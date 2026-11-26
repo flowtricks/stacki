@@ -14,6 +14,9 @@ export const messages = {
   'componentCanvas.frame.unset': '未设置',
   'componentCanvas.level.all': '为所有框架设置',
   'componentCanvas.level.frame': '此框架有自己的值',
+  'componentCanvas.level.overrides': {
+    other: '此处有 {count} 个框架保留自己的值。重置即可让它们使用此值。',
+  },
   'componentCanvas.level.part': '为每个 {part} 框架设置',
   'componentCanvas.menu.open': '在画布中打开',
   'componentCanvas.notice.truncated': '正在显示 {total} 个框架中的前 {shown} 个。要查看其余框架，请减少拥有独立框架的属性。',
@@ -36,11 +39,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': '应用到',
   'componentCanvas.panel.scope.part': '所有 {part} 框架',
   'componentCanvas.panel.scope.project': '所有组件',
+  'componentCanvas.panel.size': '尺寸',
   'componentCanvas.panel.transparent': '透明',
   'componentCanvas.panel.width': '宽度',
   'componentCanvas.popup.expand': '展开框架设置',
   'componentCanvas.popup.minimize': '最小化框架设置',
   'componentCanvas.popup.title': '框架设置',
+  'componentCanvas.scope.valueFrames': '所有 {value} 框架',
   'componentCanvas.split.full': '最多 {max} 个属性可以拥有独立框架。请先关闭其中一个。',
   'componentCanvas.split.locked': '{name} 的每个值都有独立框架。',
   'componentCanvas.split.off': {

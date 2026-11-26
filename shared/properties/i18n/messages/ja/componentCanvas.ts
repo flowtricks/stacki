@@ -15,6 +15,9 @@ export const messages = {
   'componentCanvas.frame.unset': '未設定',
   'componentCanvas.level.all': 'すべてのフレームに設定',
   'componentCanvas.level.frame': 'このフレームには独自の値があります',
+  'componentCanvas.level.overrides': {
+    other: 'ここの {count} フレームは独自の値を保持しています。リセットするとこの値になります。',
+  },
   'componentCanvas.level.part': 'すべての {part} フレームに設定',
   'componentCanvas.menu.open': 'キャンバスで開く',
   'componentCanvas.notice.truncated':
@@ -39,11 +42,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': '適用先',
   'componentCanvas.panel.scope.part': '{part} のすべてのフレーム',
   'componentCanvas.panel.scope.project': 'すべてのコンポーネント',
+  'componentCanvas.panel.size': 'サイズ',
   'componentCanvas.panel.transparent': '透明',
   'componentCanvas.panel.width': '幅',
   'componentCanvas.popup.expand': 'フレーム設定を展開',
   'componentCanvas.popup.minimize': 'フレーム設定を最小化',
   'componentCanvas.popup.title': 'フレーム設定',
+  'componentCanvas.scope.valueFrames': '{value} のすべてのフレーム',
   'componentCanvas.split.full': '個別のフレームを持てるプロパティは {max} 個までです。先にいずれかをオフにしてください。',
   'componentCanvas.split.locked': '{name} の値ごとに個別のフレームがあります。',
   'componentCanvas.split.off': {

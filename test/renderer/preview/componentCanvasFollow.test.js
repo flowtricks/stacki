@@ -118,7 +118,7 @@ function openCanvas() {
     settings: { version: 1, components: {} },
     layout,
     frame: first.key,
-    scope: first.key,
+    scopes: { props: first.key, size: '', background: first.key },
     scale: 1,
     framePanel: 'shown',
     defaults: {},
@@ -169,7 +169,8 @@ test('a selection change reaches Frame settings in the same commit, with no elem
         selection: pathOf.get(selectedId),
         frame: state.frame,
         picked: state.picked.kind,
-        scope: state.scope,
+        scope: state.scopes.props,
+        size: state.scopes.size,
         text: panel.current?.textContent ?? '',
       });
     });
@@ -212,6 +213,7 @@ test('a selection change reaches Frame settings in the same commit, with no elem
     assert.equal(commit.frame, step.frame, `${step.name}: the frame follows in that commit`);
     assert.equal(commit.picked, step.picked);
     assert.equal(commit.scope, step.scope);
+    assert.equal(commit.size, step.picked === 'group' ? step.scope : '', `${step.name}: sizes stay at all frames unless a group is selected`);
   }
   observer.disconnect();
   assert.equal(host.querySelector('.component-canvas-section'), section, 'Frame settings keeps its section: it changes words, it is not mounted again');

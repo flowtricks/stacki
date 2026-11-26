@@ -14,6 +14,9 @@ export const messages = {
   'componentCanvas.frame.unset': '설정 안 됨',
   'componentCanvas.level.all': '모든 프레임에 설정됨',
   'componentCanvas.level.frame': '이 프레임에는 자체 값이 있습니다',
+  'componentCanvas.level.overrides': {
+    other: '여기에서 프레임 {count}개가 자체 값을 유지합니다. 재설정하면 이 값이 적용됩니다.',
+  },
   'componentCanvas.level.part': '모든 {part} 프레임에 설정됨',
   'componentCanvas.menu.open': '캔버스에서 열기',
   'componentCanvas.notice.truncated': '전체 {total}개 중 처음 {shown}개의 프레임을 표시합니다. 나머지를 보려면 개별 프레임을 갖는 속성을 줄이세요.',
@@ -37,11 +40,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': '적용 대상',
   'componentCanvas.panel.scope.part': '모든 {part} 프레임',
   'componentCanvas.panel.scope.project': '모든 컴포넌트',
+  'componentCanvas.panel.size': '크기',
   'componentCanvas.panel.transparent': '투명',
   'componentCanvas.panel.width': '너비',
   'componentCanvas.popup.expand': '프레임 설정 펼치기',
   'componentCanvas.popup.minimize': '프레임 설정 최소화',
   'componentCanvas.popup.title': '프레임 설정',
+  'componentCanvas.scope.valueFrames': '모든 {value} 프레임',
   'componentCanvas.split.full': '개별 프레임을 가질 수 있는 속성은 최대 {max}개입니다. 먼저 하나를 끄세요.',
   'componentCanvas.split.locked': '{name}의 각 값마다 개별 프레임이 있습니다.',
   'componentCanvas.split.off': {

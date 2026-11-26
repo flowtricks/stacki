@@ -22,6 +22,8 @@ import {
   withSplit,
   CANVAS_LIMITS,
   keyPairs,
+  scopeHolds,
+  withoutOverrides,
   type ComponentCanvasFile,
   type FrameEdit,
 } from '../../../shared/properties/componentCanvas';
@@ -53,6 +55,7 @@ import {
   type CanvasBox,
   type CanvasInstance,
   type CanvasOpen,
+  type CanvasSection,
   type CanvasState,
   type CanvasZoom,
   type ComponentCanvasControl,
@@ -256,26 +259,41 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       canOpen: (component) => component.origin?.kind !== 'package' && component.isLayout !== true && app.project.path.length > 0,
       open,
       exit: () => void finish(origin.current),
-      setScope: (scope) => {
+      setScope: (section, scope) => {
         const current = stateRef.current;
-        if (current.kind === 'open' && scopeStillFits(scope, current.frame, current.layout)) {
-          setState({ ...current, scope });
+        if (current.kind === 'open' && scopeFits(section, scope, current)) {
+          setState({ ...current, scopes: { ...current.scopes, [section]: scope } });
         }
       },
       edit: (edit: FrameEdit) =>
         update((current) => {
-          const target = rootTarget(current);
-          const { scope } = current;
           const component = current.component.file;
-          if (target === undefined) {
-            return (file) => withFrameEdit(file, component, scope, edit);
+          if (edit.kind === 'background') {
+            const target = rootTarget(current.scopes.background, current);
+            // A root scope holds the canvas root's background (and its classes, editRootClasses).
+            return target === undefined
+              ? (file) => withFrameEdit(file, component, current.scopes.background, edit)
+              : (file) => withRootEdit(file, target, { kind: 'background', value: edit.value });
           }
-          // A root scope holds the canvas root's background (and its classes, editRootClasses); a frame's size is not set there.
-          return edit.kind === 'background' ? (file) => withRootEdit(file, target, { kind: 'background', value: edit.value }) : undefined;
+          // Sizes go to the size scope; a frame's size is never set at a root scope.
+          return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
         }),
+      resetOverrides: (section, setting) =>
+        update((current) => {
+          const scope = current.scopes[section];
+          const component = current.component.file;
+          return rootTarget(scope, current) === undefined ? (file) => withoutOverrides(file, component, scope, setting) : undefined;
+        }),
+      showTargets: (frames) => {
+        const current = stateRef.current;
+        if (current.kind === 'open') {
+          assert(frames === undefined || frames.length <= CANVAS_LIMITS.framesMax, 'A canvas outlines a bounded number of frames');
+          postToCanvas(current.id, { command: 'targets', frames: frames ?? [] });
+        }
+      },
       editRootClasses: (classes) =>
         update((current) => {
-          const target = rootTarget(current) ?? { kind: 'component' as const, file: current.component.file };
+          const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: current.component.file };
           return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
         }),
       setSplit: (split) =>
@@ -329,46 +347,51 @@ function settingsIo(project: string): CanvasSettingsIo {
   };
 }
 
-// The open canvas over new settings: its frames rebuilt, the selection and scope kept where they still fit.
+// The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit.
 function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
   const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
   const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-  return { ...current, settings, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
+  return { ...current, settings, layout, frame, scopes: keptScopes(current, frame, layout) };
 }
 
-// Where a canvas root setting goes at the current scope: the project's default or this component's; undefined at a
-// frame scope.
-function rootTarget(current: CanvasOpen): RootTarget | undefined {
-  if (current.scope === PROJECT_SCOPE) {
+// The scopes kept over a new layout or frame: each that still reaches the frame, else its section's default.
+function keptScopes(current: CanvasOpen, frame: string, layout: CanvasOpen['layout']): CanvasOpen['scopes'] {
+  const next = { ...current, frame, layout };
+  const keep = (section: CanvasSection, fallback: string): string => (scopeFits(section, current.scopes[section], next) ? current.scopes[section] : fallback);
+  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? PROJECT_SCOPE : frame) };
+}
+
+// Where a canvas root setting goes at a scope: the project's default or this component's; undefined at a frame scope.
+function rootTarget(scope: string, current: CanvasOpen): RootTarget | undefined {
+  if (scope === PROJECT_SCOPE) {
     return PROJECT_ROOT;
   }
-  return current.scope === COMPONENT_SCOPE ? { kind: 'component', file: current.component.file } : undefined;
+  return scope === COMPONENT_SCOPE ? { kind: 'component', file: current.component.file } : undefined;
 }
 
-// The scope a newly selected canvas root starts at: the component's own when it already sets something of its own,
-// else the project's, which a theme class or a canvas colour usually is.
-function rootScopeFor(current: CanvasOpen): string {
-  const root = canvasRoot(current.settings, current.component.file);
-  return root.backgroundSource === 'component' || root.classesSource === 'component' ? COMPONENT_SCOPE : PROJECT_SCOPE;
-}
-
-// The scope after a frame is selected: another frame (or coming from the canvas root) starts at the frame itself, so a
-// wider scope is always a choice made for the frame in front of you; the same frame selected again keeps it.
-function scopeAfterSelect(current: CanvasOpen, key: string): string {
-  return key !== current.frame || rootTarget(current) !== undefined ? key : current.scope;
-}
-
-// A scope is the selected frame, every frame, any set of the split values the selected frame shows (one value, or a
-// group's), or a canvas root scope.
-function scopeStillFits(scope: string, frame: string, layout: CanvasOpen['layout']): boolean {
-  if (scope === '' || scope === frame || scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
-    return true;
+// The scopes after a frame is selected. Another frame (or one after the canvas root or a group) starts each section at
+// its default: props and background at the frame itself, so a wider choice is always made for the frame in front of
+// you, and size at all frames, where a frame's size is usually wanted, unless the size scope chosen still reaches the
+// new frame. The same frame selected again keeps every choice.
+function scopesAfterSelect(current: CanvasOpen, key: string): CanvasOpen['scopes'] {
+  const fresh = key !== current.frame || current.subject === 'root' || current.picked.kind === 'group';
+  if (!fresh) {
+    return current.scopes;
   }
-  if (!layout.frames.some((candidate) => candidate.key === frame)) {
-    return false;
+  const size = current.subject === 'frame' && current.picked.kind !== 'group' && scopeHolds(current.scopes.size, key) ? current.scopes.size : '';
+  return { props: key, size, background: key };
+}
+
+// A section's scope reaches the selected frame: the frame, all frames, any set of its split values (one value, or a
+// group's); the background may also be a canvas root scope while the root is the subject.
+function scopeFits(section: CanvasSection, scope: string, current: Pick<CanvasOpen, 'frame' | 'layout' | 'subject'>): boolean {
+  if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
+    return section === 'background' && current.subject === 'root';
   }
-  const shown = new Set(keyPairs(frame));
-  return keyPairs(scope).every((pair) => shown.has(pair));
+  if (!current.layout.frames.some((candidate) => candidate.key === current.frame)) {
+    return scope === '';
+  }
+  return scopeHolds(scope, current.frame);
 }
 
 function pageFileOf(id: string): string {
@@ -450,7 +473,7 @@ async function openCanvas(
         settings: parsed.value,
         layout,
         frame: first.key,
-        scope: first.key,
+        scopes: { props: first.key, size: '', background: first.key },
         scale: 1,
         framePanel: rememberedFramePanel(),
         defaults: frameDefaults(snapshot, file, prettyComponentName(component.name)),
@@ -822,7 +845,7 @@ function useLiveSchema(state: CanvasState, scan: ScanResult, setState: React.Dis
       const component = { ...current.component, schema, rest: live?.hasRest === true };
       const layout = buildCanvasLayout(component, current.settings.components[component.file]);
       const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
-      return { ...current, component, layout, frame, scope: scopeStillFits(current.scope, frame, layout) ? current.scope : frame };
+      return { ...current, component, layout, frame, scopes: keptScopes(current, frame, layout) };
     });
   }, [file, scan.components, setState]);
 }
@@ -928,7 +951,8 @@ function followedState(current: CanvasState, followed: string, where: 'page' | '
   }
   if (isCanvasRoot(followed)) {
     // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
-    return current.subject === 'root' ? current : { ...current, subject: 'root', scope: rootScopeFor(current) };
+    // Its settings start at every component's canvas, where a theme class or a canvas colour usually belongs.
+    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: PROJECT_SCOPE } };
   }
   const box = canvasBoxOf(followed);
   if (box !== undefined) {
@@ -950,8 +974,7 @@ function withFramePicked(current: CanvasState, key: string, picked: CanvasOpen['
   if (current.frame === key && current.subject === 'frame' && current.picked.kind === picked.kind) {
     return current;
   }
-  const scope = current.picked.kind === 'group' && current.subject === 'frame' ? key : scopeAfterSelect(current, key);
-  return { ...current, frame: key, scope, subject: 'frame', picked };
+  return { ...current, frame: key, scopes: scopesAfterSelect(current, key), subject: 'frame', picked };
 }
 
 // The canvas with a group's box selected: its edits go to every frame in it (the group's key is their shared values),
@@ -966,11 +989,12 @@ function withGroupPicked(current: CanvasState, key: string): CanvasState {
   if (frame === undefined) {
     return current;
   }
-  assert(scopeStillFits(key, frame, current.layout), 'A group is a scope of every frame in it');
+  assert(scopeHolds(key, frame), 'A group is a scope of every frame in it');
   if (current.subject === 'frame' && current.picked.kind === 'group' && current.picked.key === key && current.frame === frame) {
     return current;
   }
-  return { ...current, frame, scope: key, subject: 'frame', picked: { kind: 'group', key } };
+  // Every section edits the group: that is what selecting it says.
+  return { ...current, frame, scopes: { props: key, size: key, background: key }, subject: 'frame', picked: { kind: 'group', key } };
 }
 
 // The breakpoint devices do not apply to the canvas (its toolbar hides them), so their number keys do nothing there:

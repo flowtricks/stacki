@@ -909,6 +909,71 @@ function isEmptyEntry(entry: FrameEntry): boolean {
   return Object.keys(entry).length === 0;
 }
 
+/** Whether every pair of `scope` is one of `key`'s: the scope's edits reach the frame or narrower scope `key`. */
+export function scopeHolds(scope: string, key: string): boolean {
+  const pairs = new Set(keyPairs(key));
+  return keyPairs(scope).every((pair) => pairs.has(pair));
+}
+
+/**
+ * The frames among `frames` that `scope` reaches but that show a value of their own for `setting`: one an entry
+ * narrower than the scope sets (a frame's own size, a variant's), which wins over what the scope says. Each with the
+ * entry its value comes from.
+ */
+export function overridesIn(
+  settings: ComponentCanvas | undefined,
+  frames: readonly string[],
+  scope: string,
+  setting: FrameSetting,
+): readonly { readonly frame: string; readonly from: string }[] {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A canvas has a bounded number of frames');
+  const found = frames.flatMap((frame) => {
+    if (!scopeHolds(scope, frame)) {
+      return [];
+    }
+    const from = resolveFrame(settings, frame).origins.get(setting);
+    // Narrower than the scope: it holds every pair of the scope and more.
+    return from !== undefined && from !== scope && scopeHolds(scope, from) ? [{ frame, from }] : [];
+  });
+  assert(
+    found.every((entry) => entry.from !== scope),
+    'An override is never the scope itself',
+  );
+  return found;
+}
+
+/**
+ * The file without what entries narrower than `scope` say about `setting`, so every frame the scope reaches shows the
+ * scope's value: the reset of overrides. Entries left empty are removed; the scope's own entry and wider ones stay.
+ */
+export function withoutOverrides(file: ComponentCanvasFile, component: string, scope: string, setting: FrameSetting): ComponentCanvasFile {
+  parseFrameKey(scope);
+  const settings = file.components[component];
+  // Only the entries that say something about the setting: the others are left exactly as they are.
+  const entries = Object.keys(settings?.frames ?? {}).filter(
+    (key) => key !== scope && scopeHolds(scope, key) && resolveFrame(settings, key).origins.get(setting) === key,
+  );
+  assert(entries.length <= CANVAS_LIMITS.entriesMax, 'A component keeps a bounded number of entries');
+  const edit = clearingEdit(setting);
+  return entries.reduce((next, key) => withFrameEdit(next, component, key, edit), file);
+}
+
+// The edit that drops one setting from an entry.
+function clearingEdit(setting: FrameSetting): FrameEdit {
+  if (setting === 'width' || setting === 'height') {
+    return { kind: 'field', field: setting, value: undefined };
+  }
+  if (setting === 'background') {
+    return { kind: 'background', value: undefined };
+  }
+  if (setting === 'content') {
+    return { kind: 'content', value: undefined };
+  }
+  const name = setting.slice('prop:'.length);
+  assert(name.length > 0, 'A prop setting names its prop');
+  return { kind: 'inherit', name };
+}
+
 /** The file with the props a component splits by set; `undefined` goes back to the default choice. */
 export function withSplit(file: ComponentCanvasFile, component: string, split: readonly string[] | undefined): ComponentCanvasFile {
   canvasComponentFile(component);

@@ -109,6 +109,7 @@ ${scaffold}[data-heading]::before { height: ${String(CHROME_LIMITS.headingHeight
 ${typeColorRules('light')}
 ${typeColorRules('dark')}
 html[data-stacki-ready] > body stacki-frame[data-frame][data-selected]::before { color: #2f80ff !important; }
+${scaffold}[data-target] { outline-color: #2f80ff !important; }
 ${scaffold}[data-under-tag]::before, ${group}[data-group][data-under-tag]::before { visibility: hidden !important; }
 ${scaffold}[data-fixed-width] { max-width: none !important; clip-path: ${CLIP_SIDES} !important; }
 ${scaffold}[data-fixed-height] { clip-path: ${CLIP_BOTTOM} !important; }
@@ -186,7 +187,9 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   function frameSizes(scale) {
     var thin = Math.round(1000 / scale) / 1000;
     var boxes = 'html[data-stacki-ready] > body stacki-frame[data-frame], html[data-stacki-ready] > body stacki-group';
-    var rule = '@layer ${CHROME_LAYER} { ' + boxes.split(', ').map(function (box) { return box + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; }'; }).join(' ') + ' }';
+    var rule = '@layer ${CHROME_LAYER} { ' + boxes.split(', ').map(function (box) { return box + ' { outline-width: ' + thin + 'px !important; outline-offset: ' + -thin + 'px !important; }'; }).join(' ');
+    // The frames a scope choice would change, while it is pointed at: twice as strong.
+    rule += ' html[data-stacki-ready] > body stacki-frame[data-frame][data-target] { outline-width: ' + thin * 2 + 'px !important; outline-offset: ' + -thin * 2 + 'px !important; } }';
     if (sizes.textContent !== rule) sizes.textContent = rule;
     hideUnderTag();
   }
@@ -377,6 +380,10 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
       selectedGroup = target === 'group' && typeof data.group === 'string' && /^[^"\\\]]*$/.test(data.group) ? data.group : null;
       tag = null;
       mark();
+    }
+    if (data.command === 'targets' && Array.isArray(data.frames)) {
+      var all = frames();
+      for (var t = 0; t < all.length; t++) flag(all[t], 'data-target', data.frames.indexOf(all[t].getAttribute('data-frame')) >= 0);
     }
     if (data.command === 'tag' && isFinite(data.width) && isFinite(data.height) && data.width > 0 && data.height > 0) {
       tag = { width: data.width, height: data.height, inside: data.inside === true };

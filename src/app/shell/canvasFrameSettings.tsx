@@ -178,8 +178,9 @@ interface FrameWriting {
 
 function framePanel(writing: FrameWriting): CanvasFramePanel {
   const { app, canvas, state, frame, drafts, translate } = writing;
-  // A root scope belongs to the canvas root; a frame's fields then write to the frame.
-  const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? frame.key : state.scope;
+  const scope = state.scopes.props;
+  assert(scope !== PROJECT_SCOPE, 'Props are never previewed at the project’s scope');
+  assert(scope !== COMPONENT_SCOPE, 'Props are never previewed at the canvas root’s scope');
   const id = panelNodeId(`${state.id}|${frame.key}|${scope}`);
   const values = framePanelValues({
     // The component's own fields, whether its instance, its box or a group around it is selected.
@@ -285,7 +286,7 @@ function panelNodeId(words: string): NodeId {
 // Where a setting shown at the current scope comes from, when that is not the scope itself: a wider level that gives
 // it, or a narrower one the selected frame has, which wins on that frame whatever is set here.
 function provenanceExtra(state: CanvasOpen, frame: ModelFrame, setting: FrameSetting, translate: Translator): { readonly provenance?: PropFieldProvenance } {
-  const scope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE ? frame.key : state.scope;
+  const scope = state.scopes.props;
   const settings = state.settings.components[state.component.file];
   const level = settingLevel(settings, frame.key, scope, setting);
   if (level.kind === 'own' || level.kind === 'none') {

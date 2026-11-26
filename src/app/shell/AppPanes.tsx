@@ -78,7 +78,7 @@ import {
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
-import { CanvasScopeControl } from '../../features/preview/componentCanvas/CanvasScopeControl';
+import { CanvasSectionHeading } from '../../features/preview/componentCanvas/CanvasScopeControl';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
 
@@ -577,7 +577,14 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
       </KeptTabPanel>
       <KeptTabPanel shown={app.rightTab === 'settings'}>
         {canvasInstance?.kind === 'instance' && componentCanvas?.state.kind === 'open' && (
-          <CanvasScopeControl canvas={componentCanvas} state={componentCanvas.state} />
+          <div className="component-canvas-props-scope">
+            <CanvasSectionHeading
+              canvas={componentCanvas}
+              state={componentCanvas.state}
+              section="props"
+              title={translate('componentCanvas.panel.scope.label')}
+            />
+          </div>
         )}
         <PropPreviewContext.Provider value={propPreview}>
           <PropFieldExtrasContext.Provider value={canvasInstance?.kind === 'instance' ? canvasInstance.extras : undefined}>

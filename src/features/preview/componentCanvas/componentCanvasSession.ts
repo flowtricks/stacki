@@ -4,7 +4,7 @@
 import { createContext, useContext } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_DIRECTORY } from '../../../../shared/properties/defaultsCanvas';
-import type { ComponentCanvasFile, FrameEdit } from '../../../../shared/properties/componentCanvas';
+import type { ComponentCanvasFile, FrameEdit, FrameSetting } from '../../../../shared/properties/componentCanvas';
 import type { ScanComponent } from '../../../../shared/properties/projectScan';
 import type { ComponentRecipe } from '../../../../shared/properties/componentDefaults';
 import type { CanvasComponent, CanvasLayout } from './canvasModel';
@@ -18,8 +18,12 @@ export interface CanvasOpen {
   readonly layout: CanvasLayout;
   /** The selected frame's key; always one of the layout's frames. */
   readonly frame: string;
-  /** Where the panel's edits go: `` all frames, a split value's key, the selected frame's own key, or PROJECT_SCOPE. */
-  readonly scope: string;
+  /**
+   * Where each kind of edit goes, each chosen on its own: a frame key (`` for all frames, a split value's, a group's, or
+   * the selected frame's own), or for the canvas root's background and classes PROJECT_SCOPE or COMPONENT_SCOPE.
+   * Props start at the frame, sizes at all frames, the background at the frame (all components for the root).
+   */
+  readonly scopes: CanvasScopes;
   readonly scale: number;
   /** Whether the selected frame's settings popover is open: shown when a frame is selected, hidden by its close. */
   readonly framePanel: 'shown' | 'hidden';
@@ -39,6 +43,15 @@ export interface CanvasOpen {
    */
   readonly picked: CanvasPick;
 }
+
+/** The scope of each section of edits (CanvasOpen.scopes). */
+export interface CanvasScopes {
+  readonly props: string;
+  readonly size: string;
+  readonly background: string;
+}
+
+export type CanvasSection = keyof CanvasScopes;
 
 /** What is selected on the canvas page while a frame is the subject (CanvasOpen.picked). */
 export type CanvasPick = { readonly kind: 'component' } | { readonly kind: 'box' } | { readonly kind: 'group'; readonly key: string };
@@ -80,8 +93,13 @@ export interface ComponentCanvasControl {
   readonly canOpen: (component: ScanComponent) => boolean;
   readonly open: (component: ScanComponent) => void;
   readonly exit: () => void;
-  readonly setScope: (scope: string) => void;
+  readonly setScope: (section: CanvasSection, scope: string) => void;
+  /** A size or background edit, to its section's scope (a background at a root scope goes to the canvas root). */
   readonly edit: (edit: FrameEdit) => void;
+  /** Drops what scopes narrower than the section's own say about `setting`, so every frame it reaches shows its value. */
+  readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
+  /** The frames a scope choice would change, outlined on the canvas while it is pointed at; undefined clears them. */
+  readonly showTargets: (frames: readonly string[] | undefined) => void;
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;

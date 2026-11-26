@@ -1,24 +1,34 @@
 // Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the size and background of
-// the frame selected on the canvas or in the Navigator. Every edit goes to the scope "Apply to" names (this frame, every frame of one split value, every
-// frame, or the canvas background of every component); a frame's own setting wins over a wider one. Which props get
-// their own frames and the frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
+// the frame selected on the canvas or in the Navigator. Each section's heading ends in where its edits go
+// (CanvasScopeControl.tsx): the size starts at all frames, the background at this frame, and a narrower scope's own
+// setting wins over a wider one. Where frames a section reaches keep a value of their own, its label is the Style
+// panel's orange, and Reset gives them all the value shown. Which props get their own frames and the frames' preview
+// values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode } from 'react';
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, canvasRoot, frameBackground, type FrameEntry, type FrameLength } from '../../../../shared/properties/componentCanvas';
-import Dropdown from '../../../ui/Dropdown';
+import {
+  CANVAS_LIMITS,
+  canvasRoot,
+  frameBackground,
+  overridesIn,
+  resolveFrame,
+  type FrameLength,
+  type FrameSetting,
+} from '../../../../shared/properties/componentCanvas';
 import InfoHint from '../../../ui/InfoHint';
 import SegmentedControl from '../../../ui/SegmentedControl';
 import { ResetLabel } from '../../../ui/ResetLabel';
 import { ComponentFillIcon } from '../../../ui/Icons';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import ColorSwatch from '../../style/components/ColorSwatch';
 import VariableConnect from '../../style/VariableConnect';
-import type { ModelFrame } from './canvasModel';
-import { frameLabel, prettyComponentName } from './frameLabel';
-import { CanvasScopeControl } from './CanvasScopeControl';
-import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
+import { prettyComponentName } from './frameLabel';
+import { CanvasSectionHeading } from './CanvasScopeControl';
+import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type CanvasSection, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 import { CAPTION_LABEL_FOR } from '../../../ui/captionLabel';
+import { stepSizeKey } from '../../style/SizeKit';
 
 // The width a frame takes when it stops hugging and nothing wider sets one.
 const FIXED_WIDTH_PX = 400;
@@ -28,7 +38,6 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
   const translate = useTranslate();
   const frame = state.layout.frames.find((candidate) => candidate.key === state.frame) ?? state.layout.frames[0];
   assert(frame !== undefined, 'An open canvas has a frame');
-  const entry = state.settings.components[state.component.file]?.frames?.[state.scope];
   return (
     <div className="component-canvas-panel" data-testid="component-canvas-panel">
       <div className="props-title">
@@ -36,92 +45,79 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
         <span className="component-canvas-panel-name">{prettyComponentName(state.component.name)}</span>
         <span className="badge">{translate('componentCanvas.panel.frames', { count: state.layout.frames.length })}</span>
       </div>
-      {state.subject === 'root' ? (
-        <RootSection canvas={canvas} state={state} frame={frame} />
-      ) : (
-        <FrameSection canvas={canvas} state={state} frame={frame} entry={entry} />
-      )}
+      {state.subject === 'root' ? <RootSection canvas={canvas} state={state} /> : <FrameSection canvas={canvas} state={state} />}
     </div>
   );
 }
 
-function Heading({ title, hint }: { readonly title: string; readonly hint: string }) {
+function FrameSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
+  const translate = useTranslate();
   return (
-    <div className="component-canvas-heading">
-      <span>{title}</span>
-      <InfoHint text={hint} />
-    </div>
+    <>
+      <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.size')}>
+        <CanvasSectionHeading canvas={canvas} state={state} section="size" title={translate('componentCanvas.panel.size')} />
+        <LengthField side="width" canvas={canvas} state={state} />
+        <LengthField side="height" canvas={canvas} state={state} />
+      </section>
+      <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.background')}>
+        <CanvasSectionHeading canvas={canvas} state={state} section="background" title={translate('componentCanvas.panel.background')} />
+        <BackgroundField canvas={canvas} state={state} />
+      </section>
+    </>
   );
 }
 
-function FrameSection({
-  canvas,
-  state,
-  frame,
-  entry,
-}: {
-  readonly canvas: ComponentCanvasControl;
-  readonly state: CanvasOpen;
-  readonly frame: ModelFrame;
-  readonly entry: FrameEntry | undefined;
-}) {
+// The canvas itself, while its root (the page's <html>) is selected: its background, the surface every frame sits on,
+// for this component's canvas or every component's. Its classes are the Settings panel's class field
+// (canvasFrameSettings.tsx), at the same choice.
+function RootSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
-  return (
-    <section className="component-canvas-section" aria-label={frameLabel(frame, state.component, translate)}>
-      {/* Which frame is selected on the canvas; a component with one frame is named by the title above. */}
-      {frame.parts.length > 0 && <div className="component-canvas-frame-name">{frameLabel(frame, state.component, translate)}</div>}
-      <CanvasScopeControl canvas={canvas} state={state} />
-      <LengthField side="width" canvas={canvas} state={state} value={frame.resolved.width} entry={entry} />
-      <LengthField side="height" canvas={canvas} state={state} value={frame.resolved.height} entry={entry} />
-      <BackgroundField canvas={canvas} state={state} frame={frame} entry={entry} />
-    </section>
-  );
-}
-
-// The canvas itself, while its root (the page's <html>) is selected: where its settings apply, and its background, the
-// surface every frame sits on. Its classes are the Settings panel's class field (canvasFrameSettings.tsx).
-function RootSection({ canvas, state, frame }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen; readonly frame: ModelFrame }) {
-  const translate = useTranslate();
-  const scopes = [
-    { value: COMPONENT_SCOPE, label: translate('componentCanvas.panel.scope.component') },
-    { value: PROJECT_SCOPE, label: translate('componentCanvas.panel.scope.project') },
-  ];
   return (
     <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.root.title')}>
-      <Heading title={translate('componentCanvas.panel.root.title')} hint={translate('componentCanvas.panel.root.about')} />
-      <div className="props-field">
-        <label htmlFor={CAPTION_LABEL_FOR}>
-          {translate('componentCanvas.panel.scope.label')}
-          <InfoHint text={translate('componentCanvas.panel.scope.hint')} />
-        </label>
-        <Dropdown ariaLabel={translate('componentCanvas.panel.scope.label')} value={state.scope} options={scopes} onChange={canvas.setScope} />
-      </div>
-      <BackgroundField canvas={canvas} state={state} frame={frame} entry={undefined} />
+      <CanvasSectionHeading
+        canvas={canvas}
+        state={state}
+        section="background"
+        title={translate('componentCanvas.panel.root.title')}
+        extra={<InfoHint text={translate('componentCanvas.panel.root.about')} />}
+      />
+      <BackgroundField canvas={canvas} state={state} />
     </section>
   );
 }
 
-function LengthField({
-  side,
-  canvas,
-  state,
-  value,
-  entry,
-}: {
-  readonly side: 'width' | 'height';
-  readonly canvas: ComponentCanvasControl;
-  readonly state: CanvasOpen;
-  readonly value: FrameLength;
-  readonly entry: FrameEntry | undefined;
-}) {
+// The frames a section's scope reaches that keep a value of their own for `setting`, said in the label's tip.
+function overridden(state: CanvasOpen, section: CanvasSection, setting: FrameSetting, translate: Translator): string | undefined {
+  const scope = state.scopes[section];
+  if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
+    return undefined;
+  }
+  const frames = state.layout.frames.map((candidate) => candidate.key);
+  const found = overridesIn(state.settings.components[state.component.file], frames, scope, setting);
+  return found.length === 0 ? undefined : translate('componentCanvas.level.overrides', { count: found.length });
+}
+
+function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height'; readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
   const label = translate(side === 'width' ? 'componentCanvas.panel.width' : 'componentCanvas.panel.height');
+  const scope = state.scopes.size;
+  const settings = state.settings.components[state.component.file];
+  // What the scope itself gives: its own value, else a wider one's, else hug.
+  const value = resolveFrame(settings, scope)[side];
+  const own = settings?.frames?.[scope]?.[side] !== undefined;
+  const tip = overridden(state, 'size', side, translate);
   // Hug over all frames is what no setting says, so it is written as no setting rather than as "hug".
-  const set = (next: FrameLength) => canvas.edit({ kind: 'field', field: side, value: next === 'hug' && state.scope === '' ? undefined : next });
+  const set = (next: FrameLength) => canvas.edit({ kind: 'field', field: side, value: next === 'hug' && scope === '' ? undefined : next });
   return (
     <div className="props-field">
       <FieldTitle>
-        <ResetLabel label={label} active={entry?.[side] !== undefined} onReset={() => canvas.edit({ kind: 'field', field: side, value: undefined })} />
+        <ResetLabel
+          label={label}
+          active={own || tip !== undefined}
+          tone={tip === undefined ? undefined : 'overridden'}
+          tip={tip}
+          onReset={() => (tip === undefined ? canvas.edit({ kind: 'field', field: side, value: undefined }) : canvas.resetOverrides('size', side))}
+        />
       </FieldTitle>
       <div className="component-canvas-length">
         <SegmentedControl
@@ -138,6 +134,7 @@ function LengthField({
             ariaLabel={translate('componentCanvas.panel.pixels', { side: label })}
             value={String(value)}
             suffix="px"
+            stepMin={CANVAS_LIMITS.sizePxMin}
             onCommit={(text) => {
               const pixels = Math.round(Number(text));
               if (Number.isFinite(pixels)) {
@@ -151,36 +148,31 @@ function LengthField({
   );
 }
 
-// The background at the chosen scope: the frame's own, a wider scope's, the component's, or the project's canvas
+// The background at the section's scope: the scope's own, a wider scope's, the component's, or the project's canvas
 // background. A value set here is the blue label (reset clears it); one that comes from a wider level is the orange,
-// inherited label, as the Style panel shows an inherited value.
-function BackgroundField({
-  canvas,
-  state,
-  frame,
-  entry,
-}: {
-  readonly canvas: ComponentCanvasControl;
-  readonly state: CanvasOpen;
-  readonly frame: ModelFrame;
-  readonly entry: FrameEntry | undefined;
-}) {
+// inherited label, as the Style panel shows an inherited value; frames in scope that keep their own make it orange
+// with a reset that gives them this one.
+function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
+  const scope = state.scopes.background;
   // At a root scope the field is the canvas surface: the component's own, else the project's (inherited at the component).
-  const rootScope = state.scope === PROJECT_SCOPE || state.scope === COMPONENT_SCOPE;
+  const rootScope = scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE;
   const root = canvasRoot(state.settings, state.component.file);
-  const rootOwn = state.scope === PROJECT_SCOPE ? state.settings.background : state.settings.components[state.component.file]?.root?.background;
+  const settings = state.settings.components[state.component.file];
+  const rootOwn = scope === PROJECT_SCOPE ? state.settings.background : settings?.root?.background;
   const shown = rootScope
-    ? { value: rootOwn ?? (state.scope === COMPONENT_SCOPE ? root.background : undefined) }
-    : frameBackground(state.settings, frame.resolved, state.component.file);
-  const own = rootScope ? rootOwn !== undefined : entry?.background !== undefined;
-  const inherited = !own && shown.value !== undefined;
+    ? { value: rootOwn ?? (scope === COMPONENT_SCOPE ? root.background : undefined) }
+    : frameBackground(state.settings, resolveFrame(settings, scope), state.component.file);
+  const own = rootScope ? rootOwn !== undefined : settings?.frames?.[scope]?.background !== undefined;
+  const tip = overridden(state, 'background', 'background', translate);
+  const inherited = !own && shown.value !== undefined && tip === undefined;
   const value = shown.value;
   const label = translate('componentCanvas.panel.background');
+  assert(rootScope || state.subject === 'frame', 'The canvas root’s background is set at a root scope');
   const commit = (color: string) => {
     const trimmed = color.trim();
     // Transparent over every frame is what no setting says; for the project it is a setting of its own (no canvas grey).
-    const clear = trimmed === '' || (trimmed === 'transparent' && state.scope === '');
+    const clear = trimmed === '' || (trimmed === 'transparent' && scope === '');
     canvas.edit({ kind: 'background', value: clear ? undefined : trimmed });
   };
   return (
@@ -189,7 +181,13 @@ function BackgroundField({
         {inherited ? (
           <span className="prop-label embed-editor_prop-orange component-canvas-inherited">{label}</span>
         ) : (
-          <ResetLabel label={label} active={own} onReset={() => canvas.edit({ kind: 'background', value: undefined })} />
+          <ResetLabel
+            label={label}
+            active={own || tip !== undefined}
+            tone={tip === undefined ? undefined : 'overridden'}
+            tip={tip}
+            onReset={() => (tip === undefined ? canvas.edit({ kind: 'background', value: undefined }) : canvas.resetOverrides('background', 'background'))}
+          />
         )}
       </FieldTitle>
       <div className="component-canvas-color">
@@ -285,6 +283,7 @@ function CommitInput({
   placeholder,
   suffix,
   disabled,
+  stepMin,
   onCommit,
 }: {
   readonly value: string;
@@ -292,6 +291,11 @@ function CommitInput({
   readonly placeholder?: string;
   readonly suffix?: string;
   readonly disabled?: boolean;
+  /**
+   * A number field: Up and Down step the number under the caret as the Style panel's size fields do (Shift by 10,
+   * Option by a tenth), never below this, and each step applies at once, the caret staying where it was.
+   */
+  readonly stepMin?: number;
   readonly onCommit: (text: string) => void;
 }) {
   const [draft, setDraft] = useState(value);
@@ -318,6 +322,18 @@ function CommitInput({
             commit();
           } else if (event.key === 'Escape') {
             setDraft(value);
+          } else if (stepMin !== undefined) {
+            // The Style panel's own stepping: it writes the stepped text into the field and puts the caret back.
+            const stepped = stepSizeKey(event);
+            if (stepped !== undefined) {
+              const pixels = Math.round(Number(stepped));
+              const text = Number.isFinite(pixels) && pixels < stepMin ? String(stepMin) : stepped;
+              // Under the least size, the field shows the least size it was given.
+              const input: HTMLInputElement = event.currentTarget;
+              input.value = text;
+              setDraft(text);
+              onCommit(text);
+            }
           }
         }}
       />

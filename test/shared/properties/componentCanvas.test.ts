@@ -25,6 +25,9 @@ import {
   splitCandidates,
   unionAllows,
   withFrameEdit,
+  overridesIn,
+  scopeHolds,
+  withoutOverrides,
   withSplit,
   withProjectBackground,
   frameBackground,
@@ -475,4 +478,36 @@ test('a moved file keeps being the one a frame names, itself or inside a list', 
     ],
   );
   assert.equal(relinkCanvasAssets(file, 'src/other', 'src/elsewhere'), file);
+});
+
+test('overrides: frames a scope reaches that a narrower entry sets are found, kept across wider edits, and reset', () => {
+  const button = 'src/components/Button.astro';
+  const frames = ['emphasis=primary&variant=main', 'emphasis=secondary&variant=main', 'variant=link'] as const;
+  let file = withFrameEdit(EMPTY_CANVAS_FILE, button, 'emphasis=primary&variant=main', { kind: 'field', field: 'width', value: 200 });
+  file = withFrameEdit(file, button, 'variant=main', { kind: 'field', field: 'height', value: 90 });
+  // A later all-frames width leaves the frame's own width in place: it still wins on that frame.
+  file = withFrameEdit(file, button, '', { kind: 'field', field: 'width', value: 400 });
+  const settings = file.components[button];
+  assert.equal(resolveFrame(settings, frames[0]).width, 200, 'the frame’s own width survives an all-frames edit');
+  assert.equal(resolveFrame(settings, frames[1]).width, 400);
+  assert.deepEqual(overridesIn(settings, frames, '', 'width'), [{ frame: frames[0], from: frames[0] }]);
+  assert.deepEqual(overridesIn(settings, frames, 'variant=main', 'width'), [{ frame: frames[0], from: frames[0] }], 'within a variant too');
+  assert.deepEqual(overridesIn(settings, frames, frames[0], 'width'), [], 'a frame overrides nothing of its own');
+  assert.deepEqual(
+    overridesIn(settings, frames, '', 'height').map((entry) => entry.frame),
+    [frames[0], frames[1]],
+    'a variant’s height overrides all frames for both of its frames',
+  );
+  assert.deepEqual(overridesIn(settings, frames, 'variant=link', 'height'), [], 'a scope reaches only its own frames');
+  assert.equal(scopeHolds('', 'variant=main'), true);
+  assert.equal(scopeHolds('variant=main', 'emphasis=primary&variant=main'), true);
+  assert.equal(scopeHolds('variant=main', 'variant=link'), false);
+  // Reset: every narrower entry drops the setting; the scope's own and wider stay; empty entries go.
+  const reset = withoutOverrides(file, button, '', 'width');
+  assert.equal(resolveFrame(reset.components[button], frames[0]).width, 400);
+  assert.equal(resolveFrame(reset.components[button], frames[0]).height, 90, 'only the setting reset is dropped');
+  assert.equal(reset.components[button]?.frames?.[frames[0]], undefined, 'an entry left empty is removed');
+  const heightReset = withoutOverrides(file, button, '', 'height');
+  assert.equal(heightReset.components[button]?.frames?.['variant=main'], undefined);
+  assert.equal(withoutOverrides(file, button, '', 'prop:label'), file, 'nothing narrower says label: the file is unchanged');
 });

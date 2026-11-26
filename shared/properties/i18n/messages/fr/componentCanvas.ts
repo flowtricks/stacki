@@ -14,6 +14,10 @@ export const messages = {
   'componentCanvas.frame.unset': 'non défini',
   'componentCanvas.level.all': 'Défini pour tous les cadres',
   'componentCanvas.level.frame': 'Ce cadre a sa propre valeur',
+  'componentCanvas.level.overrides': {
+    one: '{count} cadre ici conserve sa propre valeur. Réinitialisez pour lui donner celle-ci.',
+    other: '{count} cadres ici conservent leur propre valeur. Réinitialisez pour leur donner celle-ci.',
+  },
   'componentCanvas.level.part': 'Défini pour chaque cadre {part}',
   'componentCanvas.menu.open': 'Ouvrir dans le canevas',
   'componentCanvas.notice.truncated': 'Affichage des {shown} premiers cadres sur {total}. Donnez des cadres séparés à moins de props pour voir les autres.',
@@ -38,11 +42,13 @@ export const messages = {
   'componentCanvas.panel.scope.label': 'Appliquer à',
   'componentCanvas.panel.scope.part': 'Tous les cadres {part}',
   'componentCanvas.panel.scope.project': 'Tous les composants',
+  'componentCanvas.panel.size': 'Taille',
   'componentCanvas.panel.transparent': 'Transparent', // same
   'componentCanvas.panel.width': 'Largeur',
   'componentCanvas.popup.expand': 'Développer les réglages du cadre',
   'componentCanvas.popup.minimize': 'Réduire les réglages du cadre',
   'componentCanvas.popup.title': 'Réglages du cadre',
+  'componentCanvas.scope.valueFrames': 'Tous les cadres {value}',
   'componentCanvas.split.full': 'Jusqu’à {max} props peuvent avoir leurs propres cadres. Désactivez-en d’abord une.',
   'componentCanvas.split.locked': 'Chaque valeur de {name} a son propre cadre.',
   'componentCanvas.split.off': {
