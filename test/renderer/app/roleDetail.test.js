@@ -431,7 +431,7 @@ test('an option the permissions already settle cannot be switched, and says whic
   for (const part of ['sidePanel', 'navigator', 'images']) {
     assert.equal(editingSwitch(part).getAttribute('aria-checked'), 'false', part);
     assert.equal(editingSwitch(part).disabled, true, part);
-    assert.match(editingSwitch(part).closest('.app-role-editing-toggle').getAttribute('title'), /Permissions/, part);
+    assert.match(editingSwitch(part).closest('.app-role-editing-toggle').querySelector('.app-role-toggle-label').getAttribute('title'), /Permissions/, part);
   }
   await unmount();
 });

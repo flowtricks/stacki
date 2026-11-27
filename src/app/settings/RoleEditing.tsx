@@ -124,11 +124,14 @@ function EditingToggle({ row, editable, actions }: { readonly row: EditingRow; r
   const label = translate(LABELS[row.part]);
   const blocked = row.blocked === undefined ? undefined : translate(BLOCKS[row.blocked]);
   return (
-    <div className="app-role-toggle app-role-editing-toggle" data-part={row.part} title={blocked}>
+    <div className="app-role-toggle app-role-editing-toggle" data-part={row.part}>
       <span className="app-role-toggle-icon" aria-hidden="true">
         {ICONS[row.part]}
       </span>
-      <span className="app-role-toggle-label">{label}</span>
+      {/* The reason sits on the name only: a title on the row would draw over the row's own tip. */}
+      <span className="app-role-toggle-label" title={blocked}>
+        {label}
+      </span>
       <InfoHint text={blocked ?? translate(TIPS[row.part])} />
       <Switch
         label={label}

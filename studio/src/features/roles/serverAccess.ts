@@ -58,6 +58,9 @@ const EXACT: ReadonlyMap<string, RouteRule> = new Map<string, RouteRule>([
   ['/studio/api/publish', { kind: 'features', features: ['publish'] }],
   ['/studio/api/publish/account', { kind: 'features', features: ['publish'] }],
   ['/studio/api/publish/repository', { kind: 'features', features: ['publish'] }],
+  // Both change publish settings: Add Worker writes the site's deploy setup, and Add site creates the host's site.
+  ['/studio/api/publish/worker', { kind: 'features', features: ['publish'] }],
+  ['/studio/api/publish/netlify-site', { kind: 'features', features: ['publish'] }],
   ['/studio/api/sync', { kind: 'features', features: ['panel:history', 'publish'] }],
   ['/studio/api/storage/cleanup', { kind: 'features', features: ['settings:studio'] }],
   ['/studio/api/metadata', { kind: 'metadata' }],
