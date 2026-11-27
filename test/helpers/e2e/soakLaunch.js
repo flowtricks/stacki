@@ -26,6 +26,7 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { ROOT, repoPath } = require('../sources.js');
+const { classicScrollbarArguments } = require('../classicScrollbars.js');
 const { RUN_DIRECTORY_PREFIX, reapStaleSoakServers, stopRun, stopRunNow, watchdogOptions, writeRegistry } = require('./soakProcesses.js');
 
 const SITE_SOURCE = repoPath('studio/test/fixtures/site');
@@ -152,8 +153,9 @@ async function startRendererServer(root) {
  * pids of any process of the run that would not stop (none, unless something is badly wrong).
  * However the run ends (an error, SIGINT, SIGTERM, an uncaught exception), its processes are
  * stopped and its directory removed (soakProcesses.js has the layers that cover a SIGKILL).
+ * `scrollbars: 'classic'` draws classic scrollbars whatever the computer is set to (classicScrollbars.js).
  */
-async function runSoak({ scenarioModule, options, keepDirectory }) {
+async function runSoak({ scenarioModule, options, keepDirectory, scrollbars = 'as-set' }) {
   const reaped = await reapStaleSoakServers();
   if (reaped.length > 0) {
     console.log(`# reaped ${reaped.length} soak process(es) left by earlier runs: ${reaped.join(', ')}`);
@@ -210,7 +212,8 @@ async function runSoak({ scenarioModule, options, keepDirectory }) {
     const code = await new Promise((resolve, reject) => {
       // Its own process group, and the run directory on its command line, so the stop finds
       // it and everything it started.
-      const child = childProcess.spawn(electron, [path.join(__dirname, 'electronEntry.js'), `--soak-run=${directory}`], {
+      const scrollbarArguments = scrollbars === 'classic' ? classicScrollbarArguments() : [];
+      const child = childProcess.spawn(electron, [path.join(__dirname, 'electronEntry.js'), `--soak-run=${directory}`, ...scrollbarArguments], {
         cwd: ROOT,
         env,
         stdio: 'inherit',

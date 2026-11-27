@@ -5,6 +5,7 @@
 // flashes white while it is edited. The frame is as tall as its page.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DESIGN_FRAME_WINDOW_NAME } from '../../../shared/ipc/designSnapshot';
+import { hidePageRootScrollbar, STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 
 /** The tallest a frame is drawn: past this a page is cut off on the canvas. */
 export const FRAME_HEIGHT_PX_MAX = 30_000;
@@ -83,6 +84,12 @@ export function DesignFrameDocument({
     timers.current.forEach((timer) => window.clearTimeout(timer));
     shownFrame.current = frame;
     measuredWidth.current = widthPx;
+    // Before the measure, so the height read is the page's at the frame's whole width, and before the swap is painted.
+    // A page taller than FRAME_HEIGHT_PX_MAX (or one that always overflows, `height: 100%` and a margin) scrolls inside
+    // its frame; the canvas takes every pointer, so nobody scrolls it from inside.
+    if (frame.contentDocument !== null) {
+      hidePageRootScrollbar(frame.contentDocument);
+    }
     measure(frame);
     timers.current = MEASURE_AGAIN_MS.map((delay) => window.setTimeout(() => latestMeasure.current(frame), delay));
   };
@@ -97,6 +104,7 @@ export function DesignFrameDocument({
             className="dm-document"
             // Scripts stay off; same origin so the canvas can read which element is under the pointer.
             sandbox="allow-same-origin"
+            {...STILL_PAGE_FRAME}
             srcDoc={layer.html}
             tabIndex={-1}
             style={{ width: widthPx, height: heightPx, visibility: layer === layers.next ? 'hidden' : 'visible' }}

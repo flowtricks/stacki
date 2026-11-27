@@ -43,6 +43,15 @@ export const TEST_SUITES: Readonly<Record<string, SuiteOptions>> = {
   // not this code's (331 ms on a macOS runner for slices that take about 30 ms alone). Alone, it measures the code.
   'test/electron/handlers/projectScale.test.ts': { phase: 'alone' },
   'test/renderer/ui/astroEditorScale.test.js': { phase: 'alone' },
+  // Each drives a real Design mode window through timed waits (a copy drawn within 100 ms, panels within 30 s).
+  // In the shared pool, up to four Electron windows share the CPU and the waits run out, on a 10-core Mac too.
+  'test/renderer/app/designMode/designModeSoak.test.js': { phase: 'alone' },
+  'test/renderer/app/designMode/designModeControlsSoak.test.js': { phase: 'alone' },
+  'test/renderer/app/designMode/designModePagesSoak.test.js': { phase: 'alone' },
+  'test/renderer/app/designMode/designModeUnlinkSoak.test.js': { phase: 'alone' },
+  // Measures a recording's frame rate; a loaded Mac records under the floor (0.8 fps on a runner, e355e30c), and
+  // its rate checks fail outside CI.
+  'test/electron/handlers/ai/screenRecordingElectron.test.js': { phase: 'alone' },
   // Loads an app page over the real `stacki-app:` scheme, which only Electron has.
   'test/electron/handlers/appFrameFetch.test.js': { runner: 'electron' },
   // Loads the UI kit inside an app frame over the real `stacki-app:` scheme, which only Electron has.
