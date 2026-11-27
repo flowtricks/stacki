@@ -43,6 +43,7 @@ const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'src/features/style/model/inlineDefault.ts': 5,
   'src/features/ai/AiPanel.tsx': 2,
   'src/features/ai/aiHold.ts': 1,
+  'scripts/gate/testSuites.ts': 4,
 };
 
 function sourceFiles(): readonly string[] {
