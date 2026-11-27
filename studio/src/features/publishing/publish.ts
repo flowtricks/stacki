@@ -1,6 +1,6 @@
 import { gitWorkspaceBusy } from '../history/gitWorkspaceLease';
 import { managedHostingFromEnvironment, managedPublishConfig } from './managedHosting';
-import { parsePublishSource, type PublishConfig, type PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
+import { deploysFromStacki, parsePublishSource, type PublishConfig, type PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
 import { deployHosting, runPublishScripts } from '../../../vendor/stacki/electron/project/publishCommands';
 import { readMetadataSource } from '../settings/projectMetadata';
 import { deploymentFromEnvironment } from './deployment';
@@ -41,6 +41,7 @@ export type PublishState =
       readonly cleanupWarningRef?: MessageRef | undefined;
       readonly github?: 'skipped';
       readonly deployment?: 'live' | 'pending';
+      readonly custom?: 'github' | 'script';
     }
   | { readonly kind: 'failed'; readonly id: string; readonly message: string; readonly messageRef?: MessageRef | undefined };
 export class Publisher {
@@ -118,6 +119,10 @@ export class Publisher {
           .then(ok, publishFailure),
       );
       const config = managedPublishConfig(storedConfig, target, this.deploy ? this.managedHosting : undefined);
+      if (target !== 'github' && config.customHosting?.deploy === 'link' && config.githubWorkflow?.kind !== 'pull-request') {
+        // Refused before anything is built or committed: Studio keeps no deploy links.
+        throw new PublishFailure(described('publish.custom.link.studio'));
+      }
       if (config.githubWorkflow?.kind === 'pull-request') {
         if (target === 'hosting') {
           throw new PublishFailure(described('error.publish.reviewHint'));
@@ -163,12 +168,12 @@ export class Publisher {
     const deployment =
       target === 'github'
         ? undefined
-        : config.hosting.provider !== 'none'
-          ? await this.deployConfigured(snapshot, progress, config)
+        : deploysFromStacki(config)
+          ? await this.deployConfigured(snapshot, progress, config, target)
           : this.deploy
             ? await this.confirmDeployment(result.sha, progress)
             : undefined;
-    if (target !== 'github' && config.hosting.provider !== 'none') {
+    if (target !== 'github' && deploysFromStacki(config)) {
       await afterPublish(snapshot, config, target, { hostingComplete: deployment === 'live' });
     }
     this.state = {
@@ -179,6 +184,7 @@ export class Publisher {
         ? { cleanupWarning: cleanupWarning.message, ...(cleanupWarning.messageRef === undefined ? {} : { cleanupWarningRef: cleanupWarning.messageRef }) }
         : {}),
       ...(deployment ? { deployment } : {}),
+      ...customHandoff(config, target),
     };
     return this.state;
   }
@@ -234,21 +240,17 @@ export class Publisher {
             })
             .then(ok, publishFailure),
         );
-        if (target !== 'github' && config.hosting.provider !== 'none') {
+        if (target !== 'github' && deploysFromStacki(config)) {
           published(await createHostingSnapshot(this.root, snapshot));
         }
-        const sourceRoot = target !== 'github' && config.hosting.provider !== 'none' ? snapshot : this.root;
+        const sourceRoot = target !== 'github' && deploysFromStacki(config) ? snapshot : this.root;
         const captured = published(await capturePublishSource(sourceRoot, path.dirname(snapshot), { assetRoot: this.root }));
         const source = { ...captured, editor: this.editor };
         return { source, expectedHead };
       });
-      if (target !== 'github' && config.hosting.provider !== 'none') {
+      if (target !== 'github' && deploysFromStacki(config)) {
         this.state = { ...progress, stage: 'building' };
-        published(
-          await runPublishScripts(snapshot, config.beforePublish, {
-            STACKI_PUBLISH_TARGET: target,
-          }).then(ok, publishFailure),
-        );
+        published(await runPublishScripts(snapshot, config.beforePublish, productionEnvironment(target)).then(ok, publishFailure));
         if (config.buildScript === 'build') {
           published(await this.build(snapshot).then(ok, publishFailure));
         } else {
@@ -267,31 +269,32 @@ export class Publisher {
     }
     throw new PublishFailure(described('publish.studio.error.tooFast'));
   }
-  private async deployConfigured(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<'live'> {
+  private async deployConfigured(
+    snapshot: string,
+    progress: Extract<PublishState, { kind: 'building' }>,
+    config: PublishConfig,
+    target: PublishTarget,
+  ): Promise<'live'> {
     this.state = { ...progress, stage: 'deploying', deployment: 'pending' };
-    published(await deployHosting(snapshot, config).then(ok, publishFailure));
+    published(await deployHosting(snapshot, config, productionEnvironment(target)).then(ok, publishFailure));
     return 'live';
   }
   private async publishHosting(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<PublishState> {
-    if (config.hosting.provider === 'none') {
-      throw new PublishFailure(described('error.publish.chooseHosting'));
+    if (!deploysFromStacki(config)) {
+      throw new PublishFailure(described(config.customHosting === undefined ? 'error.publish.chooseHosting' : 'publish.custom.autoDeploy'));
     }
     await this.coordinator.run(async () => {
       await this.persistDraft?.();
       published(await createHostingSnapshot(this.root, snapshot));
     });
     this.state = { ...progress, stage: 'building', deployment: 'pending' };
-    published(
-      await runPublishScripts(snapshot, config.beforePublish, {
-        STACKI_PUBLISH_TARGET: 'hosting',
-      }).then(ok, publishFailure),
-    );
+    published(await runPublishScripts(snapshot, config.beforePublish, productionEnvironment('hosting')).then(ok, publishFailure));
     if (config.buildScript === 'build') {
       published(await this.build(snapshot).then(ok, publishFailure));
     } else {
       published(await runPublishScripts(snapshot, [config.buildScript]).then(ok, publishFailure));
     }
-    await this.deployConfigured(snapshot, progress, config);
+    await this.deployConfigured(snapshot, progress, config, 'hosting');
     await afterPublish(snapshot, config, 'hosting', { hostingComplete: true });
     this.state = {
       kind: 'committed',
@@ -300,6 +303,7 @@ export class Publisher {
       url: '',
       github: 'skipped',
       deployment: 'live',
+      ...customHandoff(config, 'hosting'),
     };
     return this.state;
   }
@@ -324,9 +328,21 @@ export class Publisher {
   }
 }
 
+function productionEnvironment(target: PublishTarget): Readonly<Record<string, string>> {
+  return { STACKI_PUBLISH_TARGET: target, STACKI_PUBLISH_ENV: 'production' };
+}
+
+/** For a custom host: how far Studio saw the publish go, so nothing says the site is live. */
+function customHandoff(config: PublishConfig, target: PublishTarget): { readonly custom?: 'github' | 'script' } {
+  if (config.customHosting === undefined) {
+    return {};
+  }
+  return { custom: target !== 'github' && config.customHosting.deploy === 'script' ? 'script' : 'github' };
+}
+
 export async function runBuild(root: string): Promise<void> {
   // A bounded child heap leaves room for the preview and Git on the standard-2 container.
-  await runPublishScripts(root, ['build'], { NODE_OPTIONS: '--max-old-space-size=2048' });
+  await runPublishScripts(root, ['build'], { NODE_OPTIONS: '--max-old-space-size=2048', STACKI_PUBLISH_ENV: 'production' });
 }
 export function githubFromEnvironment(root?: string) {
   const backend = process.env['STUDIO_BACKEND_URL'];
@@ -355,11 +371,12 @@ export function githubFromEnvironment(root?: string) {
 
 async function afterPublish(snapshot: string, config: PublishConfig, target: PublishTarget, options: { readonly hostingComplete: boolean }) {
   try {
-    await runPublishScripts(snapshot, config.afterPublish, { STACKI_PUBLISH_TARGET: target });
+    await runPublishScripts(snapshot, config.afterPublish, productionEnvironment(target));
   } catch (error: unknown) {
     const failure = publishFailure(error);
     const problem: Described = failure.ok ? { message: '' } : { message: failure.error.message, messageRef: failure.error.messageRef };
     // The completed-hosting note is a sentence of its own around the failure text, which is English as received.
-    throw new PublishFailure(options.hostingComplete ? described('publish.studio.error.hostingDoneThen', { message: problem.message }) : problem);
+    const done = config.customHosting === undefined ? 'publish.studio.error.hostingDoneThen' : 'publish.custom.scriptDoneThen';
+    throw new PublishFailure(options.hostingComplete ? described(done, { message: problem.message }) : problem);
   }
 }

@@ -104,6 +104,8 @@ function pathTool(executable: string, pathValue: string): string | undefined {
 // A publish command, or a package manager installing a publishing tool.
 export interface ExecutableCommand extends Omit<PublishCommand, 'executable'> {
   readonly executable: PublishCommand['executable'] | PackageManager;
+  /** Variables of this computer the command must not inherit, such as one that would redirect a staging deploy. */
+  readonly withheld?: readonly string[];
 }
 
 export function resolvePublishExecutable(

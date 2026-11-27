@@ -63,6 +63,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'Sesja się zmieniła. Zaznacz element ponownie.',
   'studio.collab.sessionExpired': 'Twoja sesja wygasła lub zmienił się dostęp do repozytorium. Twoje lokalne edycje są zachowane. Zaloguj się ponownie.',
   'studio.collab.sourceProtected': 'Źródło komponentu jest chronione w trybie Klienta.',
+  'studio.collab.roleCannot': 'Twoja rola ({role}) nie może tego zrobić. Poproś administratora o dostęp.',
   'studio.collab.takeOver': 'Przejmij',
   'studio.component.packageReadOnly': 'Komponenty z pakietów są tylko do odczytu. Edytuj właściwości instancji na stronie.',
   'studio.components.createInSource': 'Twórz szablony komponentów w źródle projektu.',

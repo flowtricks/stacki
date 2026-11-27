@@ -64,6 +64,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'Sesi berubah. Pilih elemen itu lagi.',
   'studio.collab.sessionExpired': 'Sesi Anda kedaluwarsa atau akses repositori berubah. Suntingan lokal Anda tetap aman. Masuk lagi.',
   'studio.collab.sourceProtected': 'Sumber komponen dilindungi dalam mode Client.',
+  'studio.collab.roleCannot': 'Peran Anda ({role}) tidak bisa melakukan ini. Minta akses kepada admin.',
   'studio.collab.takeOver': 'Ambil alih',
   'studio.component.packageReadOnly': 'Komponen paket hanya-baca. Edit properti instance di halaman.',
   'studio.components.createInSource': 'Buat templat komponen di sumber proyek.',

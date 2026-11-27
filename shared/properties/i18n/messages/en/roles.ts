@@ -122,6 +122,33 @@ export const messages = {
   'roles.menu.yours': 'Your role',
   'roles.menu.viewAs': 'View as',
   'roles.menu.waitForSave': 'Wait for your edits to finish saving',
+  'roles.editing.title': 'Editing',
+  'roles.editing.info':
+    'These only take away: a role never gets more than its permissions allow. Studio enforces them and Desktop previews them with View as. With the panel or anything on the page off, Code, Git, AI chat and component editing are off too.',
+  'roles.editing.search': 'Search editing options',
+  'roles.editing.readOnly': 'Read only',
+  'roles.editing.group.around': 'Around the page',
+  'roles.editing.group.page': 'On the page',
+  'roles.editing.sidePanel': 'Style and Settings panel',
+  'roles.editing.sidePanel.tip': 'The panel on the right. Off, this role cannot change styles or settings, and the page takes its space.',
+  'roles.editing.navigator': 'Navigator',
+  'roles.editing.navigator.tip': 'The list of elements on the page, with its sidebar button and shortcut.',
+  'roles.editing.canvasBar': 'Canvas toolbar',
+  'roles.editing.canvasBar.tip': 'The bar over the page: breakpoint buttons, breadcrumbs, page width, column guide and interact mode.',
+  'roles.editing.drag': 'Drag to reorder',
+  'roles.editing.drag.tip': 'Move elements by dragging them, on the page or in the Navigator.',
+  'roles.editing.text': 'Edit text',
+  'roles.editing.text.tip': 'Type into text on the page. Off, the CMS is unavailable too, because its entries hold text.',
+  'roles.editing.images': 'Change images',
+  'roles.editing.images.tip':
+    'Double-click a picture to change it or its alt text. Off, Assets and the CMS are unavailable too, because both can change pictures.',
+  'roles.editing.elements': 'Add and delete elements',
+  'roles.editing.elements.tip': 'Add, paste, duplicate and delete elements. Off by itself once dragging, text and images are all off.',
+  'roles.editing.blocked.rightPanel': 'Turn on Style panel or Settings panel in Permissions first.',
+  'roles.editing.blocked.navigator': 'Turn on Navigator in Permissions first.',
+  'roles.editing.blocked.imagePanel': 'Needs Style panel or Settings panel in Permissions.',
+  'roles.editing.blocked.pageEditing': 'Off while dragging, text and images are all off.',
+  'roles.editing.withheld': 'Off because of this role’s Editing options.',
 } as const satisfies CatalogOf<`roles.${string}`>;
 
 export type MessageKey = keyof typeof messages;

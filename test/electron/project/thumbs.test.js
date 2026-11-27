@@ -38,6 +38,9 @@ const near = (actual, expected, tolerance = 24) =>
 const PAGE = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Fixture</title><style>
   body { margin: 0; font: 16px system-ui; }
+  /* A classic bar on every computer, overlay Macs included: none of it may be in the picture. */
+  ::-webkit-scrollbar { width: 40px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-thumb { background: rgb(0,255,0); }
   .hero { height: 900px; background: rgb(${HERO.r},${HERO.g},${HERO.b}); }
   .rest { height: 4000px; background: rgb(${BELOW.r},${BELOW.g},${BELOW.b}); }
 </style></head>
@@ -145,6 +148,8 @@ app.whenReady().then(async () => {
     // captured rather than a strip of it.
     const low = pixelAt(file, 40, Math.round((top.height || 450) * 0.9));
     check('and the frame is one screen of it', near(low, HERO), `rgb(${low.r},${low.g},${low.b})`);
+    const edge = pixelAt(file, (top.width || 720) - 4, 10);
+    check('the page reaches the right edge: its own scrollbar is not in the picture', near(edge, HERO), `rgb(${edge.r},${edge.g},${edge.b})`);
   }
 
   // --- staleness -----------------------------------------------------------

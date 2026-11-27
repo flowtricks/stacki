@@ -79,7 +79,9 @@ function committedView(state: Extract<PublishState, { kind: 'committed' }>): Pub
   const github = state.github !== 'skipped';
   const hosting = state.deployment === 'live';
   const notes: Described[] = [];
-  if (state.deployment === 'pending') {
+  if (state.custom === 'github' && state.deployment === undefined) {
+    // A host that deploys from GitHub is not a missing connection: there is nothing more for Studio to do.
+  } else if (state.deployment === 'pending') {
     notes.push(described('publish.studio.note.unconfirmed'));
   } else if (state.deployment === undefined) {
     notes.push(described('publish.studio.note.notConnected'));
@@ -92,6 +94,6 @@ function committedView(state: Extract<PublishState, { kind: 'committed' }>): Pub
       state.cleanupWarningRef === undefined ? { message: state.cleanupWarning } : { message: state.cleanupWarning, messageRef: state.cleanupWarningRef },
     );
   }
-  const done: DesktopPublishState = { kind: 'done', github, hosting };
+  const done: DesktopPublishState = { kind: 'done', github, hosting, ...(state.custom === undefined ? {} : { handoff: state.custom }) };
   return notes.length === 0 ? { state: done } : { state: done, note: notes.map((part) => part.message).join(' '), noteParts: notes };
 }

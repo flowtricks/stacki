@@ -4,7 +4,8 @@ import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { parsePublishSource } from '../../../shared/properties/publishConfig';
 import { PublishStatus } from '../../features/publishing/PublishStatus';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
+import { parsePublishCommitMessage } from '../../../shared/properties/publishConfig';
+import type { PublishRequestTarget } from '../../../shared/properties/publishDestinations';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { PublishControl } from '../../features/publishing/PublishControl';
@@ -110,7 +111,7 @@ function DesktopPublishSession(props: Props) {
   );
 }
 
-type PublishSetup = { readonly kind: 'repository' } | { readonly kind: 'commit'; readonly target: PublishTarget };
+type PublishSetup = { readonly kind: 'repository' } | { readonly kind: 'commit'; readonly target: PublishRequestTarget };
 
 function useDesktopPublishAction(
   { projectPath, flushSave, refresh }: Pick<Props, 'projectPath' | 'flushSave' | 'refresh'>,
@@ -121,9 +122,9 @@ function useDesktopPublishAction(
   const [visible, setVisible] = useState(false);
   const [setup, setSetup] = useState<PublishSetup>();
   const running = useRef(false);
-  const lastTarget = useRef<PublishTarget>('all');
+  const lastTarget = useRef<PublishRequestTarget>('all');
   const active = usePublishLifetime();
-  async function publish(target: PublishTarget, message?: string) {
+  async function publish(target: PublishRequestTarget, message?: string) {
     if (running.current || state.kind === 'running') {
       return;
     }
@@ -174,8 +175,9 @@ async function setUpSavedPublishWorker(projectPath: string, translate: Translato
   return result.ok ? undefined : result.error;
 }
 
-async function publishSetup(projectPath: string, target: PublishTarget, message: string | undefined): Promise<PublishSetup | undefined> {
-  if (target === 'hosting') {
+async function publishSetup(projectPath: string, target: PublishRequestTarget, message: string | undefined): Promise<PublishSetup | undefined> {
+  // Neither commits to the person's branch, so neither asks for a commit message.
+  if (target === 'hosting' || target === 'staging') {
     return undefined;
   }
   const repository = await readGitInfo(projectPath);

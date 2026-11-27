@@ -51,7 +51,7 @@ test('theme.change reaches subscribers the role lets run, and no one else', () =
   const message = rpc.eventForSession(listening, roles.ADMIN_VIEW, 'theme.change', view);
   assert.deepEqual(message, { stacki: 'host', v: 1, event: 'theme.change', data: view });
   assert.equal(rpc.eventForSession(deaf, roles.ADMIN_VIEW, 'theme.change', view), undefined, 'not subscribed');
-  const without = { id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps']) };
+  const without = { id: 'client', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps']) };
   assert.equal(rpc.eventForSession(listening, without, 'theme.change', view), undefined, 'the role may not use the app');
 });
 

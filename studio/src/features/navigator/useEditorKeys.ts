@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { copyNode, pasteNode } from './clipboard';
+import { getStudioRole } from '../roles/roleStore';
+import { readOnlyEditor } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { menuPasteClaimed } from '../../../vendor/stacki/src/ui/menuPasteClaim';
 import type { SharedDocument } from '../collaboration/useDocument';
 import type { TreeAction } from '../source/source';
@@ -21,6 +23,10 @@ export function useEditorKeys(
       const value = event.key.toLowerCase();
       if (primary && (value === 'z' || value === 'y')) {
         event.preventDefault();
+        // A read only role has made no change to take back.
+        if (readOnlyEditor(getStudioRole().editorOff)) {
+          return;
+        }
         const direction = event.shiftKey || value === 'y' ? 'redo' : 'undo';
         // A step an app named (docs/apps.md, "Undo labels") says which one went: a string reports as a notice.
         void document.history
@@ -42,6 +48,10 @@ export function useEditorKeys(
       // An open tool that reads the clipboard (the clip-path editor) takes ⌘V: the
       // key is left alone so the browser's paste event reaches it (menuPasteClaim.ts).
       if (primary && value === 'v' && menuPasteClaimed()) {
+        return;
+      }
+      // Without adding and deleting, these keys do nothing; copying changes nothing, so it stays.
+      if (value !== 'c' && getStudioRole().editorOff.has('elements')) {
         return;
       }
       if (primary && ['c', 'd', 'v'].includes(value)) {

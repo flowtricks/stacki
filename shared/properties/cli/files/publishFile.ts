@@ -15,6 +15,8 @@ const GITHUB_USERNAME = '^(?:[a-zA-Z0-9][a-zA-Z0-9-]{0,38})?$';
 // A canonical https origin with a domain: no port, path, query or credentials.
 const SITE_ORIGIN = '^https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$';
 // The parser bounds a build output folder at 256 characters and a published URL at 2048; neither number is exported.
+// No slashes or control characters, so a link never passes as a name.
+const HOST_NAME = '^[^/\\\\\\p{Cc}]+$';
 const DIRECTORY_CHARS_MAX = 256;
 const SITE_URL_CHARS_MAX = 2_048;
 
@@ -41,6 +43,11 @@ const netlify = {
   siteId: field(identifier, 'The Netlify site (project) id.', { required: true }),
 };
 
+const customDetails = {
+  hostName: field(text(PUBLISH_LIMITS.hostNameCharsMax, { charsMin: 1, pattern: HOST_NAME }), 'What the host is called, shown in the Publish menu.'),
+  siteUrl: field(text(SITE_URL_CHARS_MAX, { charsMin: 1, pattern: SITE_ORIGIN }), 'The public address: a canonical https origin.'),
+};
+
 export const PUBLISH_FILE: FileSchema = {
   id: 'publish',
   file: '.stacki/publish.json',
@@ -63,6 +70,18 @@ export const PUBLISH_FILE: FileSchema = {
       variantOf('provider', { none: {}, cloudflare: cloudflarePages, 'cloudflare-workers': cloudflareWorkers, vercel, netlify }),
       'The hosting destination, by provider.',
       { required: true, default: 'none' },
+    ),
+    customHosting: field(
+      variantOf('deploy', {
+        github: customDetails,
+        script: {
+          script: field(identifier, 'The package.json script that deploys, a name and never a command.', { required: true }),
+          ...customDetails,
+        },
+        link: customDetails,
+      }),
+      'A host Stacki has no integration for; hosting must stay none. github: the host deploys from GitHub. script: Stacki builds, then runs a script. link: Stacki sends a request to a deploy link, which each person adds in the app and which is never stored in this file.',
+      { default: 'none' },
     ),
     buildScript: field(identifier, 'The package.json script that builds the site, a name and never a command.', { required: true, default: 'build' }),
     beforePublish: field(arrayOf(identifier, PUBLISH_LIMITS.hooksMax), 'package.json script names run before publishing, in order.', {

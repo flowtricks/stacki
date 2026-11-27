@@ -30,7 +30,9 @@ import { DraftStorage } from '../storage/draftStorage';
 import { SerialQueue } from '../../shared/serialQueue';
 import { readSource, preparePath } from '../project/projectServer';
 import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
-import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed } from '../roles/documentAccess';
+import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed, assertEditorContentAllowed } from '../roles/documentAccess';
+import { EditorUndo } from '../roles/editorUndo';
+import { limitsEditing } from '../../../vendor/stacki/shared/properties/projectRoles';
 
 /** A person signed in by another authentication provider: presence by name and a provider-qualified key, no GitHub avatar. */
 export interface ProviderPresence {
@@ -63,6 +65,9 @@ export class Room {
   readonly clients = new Map<WebSocket, Peer>();
   // Kept apart from `clients`: peers are broadcast as presence, roles are not.
   private readonly roles = new Map<WebSocket, ConnectionRole>();
+  // Who each connection is across reconnects, and what a limited role may undo (editorUndo.ts).
+  private readonly people = new Map<WebSocket, string>();
+  private readonly editorUndo = new EditorUndo();
   readonly cursors: CursorRelay;
   private readonly colors: PresenceColors;
   private queue = Promise.resolve();
@@ -143,6 +148,7 @@ export class Room {
       ...(identity && 'id' in identity ? { githubId: identity.id } : {}),
     });
     this.roles.set(socket, role);
+    this.people.set(socket, key);
     maintainConnection(socket, identity ? (authorize ?? (async () => false)) : undefined);
     this.synchronize(socket);
     this.presence();
@@ -188,6 +194,7 @@ export class Room {
     this.colors.release(key);
     this.clients.delete(socket);
     this.roles.delete(socket);
+    this.people.delete(socket);
     this.presence();
   }
   private async handle(socket: WebSocket, message: Record<string, unknown>) {
@@ -217,8 +224,9 @@ export class Room {
     // a client that skips its own Client-mode check is still refused.
     const role = await this.roleOf(socket);
     const before = Y.encodeStateVector(this.document);
+    const previous = this.text.toString();
     if (message['type'] === 'update') {
-      if (!this.applyUpdate(message, socket, role)) {
+      if (!(await this.applyUpdate(message, socket, role))) {
         // A replay can already exist in memory after a failed disk or durable write.
         // CRDT deduplication proves convergence, not persistence.
         if (this.text.toString() !== this.saved) {
@@ -237,6 +245,7 @@ export class Room {
     } else {
       throw new Error('Unknown collaboration message');
     }
+    this.rememberChange(socket, role, previous);
     this.revision++;
     const update = Buffer.from(Y.encodeStateAsUpdate(this.document, before)).toString('base64');
     for (const client of this.clients.keys()) {
@@ -256,6 +265,13 @@ export class Room {
     // Peers consume the accepted CRDT delta immediately. File projection and
     // durable storage must not sit between a keystroke and another editor.
     this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
+  }
+  private rememberChange(socket: WebSocket, role: RoleView, previous: string) {
+    const person = this.people.get(socket);
+    const next = this.text.toString();
+    if (person !== undefined && next !== previous && limitsEditing(role.editorOff)) {
+      this.editorUndo.record(person, role, { current: previous, next });
+    }
   }
   private acknowledgeSave(socket: WebSocket, save: number | undefined, scheduling: SourceSnapshot['scheduling']) {
     const revision = this.revision;
@@ -439,6 +455,21 @@ export class Room {
       })
       .catch((error: unknown) => this.broadcast({ type: 'error', message: String(error) }));
   }
+  // A limited role's edit is also judged by what it changes. The room handles one message at a time, so the
+  // document it was probed against must still be the document it applies to.
+  private async assertContent(socket: WebSocket, role: RoleView, after: string) {
+    const before = this.text.toString();
+    if (!limitsEditing(role.editorOff) || after === before) {
+      return;
+    }
+    if (this.editorUndo.steps(this.people.get(socket) ?? '', role, { current: before, next: after })) {
+      return;
+    }
+    await assertEditorContentAllowed(role, this.file, { before, after }, (file) => readSource(this.root, file).catch(() => undefined));
+    if (this.text.toString() !== before) {
+      throw new Error('Another edit arrived. Please repeat the edit.');
+    }
+  }
   private validateUpdate(message: Record<string, unknown>, socket: WebSocket, role: RoleView) {
     const update = Buffer.from(string(message['update'], 2_000_000), 'base64');
     const probe = new Y.Doc();
@@ -460,13 +491,14 @@ export class Room {
       if (after !== this.text.toString()) {
         assertDocumentChangeAllowed(role, this.file, this.text.toString(), after);
       }
+      return { update, after };
     } finally {
       probe.destroy();
     }
-    return update;
   }
-  private applyUpdate(message: Record<string, unknown>, socket: WebSocket, role: RoleView) {
-    const update = this.validateUpdate(message, socket, role);
+  private async applyUpdate(message: Record<string, unknown>, socket: WebSocket, role: RoleView) {
+    const { update, after } = this.validateUpdate(message, socket, role);
+    await this.assertContent(socket, role, after);
     const restoreSelections = captureSelectionPositions(this.document, this.clients.values());
     let changed = false;
     const markChanged = () => {
@@ -586,12 +618,15 @@ export function checksum(source: string) {
   return createHash('sha256').update(source).digest('hex');
 }
 
+const RELEASE_LISTENERS_MAX = 16;
+
 export function createRooms(root: string) {
   const coordinator = new SerialQueue(() => verifyGitWorkspaceLease(root));
   const rooms = new Map<string, Promise<Room>>();
   const readyRooms = new Set<Room>();
   let publishing: PublishState = { kind: 'idle' };
   const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
+  const releaseListeners = new Set<() => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
@@ -604,7 +639,7 @@ export function createRooms(root: string) {
       room.broadcast({ type: 'presence', peers });
     }
   };
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 2_000_000 });
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: 2_000_000, clientTracking: true });
   const get = (input: string) => {
     const file = sourcePath(input);
     let pending = rooms.get(file);
@@ -642,6 +677,11 @@ export function createRooms(root: string) {
     },
     sockets,
     get,
+    onRelease: (listener: () => void) => {
+      assert(releaseListeners.size < RELEASE_LISTENERS_MAX, 'Release listeners stay bounded');
+      releaseListeners.add(listener);
+    },
+    release: () => releaseRooms(sockets, releaseListeners),
     read: async (file: string) => {
       const pending = rooms.get(file);
       return pending ? (await pending).text.toString() : readSource(root, file);
@@ -670,6 +710,19 @@ function livePresence(rooms: ReadonlySet<Room>, sourceListeners: ReadonlySet<(fi
     },
     snapshot: () => [...rooms].flatMap((room) => [...room.cursors.snapshot()]),
   };
+}
+
+// A dev server closed. Its restart serves these same rooms (server/integration.ts), so only what belongs to that
+// server's connections is let go. The WebSocketServer stays open: a closed one refuses every later
+// connection, and nothing can reopen it.
+function releaseRooms(sockets: WebSocketServer, listeners: ReadonlySet<() => void>) {
+  for (const client of sockets.clients) {
+    // 1012 is "service restart": the browser reconnects.
+    client.close(1012, 'Studio server restarted');
+  }
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 async function removeRoom(root: string, rooms: Map<string, Promise<Room>>, readyRooms: Set<Room>, file: string) {

@@ -248,6 +248,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 1, reason: "the temporary copy of an app's sealed OAuth tokens in the secret vault, outside the project" },
     renameSync: { count: 1, reason: 'puts that token file in place whole (atomic save)' },
   },
+  'electron/project/deployLinkStore.ts': {
+    writeFileSync: { count: 1, reason: 'encrypted deploy links, written atomically and owner-only in app data, never a project document' },
+    renameSync: { count: 1, reason: 'puts that deploy link file in place whole (atomic save)' },
+  },
   'electron/project/appStorageStore.ts': {
     writeFileSync: { count: 1, reason: "the temporary copy of an app's stored values (.stacki/app-data/<id>.json or the local folder)" },
     renameSync: { count: 1, reason: 'puts that storage file in place whole (atomic save)' },

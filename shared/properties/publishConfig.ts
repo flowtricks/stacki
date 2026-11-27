@@ -1,3 +1,4 @@
+import { assert } from '../core/assert';
 import { list, record, text } from '../core/boundary';
 import { parsePublishedSiteURL } from './publishSite';
 import { parseGitHubWorkflow, type GitHubWorkflow } from './publishReview';
@@ -26,8 +27,26 @@ export type Hosting =
       readonly provider: 'netlify';
       readonly siteId: string;
     };
+export const CUSTOM_DEPLOYS = ['github', 'script', 'link'] as const;
+export type CustomDeploy = (typeof CUSTOM_DEPLOYS)[number];
+interface CustomHostingDetails {
+  readonly hostName?: string;
+  readonly siteUrl?: string;
+}
+/**
+ * A host Stacki has no integration for. `github`: the host deploys by itself when GitHub changes, so Stacki only pushes.
+ * `script`: Stacki builds, then runs a package.json script. `link`: Stacki pushes, then sends a request to the host's
+ * private deploy link. The link is a secret: it is never a key of this file (electron/project/deployLinkStore.ts).
+ */
+export type CustomHosting = CustomHostingDetails &
+  ({ readonly deploy: 'github' } | { readonly deploy: 'script'; readonly script: string } | { readonly deploy: 'link' });
 export interface PublishConfig {
   readonly publishedSite?: PublishedSite;
+  /**
+   * Stored beside `hosting`, which stays `none`, never as a provider of its own: Stacki 1.4.21 throws on a provider it
+   * does not know, but ignores a key it does not know, so a teammate on it sees "GitHub only" and deploys nowhere.
+   */
+  readonly customHosting?: CustomHosting;
   readonly githubWorkflow?: GitHubWorkflow;
   readonly version: 1;
   readonly defaultTarget: PublishTarget;
@@ -51,6 +70,7 @@ export const DEFAULT_PUBLISH_CONFIG: PublishConfig = {
   beforePublish: [],
   afterPublish: [],
 };
+const PUBLISH_IDENTIFIER = /^[a-zA-Z0-9][a-zA-Z0-9_:.-]*$/;
 export const PUBLISH_LIMITS = {
   sourceCharsMax: 16_384,
   hooksMax: 8,
@@ -59,6 +79,7 @@ export const PUBLISH_LIMITS = {
   outputBytesMax: 1_048_576,
   filesMax: 10_000,
   snapshotBytesMax: 268_435_456,
+  hostNameCharsMax: 60,
 } as const;
 
 export function parsePublishTarget(input: unknown): PublishTarget {
@@ -88,6 +109,12 @@ export function parsePublishConfig(input: unknown): PublishConfig {
       throw new Error('Enter a GitHub username, not a token or email.');
     }
   }
+  const hosting = parseHosting(value['hosting']);
+  const customHosting = value['customHosting'] === undefined ? undefined : parseCustomHosting(value['customHosting']);
+  if (customHosting !== undefined && hosting.provider !== 'none') {
+    // Two destinations in one file (a bad merge) must never be resolved by guessing which one to deploy to.
+    throw new Error('Custom hosting requires the hosting provider to be none.');
+  }
   return {
     version: 1,
     ...(value['publishedSite'] === undefined ? {} : { publishedSite: parsePublishedSite(value['publishedSite']) }),
@@ -98,11 +125,82 @@ export function parsePublishConfig(input: unknown): PublishConfig {
         }),
     defaultTarget: value['defaultTarget'] === undefined ? 'all' : parsePublishTarget(value['defaultTarget']),
     githubAccount,
-    hosting: parseHosting(value['hosting']),
+    hosting,
+    ...(customHosting === undefined ? {} : { customHosting }),
     buildScript: identifier(value['buildScript']),
     beforePublish: scripts(value['beforePublish']),
     afterPublish: scripts(value['afterPublish']),
   };
+}
+
+/** Strict: an unknown key is refused, so a deploy link written into this tracked file never passes as a setting. */
+export function parseCustomHosting(input: unknown): CustomHosting {
+  const value = record(input);
+  const deploy = CUSTOM_DEPLOYS.find((entry) => entry === value['deploy']);
+  if (deploy === undefined) {
+    throw new Error('Choose GitHub auto-deploy, a deploy script, or a deploy link.');
+  }
+  const allowed = ['deploy', 'hostName', 'siteUrl', ...(deploy === 'script' ? ['script'] : [])];
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    // The key is not echoed: a pasted link could be the key itself.
+    throw new Error('Custom hosting has a setting Stacki does not know. A deploy link is never saved in this file.');
+  }
+  const details = {
+    ...(value['hostName'] === undefined ? {} : { hostName: parseHostName(value['hostName']) }),
+    ...(value['siteUrl'] === undefined ? {} : { siteUrl: parseCustomSiteURL(value['siteUrl']) }),
+  };
+  const custom: CustomHosting = deploy === 'script' ? { deploy, script: identifier(value['script']), ...details } : { deploy, ...details };
+  assert(custom.deploy === deploy, 'A custom host keeps the way it was said to deploy');
+  return custom;
+}
+
+export function parseHostName(input: unknown): string {
+  const value = text(input).trim();
+  if (value.length === 0 || value.length > PUBLISH_LIMITS.hostNameCharsMax) {
+    throw new Error('A host name has 1 to 60 characters.');
+  }
+  // No slashes or control characters: a name is a name, and a link pasted here would be committed.
+  if (/[/\\\p{Cc}]/u.test(value)) {
+    throw new Error('A host name cannot be a link or contain slashes.');
+  }
+  return value;
+}
+
+/** The published-site address rules (an https origin, no path), with a refusal that never repeats the input. */
+function parseCustomSiteURL(input: unknown): string {
+  try {
+    return parsePublishedSiteURL(input);
+  } catch {
+    throw new Error('The site address must be like https://example.com, with no path.');
+  }
+}
+
+/** Whether publishing has anything to do after GitHub: a connected provider, a deploy script or a deploy link. */
+export function deploysFromStacki(config: Pick<PublishConfig, 'hosting' | 'customHosting'>): boolean {
+  if (config.hosting.provider !== 'none') {
+    return true;
+  }
+  return config.customHosting !== undefined && config.customHosting.deploy !== 'github';
+}
+
+/** What the main Publish button does. A host that deploys from GitHub has only one thing to publish to: GitHub. */
+export function publishDefaultTarget(config: Pick<PublishConfig, 'defaultTarget' | 'customHosting'>): PublishTarget {
+  const target = config.customHosting?.deploy === 'github' ? 'github' : config.defaultTarget;
+  assert(target.length > 0, 'Publish always has a default destination');
+  return target;
+}
+
+/** The config with a provider chosen: any custom host the file held is replaced, never kept beside it. */
+export function withHosting(config: PublishConfig, hosting: Hosting): PublishConfig {
+  const { customHosting: replaced, ...rest } = config;
+  void replaced;
+  const next: PublishConfig = { ...rest, hosting };
+  assert(next.customHosting === undefined, 'A chosen provider never sits beside a custom host');
+  return next;
+}
+
+export function isPublishScriptName(input: string): boolean {
+  return input.length <= PUBLISH_LIMITS.identifierCharsMax && PUBLISH_IDENTIFIER.test(input);
 }
 
 function parsePublishedSite(input: unknown): PublishedSite {
@@ -168,7 +266,7 @@ function identifier(input: unknown): string {
   if (value.length > PUBLISH_LIMITS.identifierCharsMax) {
     throw new Error('Publish identifier exceeds 100 characters.');
   }
-  if (!/^[a-zA-Z0-9][a-zA-Z0-9_:.-]*$/.test(value)) {
+  if (!PUBLISH_IDENTIFIER.test(value)) {
     throw new Error('Publish identifiers must be nonempty names, not commands.');
   }
   return value;

@@ -9,7 +9,8 @@ import { addCause, causeFromServerError, type AttentionCause } from './attention
 import { parseMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { receiveSharedPublish } from '../publishing/sharedPublish';
 import { reportActionToast } from '../../../vendor/stacki/src/ui/errorNotices';
-import { getEditorRole, subscribeRole } from '../roles/roleStore';
+import { getEditorRole, getStudioRole, subscribeRole } from '../roles/roleStore';
+import { assertClientEditorEdit, clientActionRefusal } from '../roles/clientEditorGate';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
 import { occurrenceOf, parsePeer, type Peer } from './presence';
 import { selectionOwner } from './selectionLock';
@@ -458,10 +459,12 @@ export class SharedDocument {
     if (!this.ready || !this.canEdit(this.selection)) {
       return;
     }
+    const source = this.text.toString();
+    const next = source.slice(0, edit.start) + edit.text + source.slice(edit.end);
     if (getEditorRole() === 'client') {
-      const source = this.text.toString();
-      assertClientSourceChange(this.file, source, source.slice(0, edit.start) + edit.text + source.slice(edit.end));
+      assertClientSourceChange(this.file, source, next);
     }
+    assertClientEditorEdit(getStudioRole(), this.file, source, next);
     const previous = this.text.toString().slice(edit.start, edit.end);
     const minimal = textChange(previous, edit.text);
     this.doc.transact(() => {
@@ -489,6 +492,10 @@ export class SharedDocument {
         throw new Error(studioTranslate('studio.collab.sourceProtected'));
       }
       assertClientAction(this.text.toString(), action);
+    }
+    const refused = clientActionRefusal(getStudioRole(), this.file, this.text.toString(), action);
+    if (refused !== undefined) {
+      throw refused;
     }
     if ('node' in action && !this.canEdit(action.node)) {
       return false;

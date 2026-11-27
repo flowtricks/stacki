@@ -1,7 +1,12 @@
 import { githubIconPath } from '../../ui/iconPaths';
+import { PlugIcon } from '../../ui/Icons';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
-export function PublishProviderIcon({ provider }: { readonly provider: Hosting['provider'] | 'github' }) {
+export function PublishProviderIcon({ provider }: { readonly provider: Hosting['provider'] | 'github' | 'custom' }) {
+  if (provider === 'custom') {
+    // A host Stacki has no mark for: the Central plug, "bring your own".
+    return <PlugIcon size={20} />;
+  }
   return (
     <svg
       className="publish-provider-icon"

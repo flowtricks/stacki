@@ -67,7 +67,9 @@ import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCan
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parseWorkerSetupRequest } from '../properties/publishWorkerSetup';
 import { parseNetlifySiteRequest } from '../properties/publishNetlify';
-import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
+import { parsePublishCommitMessage } from '../properties/publishConfig';
+import { parsePublishRequestTarget } from '../properties/publishDestinations';
+import { parseCustomPublishRequest } from '../properties/publishDeployLink';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
 import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
 import { parseComponentOpTarget, parseComponentUses } from '../properties/componentOps';
@@ -499,7 +501,7 @@ export const IPC_PAYLOADS = {
   'git:connect': object({ ...project, repository: parseGitHubRepository }),
   'publish:start': object({
     ...project,
-    target: parsePublishTarget,
+    target: parsePublishRequestTarget,
     commitMessage: optional(parsePublishCommitMessage),
   }),
   'publish:state': pathText,
@@ -510,6 +512,7 @@ export const IPC_PAYLOADS = {
   'publish:account': object({ ...project, request: parseAccountRequest }),
   'publish:workerSetup': object({ ...project, worker: parseWorkerSetupRequest }),
   'publish:netlifySite': object({ ...project, site: parseNetlifySiteRequest }),
+  'publish:custom': object({ ...project, request: parseCustomPublishRequest }),
   'cmsConnections:list': object({ ...project }),
   'cmsConnections:save': object({ ...project, draft: parseCmsConnectionDraft }),
   'cmsConnections:remove': object({ ...project, id: parseConnectionId }),

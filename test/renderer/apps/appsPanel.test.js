@@ -161,7 +161,7 @@ test('no apps: the empty state points at the + menu, with no button of its own',
   assert.equal(empty.querySelector('button') ?? undefined, undefined, 'adding an app is the header’s + alone');
   assert.equal(container.querySelector('.welcome-split-button') ?? undefined, undefined);
   await act(async () => root.unmount());
-  const viewer = await mount(panel({ id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps']) }));
+  const viewer = await mount(panel({ id: 'client', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps']) }));
   assert.match(viewer.container.querySelector('.apps-empty .apps-note').textContent, /ask an admin/);
   assert.equal(viewer.container.querySelector('.apps-empty button') ?? undefined, undefined);
   await act(async () => viewer.root.unmount());
@@ -188,11 +188,17 @@ test('the header + lists every way to add an app, installed or not; a non-admin 
   assert.deepEqual(await headerMenu(installed.container), every);
   assert.equal(installed.container.querySelector('.welcome-split-button') ?? undefined, undefined, 'the body has no split button');
   await act(async () => installed.root.unmount());
-  const viewer = await mount(panel({ id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps']) }));
+  const viewer = await mount(panel({ id: 'client', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps']) }));
   assert.deepEqual(await headerMenu(viewer.container), ['Build an app']);
   await act(async () => viewer.root.unmount());
   const publisher = await mount(
-    panel({ id: 'publisher', name: 'Publisher', isAdmin: false, features: new Set(['panel:apps', 'marketplace:view', 'marketplace:publish']) }),
+    panel({
+      id: 'publisher',
+      name: 'Publisher',
+      isAdmin: false,
+      editorOff: new Set(),
+      features: new Set(['panel:apps', 'marketplace:view', 'marketplace:publish']),
+    }),
   );
   assert.deepEqual(
     await headerMenu(publisher.container),
@@ -303,14 +309,20 @@ test('each row’s ⋯ menu: Details, Share to GitHub…, Submit to marketplace 
   await listedMenu.close();
   await act(async () => second.root.unmount());
 
-  const sharer = { id: 'helper', name: 'Helper', isAdmin: false, features: new Set(['panel:apps', 'apps:share', 'app:*']) };
+  const sharer = { id: 'helper', name: 'Helper', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'apps:share', 'app:*']) };
   const helper = await mount(panel(sharer));
   const helperMenu = await menuOf(helper.container, 'Translate');
   assert.deepEqual(helperMenu.labels, ['Details', 'Share to GitHub…'], 'apps:share without marketplace:publish or admin');
   await helperMenu.close();
   await act(async () => helper.root.unmount());
 
-  const publisher = { id: 'publisher', name: 'Publisher', isAdmin: false, features: new Set(['panel:apps', 'marketplace:publish', 'app:*']) };
+  const publisher = {
+    id: 'publisher',
+    name: 'Publisher',
+    isAdmin: false,
+    editorOff: new Set(),
+    features: new Set(['panel:apps', 'marketplace:publish', 'app:*']),
+  };
   const lone = await mount(panel(publisher));
   const loneMenu = await menuOf(lone.container, 'Translate');
   assert.deepEqual(loneMenu.labels, ['Details'], 'without apps:share an uploaded app has no way to the marketplace, so Submit hides');
@@ -410,6 +422,7 @@ test('a folder app the marketplace lists has no Share to GitHub and no Submit at
     id: 'publisher',
     name: 'Publisher',
     isAdmin: false,
+    editorOff: new Set(),
     features: new Set(['panel:apps', 'marketplace:view', 'marketplace:publish', 'app:*']),
   };
   const lone = await mount(React.createElement(AppsPanel, { projectPath: '/shared-check', role: publisher, notify: () => {}, renderSignIn }));
@@ -586,7 +599,7 @@ test('Remove app asks first, from the row’s ⋯ menu and the details header’
 test('an app with no author shows none, never "Unknown"; a non-admin sees no Uninstall', async () => {
   // An uploaded app that names no author: nothing to show, so no row at all.
   window.avb = { listApps: async () => ({ ok: true, value: [summary('heat-map', 'Heat map', 'Clicks on the canvas')] }) };
-  const viewer = await mount(panel({ id: 'editor', name: 'Editor', isAdmin: false, features: new Set(['panel:apps', 'app:*']) }));
+  const viewer = await mount(panel({ id: 'editor', name: 'Editor', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'app:*']) }));
   const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   await click(viewer.container.querySelector('.apps-row [aria-label="Heat map options"]'));
   await click([...document.querySelectorAll('[role=menuitem]')].find((item) => item.textContent === 'Details'));
@@ -634,7 +647,7 @@ test('installed apps list, filter, launch, and follow the role', async () => {
   assert.deepEqual(names(), ['Translate']);
   await act(async () => root.unmount());
 
-  const limited = { id: 'editor', name: 'Editor', isAdmin: false, features: new Set(['panel:apps', 'app:heat-map']) };
+  const limited = { id: 'editor', name: 'Editor', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'app:heat-map']) };
   const second = await mount(panel(limited));
   assert.deepEqual(
     [...second.container.querySelectorAll('.apps-row-title')].map((name) => name.textContent),
@@ -773,7 +786,7 @@ test('the Marketplace tab lists approved apps, marks installed ones, and install
   assert.deepEqual(installs, [{ projectPath: '/p', id: 'alt-text', version: '0.3.0' }]);
   await act(async () => admin.root.unmount());
 
-  const viewOnly = { id: 'editor', name: 'Editor', isAdmin: false, features: new Set(['panel:apps', 'marketplace:view']) };
+  const viewOnly = { id: 'editor', name: 'Editor', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'marketplace:view']) };
   const browsing = await mount(panel(viewOnly));
   await click([...browsing.container.querySelectorAll('[role=tab]')].find((element) => element.textContent === 'Marketplace'));
   await settle();
@@ -885,7 +898,7 @@ test('a waiting update reads on its row and dots the rail; auto-update starts of
   assert.deepEqual(switches, [{ projectPath: '/p', id: 'heat-map', autoUpdate: true }]);
   await act(async () => root.unmount());
 
-  const viewer = await mount(panel({ id: 'editor', name: 'Editor', isAdmin: false, features: new Set(['panel:apps', 'app:*']) }));
+  const viewer = await mount(panel({ id: 'editor', name: 'Editor', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'app:*']) }));
   const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   await click(viewer.container.querySelector('.apps-row [aria-label="Heat map options"]'));
   await click([...document.querySelectorAll('[role=menuitem]')].find((item) => item.textContent === 'Details'));

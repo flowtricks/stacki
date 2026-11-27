@@ -99,7 +99,7 @@ function recordingHost() {
 
 const request = (id, method, params) => ({ stacki: 'app', v: 1, id, method, params });
 const context = (host, role = roles.ADMIN_VIEW, overlays = []) => ({ host, role: () => role, setOverlay: (appId, items) => overlays.push([appId, items]) });
-const client = { id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps', 'app:heat-map', 'panel:pages']) };
+const client = { id: 'client', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'app:heat-map', 'panel:pages']) };
 
 test('non-app messages are ignored; malformed ones and newer versions are answered', async () => {
   const { host } = recordingHost();
