@@ -1327,7 +1327,7 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
 }
 
 /** Whether this component's own value of a root setting replaces the project's, so a project edit does not show on it. */
-export function rootOverrides(file: ComponentCanvasFile, component: string, setting: RootEdit['kind']): boolean {
+export function rootOverrides(file: ComponentCanvasFile, component: string, setting: keyof CanvasRoot): boolean {
   return file.components[component]?.root?.[setting] !== undefined;
 }
 
