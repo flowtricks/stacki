@@ -22,7 +22,7 @@ import { isElement, isText } from './frameBasics';
 import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
 import { inspectScopedProperties, inspectWinningDeclarations, WINNING_LIMITS, type WinningDeclaration } from './frameAuthoredStyles';
-import { list, pathText, text } from '../../shared/core/boundary';
+import { pathText } from '../../shared/core/boundary';
 import { renderedPageImage, renderedPageType } from './framePageMetadata';
 import { renderedPageText } from './framePageText';
 import { freezeViewportHeight, report } from './frameViewport';
@@ -30,7 +30,6 @@ import { startGuide, type GuideFrame } from './frameGuide';
 import {
   PATH_ATTR,
   activeScope,
-  allElementsWithPath,
   elementsWithPath,
   focusOcc,
   focusPath,
@@ -267,34 +266,10 @@ function hidePending(input: unknown): void {
   sendRects();
 }
 
-const CLASS_PATCH_NAMES_MAX = 64;
-
+// Shown through the pending edits, so the patch takes it back before it applies the rendering
+// (framePendingEdit.ts): a class this gets wrong would otherwise stay wrong until a refresh.
 function applyClassPatch(data: Record<string, unknown>): void {
-  let path: string;
-  let add: string[];
-  let remove: string[];
-  try {
-    path = pathText(data['path']);
-    add = list(text)(data['add']);
-    remove = list(text)(data['remove']);
-  } catch {
-    return;
-  }
-  if (add.length + remove.length > CLASS_PATCH_NAMES_MAX) {
-    return;
-  }
-  if ([...add, ...remove].some((name) => !name || name.length > 256 || /\s/.test(name))) {
-    return;
-  }
-  const elements = allElementsWithPath(path);
-  for (const element of elements) {
-    for (const name of remove) {
-      element.classList.remove(name);
-    }
-    for (const name of add) {
-      element.classList.add(name);
-    }
-  }
+  showCanvasEdits([{ kind: 'classes', path: data['path'], add: data['add'], remove: data['remove'] }]);
   sendClasses();
   sendRects();
 }

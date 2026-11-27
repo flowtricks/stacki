@@ -148,6 +148,8 @@ function applyEdit(edit: CanvasEdit): Shown | undefined {
   switch (edit.kind) {
     case 'attributes':
       return applyAttributes(edit);
+    case 'classes':
+      return applyClasses(edit);
     case 'text':
       return applyText(edit);
     case 'tag':
@@ -189,6 +191,36 @@ function applyAttributes(edit: Extract<CanvasEdit, { kind: 'attributes' }>): Sho
             element.setAttribute(name, value);
           }
         }
+      }
+    },
+  };
+}
+
+// A class prediction can be wrong: the component may write the same name itself, or never pass the
+// instance's class on. The rendering says which, but only to a page that matches the last one: the
+// patch writes what two renderings disagree about, so a name both of them carry is never put back on
+// an element that lost it here. So only what this edit really changed is recorded, and taken back.
+function applyClasses(edit: Extract<CanvasEdit, { kind: 'classes' }>): Shown | undefined {
+  const changed = elementsAt(edit.path)
+    .map((element) => ({
+      element,
+      removed: edit.remove.filter((name) => element.classList.contains(name)),
+      added: edit.add.filter((name) => !element.classList.contains(name)),
+    }))
+    .filter(({ removed, added }) => removed.length + added.length > 0);
+  if (changed.length === 0) {
+    return undefined;
+  }
+  for (const { element, removed, added } of changed) {
+    element.classList.remove(...removed);
+    element.classList.add(...added);
+  }
+  return {
+    edit,
+    undo: () => {
+      for (const { element, removed, added } of changed) {
+        element.classList.remove(...added);
+        element.classList.add(...removed);
       }
     },
   };

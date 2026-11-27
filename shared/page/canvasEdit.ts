@@ -20,6 +20,9 @@ export type CanvasEdit =
   | { readonly kind: 'attributes'; readonly path: string; readonly set: readonly (readonly [string, string])[]; readonly remove: readonly string[] }
   | { readonly kind: 'text'; readonly path: string; readonly text: string }
   | { readonly kind: 'tag'; readonly path: string; readonly tag: string }
+  // Single classes put on or taken off, keeping the rest: a component instance's class, which the
+  // canvas shows on the component's own root, beside the classes the component writes there.
+  | { readonly kind: 'classes'; readonly path: string; readonly add: readonly string[]; readonly remove: readonly string[] }
   | { readonly kind: 'updating'; readonly path: string };
 
 /** The model's node, as far as a diff reads it. */
@@ -38,6 +41,9 @@ export const CANVAS_EDIT_LIMITS = {
   /** Nodes one diff visits. */
   nodesMax: LIMITS.treeNodesMax,
   textCharsMax: CANVAS_INSERT_LIMITS.textCharsMax,
+  /** Class names one edit adds and removes together. */
+  classNamesMax: 64,
+  classNameCharsMax: 256,
 } as const satisfies Record<string, number>;
 
 const TAG_NAME = /^[a-z][a-z0-9-]*$/;
@@ -308,9 +314,34 @@ function parseOne(input: unknown): CanvasEdit | undefined {
     }
     case 'attributes':
       return parseAttributes(record, path);
+    case 'classes':
+      return parseClasses(record, path);
     default:
       return undefined;
   }
+}
+
+function parseClasses(record: Readonly<Record<string, unknown>>, path: string): CanvasEdit | undefined {
+  const add = parseClassNames(record['add']);
+  const remove = parseClassNames(record['remove']);
+  if (add === undefined || remove === undefined || add.length + remove.length > CANVAS_EDIT_LIMITS.classNamesMax) {
+    return undefined;
+  }
+  return { kind: 'classes', path, add, remove };
+}
+
+function parseClassNames(input: unknown): readonly string[] | undefined {
+  if (!Array.isArray(input) || input.length > CANVAS_EDIT_LIMITS.classNamesMax) {
+    return undefined;
+  }
+  const names: string[] = [];
+  for (const name of input) {
+    if (typeof name !== 'string' || name.length === 0 || name.length > CANVAS_EDIT_LIMITS.classNameCharsMax || /\s/.test(name)) {
+      return undefined;
+    }
+    names.push(name);
+  }
+  return names;
 }
 
 function parseAttributes(record: Readonly<Record<string, unknown>>, path: string): CanvasEdit | undefined {
