@@ -427,6 +427,9 @@ export const MoreIcon = centralIcon(centralMore);
 
 export const CopyIcon = centralIcon(centralCopy);
 
+// Compressing an asset, in its tile's menu and the selection toolbar: Central's `minimize-45, arrow, shrink` (set 9303:25133).
+export const CompressIcon = centralIcon(centralCollapse);
+
 // --- CMS field types -------------------------------------------------------
 
 export const ParagraphIcon = centralIcon(centralParagraph);

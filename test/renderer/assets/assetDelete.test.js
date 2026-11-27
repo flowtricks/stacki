@@ -204,6 +204,15 @@ const check = (what, condition, detail) => {
   check('pressing it opens a menu', rows().length > 0, container.innerHTML.slice(0, 160));
   check('with Delete in it', rows().includes('Delete'), rows().join());
   check('with link, compression and replacement before it', rows().join('|') === 'Copy link|Compress…|Replace…|Delete', rows().join());
+  // One row without an icon pulls its label out of line with the rest.
+  const menuRows = [...document.querySelectorAll('.more-menu-item')];
+  check(
+    'every row has an icon, so the labels line up',
+    menuRows.every((row) => row.firstElementChild?.matches('svg[data-central-icon]')),
+    menuRows.map((row) => `${row.textContent}:${row.querySelector('svg')?.dataset.centralIcon}`).join(),
+  );
+  const compressRow = menuRows.find((row) => row.textContent.trim() === 'Compress…');
+  check('Compress draws the inward arrows', compressRow?.querySelector('svg')?.dataset.centralIcon === 'collapse');
 
   // --- it asks before it does it ---------------------------------------------------
   //
@@ -261,6 +270,7 @@ const check = (what, condition, detail) => {
     tiles().every((tile) => tile.querySelector('input').checked),
   );
   check('Compress now names what it skips', /Compress 1 image; 4 other files are skipped/.test(compressButton()?.title ?? ''), compressButton()?.title);
+  check('the selection toolbar draws the same Compress icon', compressButton()?.querySelector('svg')?.dataset.centralIcon === 'collapse');
   await press(compressButton());
   const compression = () => document.querySelector('.asset-compression-dialog');
   check('compression opens one format dialog', !!compression());
