@@ -21,6 +21,13 @@ export const messages = {
     many: '{count} ramek tutaj pokazuje różne wartości. Wartość ustawiona tutaj nie zmienia własnej wartości żadnej z ramek.',
     other: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj nie zmienia własnej wartości żadnej z ramek.',
   },
+  'componentCanvas.level.mixedLayout': 'Te grupy są ułożone w różny sposób. Wybierz układ, aby ułożyć wszystkie tak samo.',
+  'componentCanvas.level.mixedShared': {
+    one: '{count} ramka tutaj pokazuje inną wartość. Wartość ustawiona tutaj zostanie jej nadana.',
+    few: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj zostanie nadana wszystkim.',
+    many: '{count} ramek tutaj pokazuje różne wartości. Wartość ustawiona tutaj zostanie nadana wszystkim.',
+    other: '{count} ramki tutaj pokazują różne wartości. Wartość ustawiona tutaj zostanie nadana wszystkim.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} ramka tutaj zachowuje własną wartość. Zresetuj, aby nadać jej tę wartość.',
     few: '{count} ramki tutaj zachowują własną wartość. Zresetuj, aby nadać im tę wartość.',

@@ -490,7 +490,7 @@ function useUnfinishedCode(onRefused: (name: string) => void): UnfinishedCode {
 // this component to none, so what was removed stays removed. Exported for its regression test.
 export function rootSettings(canvas: ComponentCanvasControl, state: CanvasOpen, translate: Translator): CanvasInstanceSettings {
   const project = state.settings.classes ?? [];
-  const atComponent = state.scopes.background === COMPONENT_SCOPE;
+  const atComponent = state.scopes.frame === COMPONENT_SCOPE;
   const own = atComponent ? state.settings.components[state.component.file]?.root?.classes : state.settings.classes;
   const inherited = atComponent && own === undefined && project.length > 0;
   const classes = inherited ? project : (own ?? []);

@@ -20,6 +20,11 @@ export const messages = {
     one: 'Le {count} cadre ici affiche une valeur différente. Une valeur définie ici laisse la valeur propre d’un cadre telle quelle.',
     other: 'Les {count} cadres ici affichent des valeurs différentes. Une valeur définie ici laisse la valeur propre de chaque cadre telle quelle.',
   },
+  'componentCanvas.level.mixedLayout': 'Ces groupes sont disposés différemment. Choisissez une disposition pour les disposer tous de la même façon.',
+  'componentCanvas.level.mixedShared': {
+    one: 'Le {count} cadre ici affiche une valeur différente. Une valeur définie ici lui est appliquée.',
+    other: 'Les {count} cadres ici affichent des valeurs différentes. Une valeur définie ici s’applique à tous.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} cadre ici conserve sa propre valeur. Réinitialisez pour lui donner celle-ci.',
     other: '{count} cadres ici conservent leur propre valeur. Réinitialisez pour leur donner celle-ci.',

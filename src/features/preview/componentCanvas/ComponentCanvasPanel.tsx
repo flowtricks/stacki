@@ -1,9 +1,9 @@
-// Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the size and background of
-// the frame selected on the canvas or in the Navigator. Each section's heading ends in where its edits go
-// (CanvasScopeControl.tsx): the size starts at all frames, the background at this frame, and a narrower scope's own
-// setting wins over a wider one. Where frames a section reaches keep a value of their own, its label is the Style
-// panel's orange, and Reset gives them all the value shown. Which props get their own frames and the frames' preview
-// values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
+// Frame settings, in the popover over the component canvas (ComponentCanvasFramePopup.tsx): the size, background and
+// layout of what is selected on the canvas or in the Navigator. One "Apply to" at the top says which frames an edit
+// reaches (CanvasScopeControl.tsx), and every one of them then shows it; it starts at this frame. Where the frames in
+// scope differ, the field says so, its label is the Style panel's orange, and Reset gives them all one value. Layout
+// arranges the groups the scope holds, or on the canvas root the page itself. Which props get their own frames and the
+// frames' preview values are the Settings panel's (src/app/shell/canvasFrameSettings.tsx).
 import { useEffect, useState, type ReactNode, type KeyboardEvent } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import {
@@ -13,12 +13,12 @@ import {
   canvasRoot,
   type CanvasArrangement,
   frameBackground,
-  overridesIn,
+  sharedOverrides,
   resolveFrame,
   scopeHolds,
   settingMixed,
   type FrameLength,
-  type FrameSetting,
+  type SharedSetting,
 } from '../../../../shared/properties/componentCanvas';
 import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../../ui/DirectionIcons';
 import InfoHint from '../../../ui/InfoHint';
@@ -30,9 +30,9 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import ColorSwatch from '../../style/components/ColorSwatch';
 import VariableConnect from '../../style/VariableConnect';
 import { prettyComponentName } from './frameLabel';
-import { canvasLevels, groupFrames } from './canvasGroups';
+import { canvasLevels, groupFrames, layoutTargets } from './canvasGroups';
 import { CanvasSectionHeading } from './CanvasScopeControl';
-import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type CanvasSection, type ComponentCanvasControl } from './componentCanvasSession';
+import { COMPONENT_SCOPE, PROJECT_SCOPE, type CanvasOpen, type ComponentCanvasControl } from './componentCanvasSession';
 import './componentCanvas.css';
 import { CAPTION_LABEL_FOR } from '../../../ui/captionLabel';
 import { stepSizeKey } from '../../style/SizeKit';
@@ -59,6 +59,9 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
         <span className="component-canvas-panel-name">{prettyComponentName(state.component.name)}</span>
         <span className="badge">{translate('componentCanvas.panel.frames', { count: state.layout.frames.length })}</span>
       </div>
+      <section className="component-canvas-section component-canvas-scope-row">
+        <CanvasSectionHeading canvas={canvas} state={state} section="frame" title={translate('componentCanvas.panel.scope.label')} />
+      </section>
       {state.subject === 'root' ? <RootSection canvas={canvas} state={state} /> : <FrameSection canvas={canvas} state={state} />}
     </div>
   );
@@ -66,31 +69,62 @@ export function ComponentCanvasPanel({ canvas, state }: { readonly canvas: Compo
 
 function FrameSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
+  const reached = new Set(framesInScope(state));
+  const targets = layoutTargets(groupFrames(state.layout.frames), reached);
   return (
     <>
       <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.size')}>
-        <CanvasSectionHeading canvas={canvas} state={state} section="size" title={translate('componentCanvas.panel.size')} />
+        <SectionTitle title={translate('componentCanvas.panel.size')} />
         <LengthField side="width" canvas={canvas} state={state} />
         <LengthField side="height" canvas={canvas} state={state} />
       </section>
       <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.background')}>
-        <CanvasSectionHeading canvas={canvas} state={state} section="background" title={translate('componentCanvas.panel.background')} />
         <BackgroundField canvas={canvas} state={state} />
       </section>
-      {/* Only a group has children to lay out: a frame, or the component in it, has no Layout. */}
-      {state.picked.kind === 'group' && <LayoutSection canvas={canvas} state={state} level={state.picked.key} />}
+      {/* Only a group of several has children to lay out: where the scope holds none, there is no Layout. */}
+      {targets.length > 0 && <LayoutSection canvas={canvas} state={state} targets={targets} />}
     </>
   );
 }
 
-// How the selected level's direct children are laid out: the canvas's own (while <html> is selected) or a group's.
-// It is always this component's setting, so it has no "Apply to": a level somebody chose is a set value (blue, with
-// Reset back to its default); one nobody chose is plain.
-function LayoutSection({ canvas, state, level }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen; readonly level: string }) {
+function SectionTitle({ title, extra }: { readonly title: string; readonly extra?: ReactNode }) {
+  return (
+    <div className="component-canvas-heading-row">
+      <span className="component-canvas-heading-title">
+        {title}
+        {extra}
+      </span>
+    </div>
+  );
+}
+
+// The frames Frame settings' scope reaches; none at a root scope.
+function framesInScope(state: CanvasOpen): readonly string[] {
+  const scope = state.scopes.frame;
+  return state.layout.frames.map((candidate) => candidate.key).filter((key) => scopeHolds(scope, key));
+}
+
+// How the direct children of each level the control arranges are laid out: the canvas's own (while <html> is
+// selected), or every group the scope holds. A level somebody chose is a set value (blue, with Reset back to the
+// defaults); one nobody chose is plain; levels arranged differently show no choice, in orange, until one is made.
+function LayoutSection({
+  canvas,
+  state,
+  targets,
+}: {
+  readonly canvas: ComponentCanvasControl;
+  readonly state: CanvasOpen;
+  readonly targets: readonly string[];
+}) {
   const translate = useTranslate();
   const title = translate('componentCanvas.panel.layout');
   const levels = canvasLevels(groupFrames(state.layout.frames), state.layout.frames);
-  const { value, chosen } = levelArrangement(state.settings.components[state.component.file], level, levels);
+  const found = targets.map((level) => levelArrangement(state.settings.components[state.component.file], level, levels));
+  const shown = new Set(found.map((level) => level.value));
+  const first = found[0];
+  assert(first !== undefined, 'A Layout control arranges a level');
+  const value: CanvasArrangement | 'mixed' = shown.size === 1 ? first.value : 'mixed';
+  const chosen = found.some((level) => level.chosen);
   // Drawn with the Style panel's direction icons; each choice's words are its tooltip and accessible name.
   const option = (arrangement: CanvasArrangement, icon: ReactNode, name: string) => ({
     value: arrangement,
@@ -103,28 +137,32 @@ function LayoutSection({ canvas, state, level }: { readonly canvas: ComponentCan
     option('column', <ArrowDownIcon />, translate('componentCanvas.panel.layout.column')),
     option('wrap', <RowWrapIcon />, translate('componentCanvas.panel.layout.wrap')),
   ];
-  assert(
-    options.some((candidate) => candidate.value === value),
-    'The canvas’s arrangement is one it offers',
-  );
   return (
     <section className="component-canvas-section" aria-label={title}>
       <div className="component-canvas-heading-row">
         <span className="component-canvas-heading-title">
-          <ResetLabel label={title} active={chosen} onReset={() => canvas.setArrangement(level, undefined)} />
+          <ResetLabel
+            label={title}
+            active={chosen}
+            tone={value === 'mixed' ? 'overridden' : undefined}
+            tip={value === 'mixed' ? translate('componentCanvas.level.mixedLayout') : undefined}
+            onReset={() => canvas.setArrangement(targets, undefined)}
+          />
         </span>
+        {/* The layout is never shared: at All components it says whose it is. */}
+        {state.scopes.frame === PROJECT_SCOPE && <span className="component-canvas-own">{translate('componentCanvas.panel.scope.component')}</span>}
       </div>
       <div className="props-field">
-        <SegmentedControl<CanvasArrangement>
-          // A level of its own: the highlight never slides over from the level shown before.
-          key={level}
+        <SegmentedControl<CanvasArrangement | 'mixed'>
+          // Levels of their own: the highlight never slides over from the levels shown before.
+          key={targets.join('\n')}
           className="component-canvas-arrangement"
           ariaLabel={title}
           value={value}
           options={options}
           onChange={(next) => {
-            if (next !== value) {
-              canvas.setArrangement(level, next);
+            if (next !== value && next !== 'mixed') {
+              canvas.setArrangement(targets, next);
             }
           }}
         />
@@ -134,81 +172,73 @@ function LayoutSection({ canvas, state, level }: { readonly canvas: ComponentCan
 }
 
 // The canvas itself, while its root (the page's <html>) is selected: its background, the surface every frame sits on,
-// for this component's canvas or every component's. Its classes are the Settings panel's class field
-// (canvasFrameSettings.tsx), at the same choice.
+// for this component's canvas or every component's, and how its top-level groups are laid out. Its classes are the
+// Settings panel's class field (canvasFrameSettings.tsx), at the same choice.
 function RootSection({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
+  const title = translate('componentCanvas.panel.root.title');
   return (
     <>
-      <section className="component-canvas-section" aria-label={translate('componentCanvas.panel.root.title')}>
-        <CanvasSectionHeading
-          canvas={canvas}
-          state={state}
-          section="background"
-          title={translate('componentCanvas.panel.root.title')}
-          extra={<InfoHint text={translate('componentCanvas.panel.root.about')} />}
-        />
+      <section className="component-canvas-section" aria-label={title}>
+        <SectionTitle title={title} extra={<InfoHint text={translate('componentCanvas.panel.root.about')} />} />
         <BackgroundField canvas={canvas} state={state} />
       </section>
-      <LayoutSection canvas={canvas} state={state} level={CANVAS_LEVEL} />
+      <LayoutSection canvas={canvas} state={state} targets={[CANVAS_LEVEL]} />
     </>
   );
 }
 
-// Whether the frames a section's scope reaches show different values for `setting`: its field then says Mixed rather
-// than one frame's value. An edit writes the scope's value only; a frame with its own keeps it.
-function mixed(state: CanvasOpen, section: CanvasSection, setting: FrameSetting): boolean {
-  const scope = state.scopes[section];
-  if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
-    return false;
-  }
-  const frames = state.layout.frames.map((candidate) => candidate.key);
-  return settingMixed(state.settings.components[state.component.file], frames, scope, setting);
-}
-
-interface Overrides {
+interface Differences {
+  /** Whether the frames in scope show different values: the field then says Mixed rather than one frame's value. */
+  readonly mixed: boolean;
   /** What the label's tip says: that the frames differ, and which keep a value of their own. */
   readonly tip: string | undefined;
-  /** How many frames in scope keep a value a narrower scope gives them: what Reset can give the scope's value. */
+  /** How many frames in scope Reset would change. */
   readonly count: number;
 }
 
-// The frames a section's scope reaches that keep a value of their own for `setting`, and whether they differ, said in
-// the label's tip. Reset (resetOverrides) gives those frames the scope's value; frames that differ only through a
-// sibling scope have nothing here to reset.
-function overridden(state: CanvasOpen, section: CanvasSection, setting: FrameSetting, translate: Translator): Overrides {
-  const scope = state.scopes[section];
+// How the frames in scope stand for `setting`, said in the label's tip.
+function differences(state: CanvasOpen, setting: SharedSetting, translate: Translator): Differences {
+  const scope = state.scopes.frame;
   if (scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE) {
-    return { tip: undefined, count: 0 };
+    return { mixed: false, tip: undefined, count: 0 };
   }
+  const settings = state.settings.components[state.component.file];
   const frames = state.layout.frames.map((candidate) => candidate.key);
-  const found = overridesIn(state.settings.components[state.component.file], frames, scope, setting);
-  const reached = frames.filter((key) => scopeHolds(scope, key)).length;
-  const differ = mixed(state, section, setting) ? translate('componentCanvas.level.mixed', { count: reached }) : undefined;
+  const mixed = settingMixed(settings, frames, scope, setting);
+  const found = sharedOverrides(settings, frames, scope, setting);
+  const reached = framesInScope(state).length;
+  assert(found.length <= reached, 'Only frames in scope keep their own value');
+  const differ = mixed ? translate('componentCanvas.level.mixedShared', { count: reached }) : undefined;
   if (found.length === 0) {
-    return { tip: differ, count: 0 };
+    return { mixed, tip: differ, count: 0 };
   }
   const count = translate('componentCanvas.level.overrides', { count: found.length });
-  // The selected frame among them is why it does not change: said first.
-  const own = found.some((entry) => entry.frame === state.frame) ? `${translate('componentCanvas.level.frame')}. ${count}` : count;
-  assert(found.length <= reached, 'Only frames in scope keep their own value');
-  return { tip: differ === undefined ? own : `${differ} ${own}`, count: found.length };
+  // The selected frame among them is said first.
+  const own = found.includes(state.frame) && reached > 1 ? `${translate('componentCanvas.level.frame')}. ${count}` : count;
+  return { mixed, tip: differ === undefined ? own : `${differ} ${own}`, count: found.length };
+}
+
+// What the frames in scope show where they all show the same: any one of them speaks for all.
+function sharedFrame(state: CanvasOpen) {
+  const key = framesInScope(state)[0];
+  assert(key !== undefined, 'A frame scope reaches a frame');
+  return resolveFrame(state.settings.components[state.component.file], key);
 }
 
 function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height'; readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
   const label = translate(side === 'width' ? 'componentCanvas.panel.width' : 'componentCanvas.panel.height');
-  const scope = state.scopes.size;
+  const scope = state.scopes.frame;
   const settings = state.settings.components[state.component.file];
-  // What the scope itself gives: its own value, else a wider one's, else hug; while the selected frame is being resized
-  // on the canvas, the size the pointer gives it.
+  // What the frames in scope show; while the selected frame is being resized on the canvas, the size the pointer gives it.
   const dragged = state.resizing?.frame === state.frame ? state.resizing[side] : undefined;
   // Frames in scope that differ: hug and fixed together select neither; fixed sizes alone leave the pixels empty.
   const lengths = sideValues(state, side);
   const shownMixed = dragged === undefined && lengths.length > 1;
-  const value = dragged ?? (shownMixed ? (lengths.every((length) => length !== 'hug') ? 'mixed' : 'unknown') : resolveFrame(settings, scope)[side]);
+  const value = dragged ?? (shownMixed ? (lengths.every((length) => length !== 'hug') ? 'mixed' : 'unknown') : sharedFrame(state)[side]);
   const own = settings?.frames?.[scope]?.[side] !== undefined;
-  const { tip, count } = overridden(state, 'size', side, translate);
+  const { tip, count } = differences(state, side, translate);
   // Hug over all frames is what no setting says, so it is written as no setting rather than as "hug".
   const set = (next: FrameLength) => canvas.edit({ kind: 'field', field: side, value: next === 'hug' && scope === '' ? undefined : next });
   return (
@@ -219,7 +249,7 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
           active={own || count > 0}
           tone={tip === undefined ? undefined : 'overridden'}
           tip={tip}
-          onReset={() => (count === 0 ? canvas.edit({ kind: 'field', field: side, value: undefined }) : canvas.resetOverrides('size', side))}
+          onReset={() => (count === 0 ? canvas.edit({ kind: 'field', field: side, value: undefined }) : canvas.resetOverrides('frame', side))}
         />
       </FieldTitle>
       <div className="component-canvas-length">
@@ -252,22 +282,21 @@ function LengthField({ side, canvas, state }: { readonly side: 'width' | 'height
   );
 }
 
-// The distinct sizes the frames in the size scope show for a side, so the field can tell when they differ.
+// The distinct sizes the frames in scope show for a side, so the field can tell when they differ.
 function sideValues(state: CanvasOpen, side: 'width' | 'height'): readonly FrameLength[] {
-  const scope = state.scopes.size;
   const settings = state.settings.components[state.component.file];
-  const shown = new Set(state.layout.frames.filter((frame) => scopeHolds(scope, frame.key)).map((frame) => resolveFrame(settings, frame.key)[side]));
+  const shown = new Set(framesInScope(state).map((key) => resolveFrame(settings, key)[side]));
   assert(shown.size <= state.layout.frames.length, 'Each frame shows one size for a side');
   return [...shown];
 }
 
-// The background at the section's scope: the scope's own, a wider scope's, the component's, or the project's canvas
+// The background the frames in scope show: their own, a wider scope's, the component's, or the project's canvas
 // background. A value set here is the blue label (reset clears it); one that comes from a wider level is the orange,
 // inherited label, as the Style panel shows an inherited value; frames in scope that keep their own make it orange
 // with a reset that gives them this one.
 function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen }) {
   const translate = useTranslate();
-  const scope = state.scopes.background;
+  const scope = state.scopes.frame;
   // At a root scope the field is the canvas surface: the component's own, else the project's (inherited at the component).
   const rootScope = scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE;
   const root = canvasRoot(state.settings, state.component.file);
@@ -275,12 +304,12 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
   const rootOwn = scope === PROJECT_SCOPE ? state.settings.background : settings?.root?.background;
   const shown = rootScope
     ? { value: rootOwn ?? (scope === COMPONENT_SCOPE ? root.background : undefined) }
-    : frameBackground(state.settings, resolveFrame(settings, scope), state.component.file);
+    : frameBackground(state.settings, sharedFrame(state), state.component.file);
   const own = rootScope ? rootOwn !== undefined : settings?.frames?.[scope]?.background !== undefined;
-  const { tip, count } = overridden(state, 'background', 'background', translate);
+  const { tip, count, mixed } = differences(state, 'background', translate);
   const inherited = !own && shown.value !== undefined && tip === undefined;
   // Frames in scope that differ show no one colour: the swatch is empty and the field says Mixed.
-  const differ = !rootScope && mixed(state, 'background', 'background');
+  const differ = !rootScope && mixed;
   const value = differ ? undefined : shown.value;
   const label = translate('componentCanvas.panel.background');
   assert(rootScope || state.subject === 'frame', 'The canvas root’s background is set at a root scope');
@@ -307,7 +336,7 @@ function BackgroundField({ canvas, state }: { readonly canvas: ComponentCanvasCo
             active={own || count > 0}
             tone={tip === undefined ? undefined : 'overridden'}
             tip={tip}
-            onReset={() => (count === 0 ? canvas.edit({ kind: 'background', value: undefined }) : canvas.resetOverrides('background', 'background'))}
+            onReset={() => (count === 0 ? canvas.edit({ kind: 'background', value: undefined }) : canvas.resetOverrides('frame', 'background'))}
           />
         )}
       </FieldTitle>

@@ -49,10 +49,8 @@ const CLIP_SIDES = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 1000
 const CLIP_BOTTOM = 'polygon(-100000px -100px, 100000px -100px, 100000px 100%, -100000px 100%)';
 const CLIP_BOTH = 'polygon(0 -100px, 3000px -100px, 3000px 0, 100% 0, 100% 100%, 0 100%)';
 
-// A frame starts below its caption (a lone top-level frame's caption is a heading, as tall as a group's); a group's
-// contents start below its heading, inside its padding.
+// A frame starts below its caption; a group's contents start below its heading, inside its padding.
 const CAPTION_ROOM_PX = CHROME_LIMITS.captionHeightPx + CHROME_LIMITS.captionGapPx;
-const HEADING_ROOM_PX = CHROME_LIMITS.headingHeightPx + CHROME_LIMITS.captionGapPx;
 const GROUP_PADDING_TOP_PX = CHROME_LIMITS.groupPaddingPx + CHROME_LIMITS.headingHeightPx + CHROME_LIMITS.headingGapPx;
 
 /** A box's outline at rest: quiet, so the editor's own hover and selection outlines (the same blue) stand out on it. */
@@ -120,8 +118,7 @@ ${group}::after { content: none !important; }
 ${scaffold} { flex: 0 0 auto !important; display: block !important; position: relative !important; width: max-content !important; height: auto !important; max-width: ${String(CHROME_LIMITS.hugWidthPxMax)}px !important; min-width: 24px !important; padding: ${String(CHROME_LIMITS.framePaddingPx)}px !important; ${reset} transform: translate(0) !important; margin-top: ${String(CAPTION_ROOM_PX)}px !important; }
 ${scaffold}::before { content: attr(data-label) !important; ${type} bottom: 100% !important; top: auto !important; margin: 0 0 ${String(CHROME_LIMITS.captionGapPx)}px !important; max-width: 100% !important; height: ${String(CHROME_LIMITS.captionHeightPx)}px !important; font: 400 12px/${String(CHROME_LIMITS.captionHeightPx)}px ${FONT_STACK} !important; color: ${label} !important; }
 ${scaffold}::after { content: none !important; }
-${scaffold}[data-heading] { margin-top: ${String(HEADING_ROOM_PX)}px !important; }
-${scaffold}[data-heading]::before { height: ${String(CHROME_LIMITS.headingHeightPx)}px !important; max-width: 100% !important; font: ${HEADING_FONT} ${FONT_STACK} !important; color: ${TYPE_COLORS[theme].heading} !important; }
+${scaffold}[data-captionless]::before { visibility: hidden !important; }
 ${typeColorRules('light')}
 ${typeColorRules('dark')}
 html[data-stacki-ready] > body stacki-frame[data-frame][data-selected]::before { color: #2f80ff !important; }
@@ -160,8 +157,8 @@ function typeColorRules(on: 'light' | 'dark'): string {
   const within = `html[data-stacki-${on}] > body`;
   return [
     `${within} stacki-group[data-depth]::before { color: ${colors.subheading} !important; }`,
-    `${within} stacki-group[data-depth="0"]::before, ${within} stacki-frame[data-frame][data-heading]::before { color: ${colors.heading} !important; }`,
-    `${within} stacki-frame[data-frame]:not([data-heading])::before { color: ${colors.caption} !important; }`,
+    `${within} stacki-group[data-depth="0"]::before { color: ${colors.heading} !important; }`,
+    `${within} stacki-frame[data-frame]::before { color: ${colors.caption} !important; }`,
   ].join('\n');
 }
 
@@ -240,7 +237,6 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     var next = scale === labelledAt ? typeScale : labelScale(scale), unit = next / scale;
     labelledAt = scale;
     rule += ' ' + typeRule(SCAFFOLD, 12, ${String(CHROME_LIMITS.captionHeightPx)}, unit, ${String(CHROME_LIMITS.captionGapPx)});
-    rule += ' ' + typeRule(SCAFFOLD + '[data-heading]', 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0);
     rule += ' ' + typeRule(GROUP, 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0);
     rule += ' ' + typeRule(GROUP + ':not([data-depth="0"])', 13, ${String(CHROME_LIMITS.headingHeightPx)}, unit, 0) + ' }';
     if (sizes.textContent !== rule) {
@@ -265,9 +261,8 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   function labelRect(box, scale, type, bounds) {
     bounds = bounds || box.getBoundingClientRect();
     var isGroup = box.tagName.toLowerCase() === 'stacki-group';
-    var heading = isGroup || box.hasAttribute('data-heading');
-    var height = (heading ? ${String(CHROME_LIMITS.headingHeightPx)} : ${String(CHROME_LIMITS.captionHeightPx)}) * type;
-    var text = textWidth(box, isGroup ? (box.getAttribute('data-depth') === '0' ? '600 13px' : '500 13px') : heading ? '600 13px' : '400 12px') * type;
+    var height = (isGroup ? ${String(CHROME_LIMITS.headingHeightPx)} : ${String(CHROME_LIMITS.captionHeightPx)}) * type;
+    var text = textWidth(box, isGroup ? (box.getAttribute('data-depth') === '0' ? '600 13px' : '500 13px') : '400 12px') * type;
     if (isGroup) {
       var inset = ${String(CHROME_LIMITS.groupPaddingPx)} * scale;
       var room = Math.max(bounds.width - 2 * inset, 0);
@@ -288,7 +283,10 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
   function placeLabels(scale, type, all, rects) {
     var kept = [], crowded = [];
     for (var i = 0; i < all.length; i++) {
-      var box = all[i], label = labelRect(box, scale, type, rects[i]), over = false;
+      var box = all[i];
+      // A caption that is not drawn takes no room and cannot be crowded.
+      if (box.hasAttribute('data-captionless')) { crowded.push(false); continue; }
+      var label = labelRect(box, scale, type, rects[i]), over = false;
       var isGroup = box.tagName.toLowerCase() === 'stacki-group';
       for (var k = 0; k < kept.length && !over; k++) over = overlaps(label, kept[k]);
       for (var b = 0; b < all.length && !over; b++) {
@@ -373,10 +371,10 @@ export function chromeScript(id: string, theme: 'light' | 'dark' = 'dark'): stri
     var all = frames(), rules = '', next = {};
     for (var i = 0; i < all.length; i++) {
       var frame = all[i];
-      if (frame.hasAttribute('data-fixed-width') || frame.hasAttribute('data-fallback')) continue;
+      if (frame.hasAttribute('data-fixed-width') || frame.hasAttribute('data-fallback') || frame.hasAttribute('data-captionless')) continue;
       var key = frame.getAttribute('data-frame');
       var natural = frame.offsetWidth - 2 * (widened[key] || 0);
-      var extra = Math.max(0, Math.ceil((textWidth(frame, frame.hasAttribute('data-heading') ? '600 13px' : '400 12px') - natural) / 2));
+      var extra = Math.max(0, Math.ceil((textWidth(frame, '400 12px') - natural) / 2));
       next[key] = extra;
       if (extra > 0) rules += 'html[data-stacki-ready] > body stacki-frame[data-frame="' + key + '"] { padding-inline: ' + (${String(CHROME_LIMITS.framePaddingPx)} + extra) + 'px !important; } ';
     }

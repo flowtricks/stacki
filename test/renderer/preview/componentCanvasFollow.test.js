@@ -28,12 +28,14 @@ const output = path.join(directory, 'component-canvas-follow.cjs');
 buildSync({
   stdin: {
     contents: [
-      "export { useFrameFollowsEditor, frameSettingChange, valuesChange, rootClassesChange, withSettings, arrangementChange } from './src/app/state/useDesktopComponentCanvas';",
+      "export { useFrameFollowsEditor, frameSettingChange, resetChange, valuesChange, rootClassesChange, withSettings, arrangementChange } from './src/app/state/useDesktopComponentCanvas';",
       "export { rootSettings } from './src/app/shell/canvasFrameSettings';",
       "export { ComponentCanvasPanel } from './src/features/preview/componentCanvas/ComponentCanvasPanel';",
       "export { noteComponentCanvas } from './src/features/preview/componentCanvas/componentCanvasSession';",
       "export { buildCanvasLayout } from './src/features/preview/componentCanvas/canvasModel';",
-      "export { groupFrames } from './src/features/preview/componentCanvas/canvasGroups';",
+      "export { groupFrames, canvasLevels, layoutTargets } from './src/features/preview/componentCanvas/canvasGroups';",
+      "export { sectionScopes } from './src/features/preview/componentCanvas/CanvasScopeControl';",
+      "export { resolveFrame, scopeHolds, sharedOverrides } from './shared/properties/componentCanvas';",
       "export { canvasPageSource, canvasTreeOf } from './src/features/preview/componentCanvas/canvasPage';",
       "export { nodeAtPath } from './src/editor/editorTree';",
       "export { parseComponentCanvasSource, serializeComponentCanvas } from './shared/properties/componentCanvas';",
@@ -134,7 +136,7 @@ function openCanvas() {
     settings: { version: 1, components: {} },
     layout,
     frame: first.key,
-    scopes: { props: first.key, size: '', background: first.key },
+    scopes: { props: first.key, frame: first.key },
     rootScope: '*component',
     scale: 1,
     framePanel: 'shown',
@@ -189,7 +191,7 @@ test('a selection change reaches Frame settings in the same commit, with no elem
         frame: state.frame,
         picked: state.picked.kind,
         scope: state.scopes.props,
-        size: state.scopes.size,
+        shared: state.scopes.frame,
         text: panel.current?.textContent ?? '',
       });
     });
@@ -232,7 +234,7 @@ test('a selection change reaches Frame settings in the same commit, with no elem
     assert.equal(commit.frame, step.frame, `${step.name}: the frame follows in that commit`);
     assert.equal(commit.picked, step.picked);
     assert.equal(commit.scope, step.scope);
-    assert.equal(commit.size, step.picked === 'group' ? step.scope : '', `${step.name}: sizes stay at all frames unless a group is selected`);
+    assert.equal(commit.shared, step.scope, `${step.name}: Frame settings’ one scope starts at the frame, or the group selected`);
   }
   observer.disconnect();
   assert.equal(host.querySelector('.component-canvas-section'), section, 'Frame settings keeps its section: it changes words, it is not mounted again');
@@ -254,6 +256,7 @@ test('a selection change reaches Frame settings in the same commit, with no elem
 // The size fields now start Fixed at the frame's drawn size and write it at the scope only: the frame's own Hug survives
 // and still wins there (frameSettingChange). Frames in scope that differ (one Hug, the others fixed) are said as they
 // are: neither choice marked, the label orange, saying the frame keeps its own value, with a Reset that gives it this one.
+// Since the one shared "Apply to", the write also takes the frame's Hug away (below).
 test('Fixed at All frames writes from the drawn size, and frames that differ are said to be Mixed', async (context) => {
   const { state: opened } = openCanvas();
   const link = opened.layout.frames[1].key;
@@ -265,16 +268,16 @@ test('Fixed at All frames writes from the drawn size, and frames that differ are
   const root = createRoot(host);
   context.after(() => act(async () => root.unmount()));
   const draw = (state) => act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: panelControl, state })));
-  const base = { ...opened, settings, frame: link, scopes: { props: link, size: '', background: link } };
+  const base = { ...opened, settings, frame: link, scopes: { props: link, frame: '' } };
   canvas.noteComponentCanvas(base);
   await draw(base);
-  const width = () => host.querySelectorAll('.component-canvas-section')[0].querySelectorAll('.props-field')[0];
+  const width = () => host.querySelector('section[aria-label="Size"]').querySelectorAll('.props-field')[0];
   const pressed = () => width().querySelector('[role="radio"][aria-checked="true"]')?.textContent;
   assert.equal(pressed(), 'Hug', 'nothing set at All frames: Hug');
   const fixed = [...width().querySelectorAll('[role="radio"]')].find((button) => button.textContent === 'Fixed');
   await act(async () => fixed.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
   assert.deepEqual(edits, [{ kind: 'field', field: 'width', value: 183 }], 'Fixed starts at the frame’s drawn width, written to All frames');
-  // The store answers with the all-frames width; the frame's own Hug still wins on that frame.
+  // A This-frame Hug chosen afterwards wins on that frame.
   const after = {
     ...base,
     settings: { ...settings, components: { [BUTTON]: { ...settings.components[BUTTON], frames: { '': { width: 183 }, [link]: { width: 'hug' } } } } },
@@ -284,7 +287,7 @@ test('Fixed at All frames writes from the drawn size, and frames that differ are
   assert.equal(width().querySelector('input') ?? undefined, undefined, 'no one size to show');
   const label = width().querySelector('.prop-label');
   assert.match(label.className, /embed-editor_prop-orange/, 'frames that differ are said in orange');
-  assert.match(label.title, /frames here show different values\. A value set here leaves each frame’s own value as it is\./, 'and that own values stay');
+  assert.match(label.title, /frames here show different values\. A value set here gives them all that value\./, 'and what a value set here does');
   assert.match(label.title, /This frame has its own value\. 1 frame here keeps its own value\. Reset to give it this one\./, 'and which, with Reset');
   // Every frame fixed, at different sizes: Fixed, with the pixels left empty and saying Mixed.
   const sized = {
@@ -308,13 +311,14 @@ test('Fixed at All frames writes from the drawn size, and frames that differ are
 test('Layout shows direction icons, named and tipped by their words', async (context) => {
   const { state } = openCanvas();
   const arrangements = [];
-  const panelControl = { ...control, setArrangement: (next) => arrangements.push(next) };
+  const panelControl = { ...control, setArrangement: (_levels, next) => arrangements.push(next) };
   const host = document.createElement('div');
   document.body.append(host);
   const root = createRoot(host);
   context.after(() => act(async () => root.unmount()));
   canvas.noteComponentCanvas(state);
-  await act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: panelControl, state })));
+  const all = { ...state, scopes: { ...state.scopes, frame: '' } };
+  await act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: panelControl, state: all })));
   const group = host.querySelector('.component-canvas-arrangement');
   assert.equal(group.getAttribute('aria-label'), 'Layout');
   const segments = [...group.querySelectorAll('[role="radio"]')];
@@ -343,36 +347,116 @@ test('Layout shows direction icons, named and tipped by their words', async (con
   canvas.noteComponentCanvas({ kind: 'idle' });
 });
 
-// The owner's rule (f788a3be): a size set for all frames applies across the variants, and a frame or variant can still
-// override it. A wider edit writes only its own scope's value; every narrower value, size, background or prop, survives
-// it and still wins on its frames. cc65d733 dropped them on a wider edit; this pins that it never does again.
-test('a wider edit writes its own scope only: frames and variants keep their own size, background and props', () => {
-  const { state: opened } = openCanvas();
-  const [first, second] = opened.layout.frames.map((frame) => frame.key);
-  const variant = first.split('&').find((pair) => pair.startsWith('variant='));
-  const stored = {
+// The owner's report: "this dropdown isn't working, it just keeps switching only the selected frame". An edit was
+// written at the chosen key alone, so a narrower setting, or one of another axis that merges later (`variant=main` over
+// `emphasis=primary`), still won on its frames. Now every frame the choice names takes the value, and no other frame
+// changes (componentCanvas.ts withSharedEdit). A frame can be given its own again afterwards. Preview values keep their
+// own rule: narrower ones survive a wider edit.
+const STORED = (opened) => {
+  const keys = opened.layout.frames.map((frame) => frame.key);
+  return {
     version: 1,
     components: {
       [BUTTON]: {
         split: ['variant', 'emphasis'],
-        frames: { [first]: { width: 200, background: 'red', props: { label: 'Own' } }, [variant]: { height: 90 } },
+        frames: {
+          'variant=main': { width: 'hug', background: 'green', props: { label: 'Main' } },
+          [keys[2]]: { width: 200, height: 90, background: 'red', props: { label: 'Own' } },
+        },
       },
     },
   };
-  const at = (scope) => ({ ...opened, settings: stored, frame: first, scopes: { props: scope, size: scope, background: scope } });
-  const wide = canvas.frameSettingChange(at(''), { kind: 'field', field: 'width', value: 400 })(stored);
-  assert.equal(wide.components[BUTTON].frames[first].width, 200, 'the frame’s own width survives an all-frames width');
-  assert.equal(wide.components[BUTTON].frames[''].width, 400, 'and the all-frames width is written');
-  const tall = canvas.frameSettingChange(at(''), { kind: 'field', field: 'height', value: 50 })(stored);
-  assert.equal(tall.components[BUTTON].frames[variant].height, 90, 'a variant’s own height survives too');
-  const painted = canvas.frameSettingChange(at(variant), { kind: 'background', value: 'blue' })(stored);
-  assert.equal(painted.components[BUTTON].frames[first].background, 'red', 'the frame’s own background survives a variant’s');
-  assert.equal(painted.components[BUTTON].frames[variant].background, 'blue');
-  const labelled = canvas.valuesChange(at(''), '', [{ kind: 'prop', name: 'label', value: 'All' }])(stored);
-  assert.deepEqual(labelled.components[BUTTON].frames[first].props, { label: 'Own' }, 'the frame’s own prop survives an all-frames value');
-  assert.equal(labelled.components[BUTTON].frames[''].props.label, 'All');
-  // The negative space: a frame without values of its own takes the wider value.
-  assert.equal(wide.components[BUTTON].frames[second], undefined, 'nothing is written for a frame that had nothing');
+};
+
+test('every scope offered reaches the frames it counts, and each of them takes a size, Hug and a background', () => {
+  const { state: opened } = openCanvas();
+  const stored = STORED(opened);
+  const frames = opened.layout.frames.map((frame) => frame.key);
+  const shownBy = (file, key, setting) => canvas.resolveFrame(file.components[BUTTON], key)[setting];
+  let weighed = 0;
+  for (const frame of frames) {
+    const selected = { ...opened, settings: stored, frame };
+    for (const scope of canvas.sectionScopes({ ...selected, scopes: { props: frame, frame } }, 'frame', (key, values) => `${key} ${values?.count ?? ''}`)) {
+      const state = { ...selected, scopes: { props: frame, frame: scope.value } };
+      assert.equal(scope.hint, `componentCanvas.panel.frames ${scope.frames.length}`, 'the count is the frames it reaches');
+      const edits = [
+        { kind: 'field', field: 'width', value: 321 },
+        { kind: 'field', field: 'height', value: 123 },
+        { kind: 'field', field: 'width', value: scope.value === '' ? undefined : 'hug' },
+        { kind: 'background', value: 'blue' },
+      ];
+      for (const edit of edits) {
+        const setting = edit.kind === 'field' ? edit.field : 'background';
+        const next = canvas.frameSettingChange(state, edit)(stored);
+        const wanted = edit.value ?? 'hug';
+        for (const key of frames) {
+          const expected = scope.frames.includes(key) ? wanted : shownBy(stored, key, setting);
+          assert.equal(shownBy(next, key, setting), expected, `${scope.value || 'all'} ${setting} on ${key}`);
+          assert.deepEqual(canvas.resolveFrame(next.components[BUTTON], key).props, canvas.resolveFrame(stored.components[BUTTON], key).props);
+        }
+        assert.equal(canvas.parseComponentCanvasSource(canvas.serializeComponentCanvas(next)).ok, true);
+        weighed += 1;
+      }
+    }
+  }
+  assert.ok(weighed > frames.length * 4, 'wider scopes than This frame were weighed');
+});
+
+test('a later This-frame value wins, the shared field says so, and Reset gives the whole scope one value again', () => {
+  const { state: opened } = openCanvas();
+  const frames = opened.layout.frames.map((frame) => frame.key);
+  const scope = 'emphasis=primary';
+  const primary = frames.filter((key) => canvas.scopeHolds(scope, key));
+  const at = (settings, chosen, frame = primary[0]) => ({ ...opened, settings, frame, scopes: { props: frame, frame: chosen } });
+  const stored = STORED(opened);
+  const wide = canvas.frameSettingChange(at(stored, scope), { kind: 'field', field: 'width', value: 300 })(stored);
+  assert.deepEqual(canvas.sharedOverrides(wide.components[BUTTON], frames, scope, 'width'), []);
+  const own = canvas.frameSettingChange(at(wide, primary[0]), { kind: 'field', field: 'width', value: 111 })(wide);
+  assert.deepEqual(canvas.sharedOverrides(own.components[BUTTON], frames, scope, 'width'), [primary[0]]);
+  const reset = canvas.resetChange(at(own, scope), 'frame', 'width')(own);
+  assert.ok(primary.every((key) => canvas.resolveFrame(reset.components[BUTTON], key).width === 300));
+  // With nothing of its own at the scope, Reset takes what narrower entries say.
+  const bare = canvas.resetChange(at(stored, ''), 'frame', 'height')(stored);
+  assert.ok(frames.every((key) => canvas.resolveFrame(bare.components[BUTTON], key).height === 'hug'));
+  assert.equal(bare.components[BUTTON].frames[frames[2]].width, 200, 'and only of that setting');
+  // Preview values are the other choice’s: a wider value leaves a frame’s own.
+  const labelled = canvas.valuesChange(at(stored, ''), '', [{ kind: 'prop', name: 'label', value: 'All' }])(stored);
+  assert.deepEqual(labelled.components[BUTTON].frames[frames[2]].props, { label: 'Own' });
+});
+
+// Layout under the shared choice: every group of several whose frames are all in the set; This frame has none, so no
+// control; the canvas itself is arranged only while it is selected.
+test('Layout arranges every group the chosen set holds, and is not offered where it holds none', async (context) => {
+  const { state: opened } = openCanvas();
+  const tree = canvas.groupFrames(opened.layout.frames);
+  const reached = (scope) => new Set(opened.layout.frames.map((frame) => frame.key).filter((key) => canvas.scopeHolds(scope, key)));
+  assert.deepEqual(canvas.layoutTargets(tree, reached('')), ['variant=main', 'variant=play']);
+  assert.deepEqual(canvas.layoutTargets(tree, reached('variant=play')), ['variant=play']);
+  assert.deepEqual(canvas.layoutTargets(tree, reached('emphasis=primary')), [], 'no group is all primary');
+  assert.deepEqual(canvas.layoutTargets(tree, reached(opened.layout.frames[0].key)), []);
+  const both = canvas.arrangementChange(opened, ['variant=main', 'variant=play'], 'column')(opened.settings);
+  assert.deepEqual(both.components[BUTTON].layouts, { 'variant=main': 'column', 'variant=play': 'column' });
+  const calls = [];
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  context.after(() => act(async () => root.unmount()));
+  const draw = (state) =>
+    act(async () =>
+      root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: { ...control, setArrangement: (...call) => calls.push(call) }, state })),
+    );
+  const dropdowns = () => host.querySelectorAll('button.dd-trigger').length;
+  await draw(opened);
+  assert.equal(dropdowns(), 1, 'one Apply to');
+  assert.equal(host.querySelector('section[aria-label="Layout"]') ?? undefined, undefined, 'This frame has nothing to arrange');
+  const mixed = { version: 1, components: { [BUTTON]: { layouts: { 'variant=main': 'column' } } } };
+  await draw({ ...opened, settings: mixed, scopes: { ...opened.scopes, frame: '' } });
+  assert.equal(dropdowns(), 1);
+  const section = host.querySelector('section[aria-label="Layout"]');
+  assert.equal(section.querySelector('[role="radio"][aria-checked="true"]') ?? undefined, undefined, 'groups arranged differently show no choice');
+  assert.match(section.querySelector('.prop-label').className, /embed-editor_prop-orange/);
+  await act(async () => section.querySelectorAll('[role="radio"]')[0].dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
+  assert.deepEqual(calls, [[['variant=main', 'variant=play'], 'row']]);
 });
 
 // The canvas root's settings always start at this component; every component's is only ever the person's own pick,
@@ -403,14 +487,14 @@ test('the canvas root’s settings start at This component, and a picked All com
   const own = { ...project, components: { [BUTTON]: { root: { classes: ['theme-invert'] } } } };
   for (const settings of [project, own, { version: 1, components: {} }]) {
     await open(settings);
-    assert.equal(held.state.scopes.background, '*component');
+    assert.equal(held.state.scopes.frame, '*component');
   }
   // Picked by the person, All components comes back after a frame was selected in between.
-  await act(async () => held.setState((state) => ({ ...state, rootScope: '*project', scopes: { ...state.scopes, background: '*project' } })));
+  await act(async () => held.setState((state) => ({ ...state, rootScope: '*project', scopes: { ...state.scopes, frame: '*project' } })));
   await act(async () => held.select(frameId));
-  assert.notEqual(held.state.scopes.background, '*project');
+  assert.notEqual(held.state.scopes.frame, '*project');
   await act(async () => held.select(rootId));
-  assert.equal(held.state.scopes.background, '*project');
+  assert.equal(held.state.scopes.frame, '*project');
   canvas.noteComponentCanvas({ kind: 'idle' });
 });
 
@@ -431,7 +515,7 @@ function rootField(opened) {
       const { value } = field();
       const extra = field().extras('class');
       const label = extra?.provenance?.tone === 'inherited' ? 'orange' : extra?.reset !== undefined ? 'blue' : 'plain';
-      return { value, label, scope: state.scopes.background };
+      return { value, label, scope: state.scopes.frame };
     },
     remove: () => field().onSetProp('class', undefined),
     type: (text) => field().onSetProp('class', { type: 'string', value: text }),
@@ -442,7 +526,7 @@ function rootField(opened) {
 
 const atRoot = (settings, scope = '*component') => {
   const { state } = openCanvas();
-  return { ...state, settings, subject: 'root', rootScope: scope, scopes: { ...state.scopes, background: scope } };
+  return { ...state, settings, subject: 'root', rootScope: scope, scopes: { ...state.scopes, frame: scope } };
 };
 
 // The owner's reports: a theme-dark on screen that would not come off, under an orange label nobody expected.
@@ -484,11 +568,11 @@ test('with nothing shared a class is blue or nothing is plain; All components ed
 test('a Layout choice is this component’s own, at its level only, whatever the root scope', () => {
   const state = atRoot({ version: 1, components: {} }, '*project');
   const [group] = state.boxes.filter((box) => box.kind === 'group').map((box) => box.key);
-  const next = canvas.arrangementChange(state, '*canvas', 'row')(state.settings);
+  const next = canvas.arrangementChange(state, ['*canvas'], 'row')(state.settings);
   assert.deepEqual(next.components[BUTTON].layouts, { '*canvas': 'row' });
-  const both = canvas.arrangementChange({ ...state, settings: next }, group, 'column')(next);
+  const both = canvas.arrangementChange({ ...state, settings: next }, [group], 'column')(next);
   assert.deepEqual(both.components[BUTTON].layouts, { '*canvas': 'row', [group]: 'column' });
-  assert.deepEqual(canvas.arrangementChange({ ...state, settings: both }, '*canvas', undefined)(both).components[BUTTON].layouts, { [group]: 'column' });
+  assert.deepEqual(canvas.arrangementChange({ ...state, settings: both }, ['*canvas'], undefined)(both).components[BUTTON].layouts, { [group]: 'column' });
 });
 
 // A borrowed background is only the empty field's placeholder: Backspace there must remove it here, never do nothing.

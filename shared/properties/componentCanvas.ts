@@ -1070,6 +1070,84 @@ export function withoutOverrides(file: ComponentCanvasFile, component: string, s
   return entries.reduce((next, key) => withFrameEdit(next, component, key, edit), file);
 }
 
+/** A frame setting Frame settings edits under its one "Apply to": a side's size, or the background. */
+export type SharedSetting = 'width' | 'height' | 'background';
+
+/** An edit of one of them; an undefined value takes what the scope's frames set away, so wider settings show. */
+export type SharedEdit = Extract<FrameEdit, { readonly kind: 'field' | 'background' }>;
+
+/**
+ * The file with one setting given to every frame of `frames` that `scope` reaches, and to no other: afterwards each of
+ * them shows the value. What narrower entries said about it for those frames goes. A frame can still be won by an entry
+ * of another axis (`variant=main` over `emphasis=primary`: as specific, and later in order), which also reaches frames
+ * outside the scope and so stays: the value is then written where the two meet, which reaches only frames in scope.
+ * Every entry is an ordinary frame key, so older versions read the file as they always have.
+ */
+export function withSharedEdit(file: ComponentCanvasFile, component: string, scope: string, edit: SharedEdit, frames: readonly string[]): ComponentCanvasFile {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A canvas has a bounded number of frames');
+  const setting: SharedSetting = edit.kind === 'field' ? edit.field : 'background';
+  const reached = frames.filter((frame) => scopeHolds(scope, frame));
+  const narrower = Object.entries(file.components[component]?.frames ?? {})
+    .filter(([key, entry]) => key !== scope && scopeHolds(scope, key) && entry[setting] !== undefined)
+    .map(([key]) => key)
+    // An entry no frame here matches (a split turned off) is kept for when its frames return.
+    .filter((key) => reached.some((frame) => scopeHolds(key, frame)));
+  const cleared = narrower.reduce((next, key) => withFrameEdit(next, component, key, clearingEdit(setting)), file);
+  const written = withFrameEdit(cleared, component, scope, edit);
+  if (edit.value === undefined) {
+    return written;
+  }
+  const value = written.components[component]?.frames?.[scope]?.[setting];
+  assert(value !== undefined, 'The scope holds the value it was given');
+  const result = reached.reduce((next, frame) => withValueOn(next, component, { scope, frame, edit, value }), written);
+  assert(
+    reached.every((frame) => resolveFrame(result.components[component], frame)[setting] === value),
+    'Every frame in scope shows the value',
+  );
+  return result;
+}
+
+// One frame in scope made to show the value: while another entry wins on it, the value is written at the scope's pairs
+// and that entry's together. Each round's key holds more pairs than the winner, so the frame's pairs bound the rounds.
+function withValueOn(
+  file: ComponentCanvasFile,
+  component: string,
+  target: { readonly scope: string; readonly frame: string; readonly edit: SharedEdit; readonly value: FrameLength | string },
+): ComponentCanvasFile {
+  const setting: SharedSetting = target.edit.kind === 'field' ? target.edit.field : 'background';
+  let next = file;
+  for (let round = 0; round <= keyPairs(target.frame).length; round++) {
+    const shown = resolveFrame(next.components[component], target.frame);
+    if (shown[setting] === target.value) {
+      return next;
+    }
+    const winner = shown.origins.get(setting);
+    assert(winner !== undefined, 'A frame that differs takes its value from an entry');
+    next = withFrameEdit(next, component, joinedKey(target.scope, winner), target.edit);
+  }
+  assert(false, 'The frame’s own key wins over every entry it matches');
+}
+
+// The key that holds both keys' pairs, in a key's order (frameKey: by prop name).
+function joinedKey(left: string, right: string): string {
+  const prop = (pair: string): string => pair.split('=')[0] ?? '';
+  // No two pairs name one prop: both keys are pairs of one frame, which names each once.
+  const pairs = [...new Set([...keyPairs(left), ...keyPairs(right)])].sort((first, second) => (prop(first) < prop(second) ? -1 : 1));
+  return parseFrameKey(pairs.join('&'));
+}
+
+/**
+ * The frames among `frames` that `scope` reaches and that Reset would change: with a value at the scope, those showing
+ * another; without one, those a narrower entry gives a value.
+ */
+export function sharedOverrides(settings: ComponentCanvas | undefined, frames: readonly string[], scope: string, setting: SharedSetting): readonly string[] {
+  const own = settings?.frames?.[scope]?.[setting];
+  if (own === undefined) {
+    return overridesIn(settings, frames, scope, setting).map((entry) => entry.frame);
+  }
+  return frames.filter((frame) => scopeHolds(scope, frame) && resolveFrame(settings, frame)[setting] !== own);
+}
+
 // The edit that drops one setting from an entry.
 function clearingEdit(setting: FrameSetting): FrameEdit {
   if (setting === 'width' || setting === 'height') {

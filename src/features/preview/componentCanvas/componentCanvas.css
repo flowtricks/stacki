@@ -183,6 +183,10 @@
   min-width: 0;
   margin: 8px 12px 6px;
 }
+.component-canvas-own {
+  color: var(--text-faint);
+  font-size: 11px;
+}
 .component-canvas-heading-title {
   display: inline-flex;
   flex: 1 1 auto;

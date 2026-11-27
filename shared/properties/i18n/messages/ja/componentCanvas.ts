@@ -20,6 +20,10 @@ export const messages = {
   'componentCanvas.level.mixed': {
     other: 'ここの {count} フレームは異なる値を表示しています。ここで値を設定しても、各フレーム独自の値はそのまま保持されます。',
   },
+  'componentCanvas.level.mixedLayout': 'これらのグループはレイアウトが異なります。いずれかを選ぶと、すべて同じレイアウトになります。',
+  'componentCanvas.level.mixedShared': {
+    other: 'ここの{count}個のフレームは値が異なります。ここで設定した値はすべてに適用されます。',
+  },
   'componentCanvas.level.overrides': {
     other: 'ここの {count} フレームは独自の値を保持しています。リセットするとこの値になります。',
   },

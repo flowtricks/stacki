@@ -20,6 +20,11 @@ export const messages = {
     one: 'Il {count} frame qui mostra un valore diverso. Un valore impostato qui lascia invariato il valore proprio di un frame.',
     other: 'I {count} frame qui mostrano valori diversi. Un valore impostato qui lascia invariato il valore proprio di ogni frame.',
   },
+  'componentCanvas.level.mixedLayout': 'Questi gruppi sono disposti in modo diverso. Scegli una disposizione per disporli tutti allo stesso modo.',
+  'componentCanvas.level.mixedShared': {
+    one: 'Il {count} riquadro qui mostra un valore diverso. Un valore impostato qui viene applicato.',
+    other: 'I {count} riquadri qui mostrano valori diversi. Un valore impostato qui viene applicato a tutti.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} frame qui mantiene un proprio valore. Reimposta per assegnargli questo.',
     other: '{count} frame qui mantengono un proprio valore. Reimposta per assegnare loro questo.',

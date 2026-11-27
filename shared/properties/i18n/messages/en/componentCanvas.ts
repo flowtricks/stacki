@@ -19,6 +19,11 @@ export const messages = {
     one: 'The {count} frame here shows a different value. A value set here leaves a frame’s own value as it is.',
     other: 'The {count} frames here show different values. A value set here leaves each frame’s own value as it is.',
   },
+  'componentCanvas.level.mixedLayout': 'These groups are laid out differently. Choose one to lay them all out the same way.',
+  'componentCanvas.level.mixedShared': {
+    one: 'The {count} frame here shows a different value. A value set here gives it that value.',
+    other: 'The {count} frames here show different values. A value set here gives them all that value.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} frame here keeps its own value. Reset to give it this one.',
     other: '{count} frames here keep their own value. Reset to give them this one.',

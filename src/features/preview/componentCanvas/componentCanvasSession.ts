@@ -19,9 +19,10 @@ export interface CanvasOpen {
   /** The selected frame's key; always one of the layout's frames. */
   readonly frame: string;
   /**
-   * Where each kind of edit goes, each chosen on its own: a frame key (`` for all frames, a split value's, a group's, or
-   * the selected frame's own), or for the canvas root's background and classes PROJECT_SCOPE or COMPONENT_SCOPE.
-   * Props start at the frame, sizes at all frames, the background at the frame (all components for the root).
+   * Where edits go: a frame key (`` for all frames, a split value's, a group's, or the selected frame's own). The Settings
+   * panel's preview values have their own choice; Frame settings has one for the size, background and layout, which on
+   * the canvas root is PROJECT_SCOPE or COMPONENT_SCOPE, for its background and classes. Both start at the frame (this
+   * component for the root).
    */
   readonly scopes: CanvasScopes;
   /** The scope the canvas root's settings are at: this component's, until the person picks every component's. */
@@ -57,8 +58,7 @@ export interface CanvasResizing {
 /** The scope of each section of edits (CanvasOpen.scopes). */
 export interface CanvasScopes {
   readonly props: string;
-  readonly size: string;
-  readonly background: string;
+  readonly frame: string;
 }
 
 export type CanvasSection = keyof CanvasScopes;
@@ -111,9 +111,12 @@ export interface ComponentCanvasControl {
   readonly open: (component: ScanComponent) => void;
   readonly exit: () => void;
   readonly setScope: (section: CanvasSection, scope: string) => void;
-  /** A size or background edit, to its section's scope (a background at a root scope goes to the canvas root). */
+  /**
+   * A size or background edit at Frame settings' scope: every frame it reaches then shows the value (a background at a
+   * root scope goes to the canvas root).
+   */
   readonly edit: (edit: FrameEdit) => void;
-  /** Drops what scopes narrower than the section's own say about `setting`, so every frame it reaches shows its value. */
+  /** Gives every frame the section's scope reaches the scope's value of `setting`, dropping what overrode it. */
   readonly resetOverrides: (section: CanvasSection, setting: FrameSetting) => void;
   /** A frame's size as the canvas draws it now, in its own pixels; undefined before the page has said. */
   readonly drawnSize: (frame: string) => { readonly width: number; readonly height: number } | undefined;
@@ -127,10 +130,10 @@ export interface ComponentCanvasControl {
   /** The props that get their own frames; undefined goes back to the default choice. */
   readonly setSplit: (split: readonly string[] | undefined) => void;
   /**
-   * How one level's direct children are laid out (CANVAS_LEVEL, or a group's key): side by side, stacked or
-   * wrapping; undefined goes back to the level's default. This component's own, whatever the root scope.
+   * How each of these levels' direct children are laid out (CANVAS_LEVEL, or groups' keys): side by side, stacked or
+   * wrapping; undefined goes back to each level's default. This component's own, whatever the root scope.
    */
-  readonly setArrangement: (level: string, arrange: CanvasArrangement | undefined) => void;
+  readonly setArrangement: (levels: readonly string[], arrange: CanvasArrangement | undefined) => void;
   readonly zoom: (action: CanvasZoom) => void;
   readonly hideFramePanel: () => void;
   /** Opens Frame settings on the selected frame, leaving any element selected inside a frame. */

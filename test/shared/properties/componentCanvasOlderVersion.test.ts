@@ -20,6 +20,7 @@ import {
   serializeComponentCanvas,
   withLevelArrangement,
   withRootEdit,
+  withSharedEdit,
   type ComponentCanvasFile,
 } from '#dist/shared/properties/componentCanvas.js';
 
@@ -112,6 +113,21 @@ test('1.4.20 gives the newer layouts back unchanged from every way it writes the
     assert.deepEqual(layoutsOf(rewritten), layoutsOf(source), what);
     assert.ok(parseComponentCanvasSource(rewritten).ok, `${what}: this version reads it back`);
   }
+});
+
+// A value applied to a set of frames may be written where two settings meet: still an ordinary frame key.
+test('1.4.20 reads what a size applied to a set of frames writes', () => {
+  const start = parseComponentCanvasFile({
+    version: 1,
+    components: { [button]: { split: ['variant', 'emphasis'], frames: { 'variant=main': { width: 'hug' } } } },
+  });
+  const frames = ['emphasis=primary&variant=main', 'emphasis=secondary&variant=main', 'emphasis=primary&variant=play'];
+  const applied = withSharedEdit(start, button, 'emphasis=primary', { kind: 'field', field: 'width', value: 300 }, frames);
+  assert.deepEqual(read(serializeComponentCanvas(applied)).components[button]?.frames, {
+    'emphasis=primary': { width: 300 },
+    'emphasis=primary&variant=main': { width: 300 },
+    'variant=main': { width: 'hug' },
+  });
 });
 
 test('layouts move with a component this version renames', () => {

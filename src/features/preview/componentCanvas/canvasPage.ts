@@ -337,33 +337,37 @@ function worldMarkup(input: CanvasPageInput, frames: ReadonlyMap<string, Written
   const flat = input.frames.map((frame): CanvasPageItem => ({ kind: 'frame', key: frame.key, caption: frame.label }));
   const items = input.groups ?? flat;
   const written = new Set<string>();
-  const write = (item: CanvasPageItem, depth: number): string => {
+  const write = (item: CanvasPageItem, depth: number, caption: FrameCaption): string => {
     assert(depth <= CANVAS_LIMITS.splitPropsMax, 'Boxes nest no deeper than the split');
     if (item.kind === 'frame') {
       const held = frames.get(item.key);
       assert(held !== undefined, 'A box holds frames the page draws');
       written.add(item.key);
-      // Among groups, a frame that stands alone at the top is headed as they are.
-      const heading = depth === 0 && items.some((other) => other.kind === 'group');
-      return frameMarkup({ ...held.frame, label: item.caption }, held.instance, { heading });
+      return frameMarkup({ ...held.frame, label: item.caption }, held.instance, { caption });
     }
     // A real element of the page, as a frame is: the editor selects it as a div, and the Navigator lists it as one.
-    const children = item.children.map((child) => write(child, depth + 1)).join('\n');
+    // A box's only frame has nothing to add to its header, so its caption is not drawn.
+    const within: FrameCaption = item.children.length === 1 ? 'said' : 'drawn';
+    const children = item.children.map((child) => write(child, depth + 1, within)).join('\n');
     const own = item.arrange ?? DEFAULT_ARRANGEMENT;
     assert(CANVAS_ARRANGEMENTS.includes(own), 'A group is laid out one of the canvas’s ways');
     const laid = own === DEFAULT_ARRANGEMENT ? '' : ` data-arrange="${own}"`;
     const named = `data-group={${escapedLiteral(item.key)}} data-label={${escapedLiteral(item.header)}} data-depth="${String(depth)}"${laid}`;
     return `<${CANVAS_GROUP_TAG} ${named}>\n${children}\n</${CANVAS_GROUP_TAG}>`;
   };
-  const html = items.map((item) => write(item, 0)).join('\n');
+  const html = items.map((item) => write(item, 0, 'drawn')).join('\n');
   assert(written.size === frames.size, 'Every frame is drawn once');
   const stacked = items.some((item) => item.kind === 'group') || input.frames.some((frame) => frame.row > 0);
   return { html, flow: stacked ? 'column' : 'row' };
 }
 
-function frameMarkup(frame: CanvasPageFrame, instance: string, drawn: { readonly heading: boolean }): string {
+// Whether a frame draws its caption, or the header of the box around it has said it. Either way the frame is named by it
+// (the Navigator, the editor's tag) and keeps the caption's room, so frame tops line up with a sibling box's.
+type FrameCaption = 'drawn' | 'said';
+
+function frameMarkup(frame: CanvasPageFrame, instance: string, drawn: { readonly caption: FrameCaption }): string {
   const style: string[] = [];
-  const flags: string[] = drawn.heading ? ['data-heading'] : [];
+  const flags: string[] = drawn.caption === 'said' ? ['data-captionless'] : [];
   if (frame.width !== 'hug') {
     style.push(`width: ${String(frame.width)}px`);
     flags.push('data-fixed-width');
