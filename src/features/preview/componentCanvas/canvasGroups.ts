@@ -55,6 +55,50 @@ export function canvasLevels(items: readonly CanvasTreeItem[], frames: readonly 
   return { groups, stacked: items.some((entry) => entry.kind === 'group') || frames.some((frame) => frame.row > 0) };
 }
 
+/**
+ * The levels a Layout chosen for a set of frames arranges: every group of several whose frames are all in the set. The
+ * canvas itself is not one: it is arranged only while it is selected. A set of one frame reaches none.
+ */
+export function layoutTargets(items: readonly CanvasTreeItem[], reached: ReadonlySet<string>): readonly string[] {
+  const targets: string[] = [];
+  const pending = [...items];
+  for (let visited = 0; visited < CANVAS_LIMITS.framesMax * (CANVAS_LIMITS.splitPropsMax + 1); visited++) {
+    const next = pending.shift();
+    if (next === undefined) {
+      break;
+    }
+    if (next.kind === 'group') {
+      if (next.children.length > 1) {
+        if (framesOf(next).every((key) => reached.has(key))) {
+          targets.push(next.key);
+        }
+      }
+      pending.unshift(...next.children);
+    }
+  }
+  assert(pending.length === 0, 'Every level is weighed');
+  return targets;
+}
+
+// The keys of the frames inside a group.
+function framesOf(group: CanvasGroup): readonly string[] {
+  const keys: string[] = [];
+  const pending: CanvasTreeItem[] = [group];
+  for (let visited = 0; visited < CANVAS_LIMITS.framesMax * (CANVAS_LIMITS.splitPropsMax + 1); visited++) {
+    const next = pending.pop();
+    if (next === undefined) {
+      break;
+    }
+    if (next.kind === 'frame') {
+      keys.push(next.key);
+    } else {
+      pending.push(...next.children);
+    }
+  }
+  assert(pending.length === 0, 'Every frame of a group is found');
+  return keys;
+}
+
 // The items of one level: the frames that share the part at `depth`, grouped. The depth is bounded by the split.
 function level(frames: readonly Grouped[], depth: number): readonly CanvasTreeItem[] {
   assert(depth <= CANVAS_LIMITS.splitPropsMax, 'Groups nest no deeper than the split');

@@ -20,6 +20,11 @@ export const messages = {
     one: 'El {count} marco de aquí muestra un valor distinto. Un valor definido aquí deja sin cambios el valor propio de un marco.',
     other: 'Los {count} marcos de aquí muestran valores distintos. Un valor definido aquí deja sin cambios el valor propio de cada marco.',
   },
+  'componentCanvas.level.mixedLayout': 'Estos grupos están organizados de forma distinta. Elige una disposición para organizarlos todos igual.',
+  'componentCanvas.level.mixedShared': {
+    one: 'El {count} marco de aquí muestra un valor distinto. El valor que definas aquí se le aplica.',
+    other: 'Los {count} marcos de aquí muestran valores distintos. El valor que definas aquí se aplica a todos.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} marco aquí conserva su propio valor. Restablece para darle este.',
     other: '{count} marcos aquí conservan su propio valor. Restablece para darles este.',

@@ -19,6 +19,11 @@ export const messages = {
     one: 'O {count} quadro aqui mostra um valor diferente. Um valor definido aqui mantém inalterado o valor próprio de um quadro.',
     other: 'Os {count} quadros aqui mostram valores diferentes. Um valor definido aqui mantém inalterado o valor próprio de cada quadro.',
   },
+  'componentCanvas.level.mixedLayout': 'Estes grupos estão organizados de formas diferentes. Escolha um layout para organizar todos do mesmo jeito.',
+  'componentCanvas.level.mixedShared': {
+    one: 'O {count} quadro aqui mostra um valor diferente. Um valor definido aqui passa a valer para ele.',
+    other: 'Os {count} quadros aqui mostram valores diferentes. Um valor definido aqui passa a valer para todos.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} quadro aqui mantém o próprio valor. Redefina para dar a ele este valor.',
     other: '{count} quadros aqui mantêm o próprio valor. Redefina para dar a eles este valor.',

@@ -1,10 +1,9 @@
-// Where a section's next edit goes, as one compact dropdown at the end of the section's heading row: "This frame",
+// Where the next edit goes, as one compact dropdown at the end of a heading row (Frame settings has one, over its size,
+// background and layout; the Settings panel one, over its preview values): "This frame",
 // "All play frames" for each value the selected frame shares with others, a group's values when a group is selected,
 // and "All frames", each with how many frames it reaches. A choice that would reach exactly the frames another reaches
-// is left out. Each section keeps its own choice (useDesktopComponentCanvas.ts): props start at this frame, sizes at all
-// frames, the background at this frame; on the canvas root the background and classes choose between this
-// component's canvas and every component's. Pointing at a choice outlines on the canvas exactly the frames it changes.
-import type { ReactNode } from 'react';
+// is left out. Both start at this frame (useDesktopComponentCanvas.ts); on the canvas root the background and classes
+// choose between this component's canvas and every component's. Pointing at a choice outlines on the canvas exactly the frames it changes.
 import { CANVAS_LIMITS, frameKey, keyPairs, scopeHolds } from '../../../../shared/properties/componentCanvas';
 import { assert } from '../../../../shared/core/assert';
 import Dropdown, { type DropdownOption } from '../../../ui/Dropdown';
@@ -84,7 +83,7 @@ function rootScopes(translate: Translator, frames: readonly string[]): readonly 
 /** The scopes a section offers now; the section's own value is always one of them. */
 export function sectionScopes(state: CanvasOpen, section: CanvasSection, translate: Translator): readonly CanvasScope[] {
   const frames = state.layout.frames.map((candidate) => candidate.key);
-  if (state.subject === 'root' && section === 'background') {
+  if (state.subject === 'root' && section === 'frame') {
     return rootScopes(translate, frames);
   }
   const frame = state.layout.frames.find((candidate) => candidate.key === state.frame);
@@ -100,18 +99,19 @@ export function CanvasSectionHeading({
   state,
   section,
   title,
-  extra,
 }: {
   readonly canvas: ComponentCanvasControl;
   readonly state: CanvasOpen;
   readonly section: CanvasSection;
   readonly title: string;
-  /** Beside the title (an info hint). */
-  readonly extra?: ReactNode;
 }) {
   const translate = useTranslate();
   const scopes = sectionScopes(state, section, translate);
-  const value = state.scopes[section];
+  const frames = state.layout.frames.map((candidate) => candidate.key);
+  const chosen = state.scopes[section];
+  // A set kept across a change of frames may reach what another row names: that row is shown, since it is the same set.
+  const reached = frames.filter((key) => scopeHolds(chosen, key)).join('\n');
+  const value = (scopes.find((scope) => scope.value === chosen) ?? scopes.find((scope) => scope.frames.join('\n') === reached))?.value ?? chosen;
   const options: readonly DropdownOption[] = scopes.map((scope) => ({
     value: scope.value,
     label: scope.label,
@@ -121,10 +121,7 @@ export function CanvasSectionHeading({
   const framesOf = (scope: string | undefined): readonly string[] | undefined => scopes.find((candidate) => candidate.value === scope)?.frames;
   return (
     <div className="component-canvas-heading-row">
-      <span className="component-canvas-heading-title">
-        {title}
-        {extra}
-      </span>
+      <span className="component-canvas-heading-title">{title}</span>
       {scopes.length > 1 && scopes.some((scope) => scope.value === value) && (
         <Dropdown
           className="component-canvas-scope"

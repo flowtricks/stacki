@@ -18,6 +18,10 @@ export const messages = {
   'componentCanvas.level.mixed': {
     other: '{count} frame di sini menampilkan nilai yang berbeda. Nilai yang diatur di sini membiarkan nilai milik tiap frame sebagaimana adanya.',
   },
+  'componentCanvas.level.mixedLayout': 'Grup-grup ini ditata berbeda. Pilih salah satu untuk menata semuanya dengan cara yang sama.',
+  'componentCanvas.level.mixedShared': {
+    other: '{count} frame di sini menampilkan nilai berbeda. Nilai yang diatur di sini diterapkan ke semuanya.',
+  },
   'componentCanvas.level.overrides': {
     other: '{count} frame di sini tetap memakai nilainya sendiri. Reset untuk memberinya nilai ini.',
   },

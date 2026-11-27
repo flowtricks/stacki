@@ -18,6 +18,10 @@ export const messages = {
   'componentCanvas.level.mixed': {
     other: '此處的 {count} 個框架顯示不同的值。在此處設定的值不會變更各框架自身的值。',
   },
+  'componentCanvas.level.mixedLayout': '這些群組的版面配置不同。選擇一種即可讓它們全部採用相同的配置。',
+  'componentCanvas.level.mixedShared': {
+    other: '此處的 {count} 個畫框顯示不同的值。在此設定的值會套用到全部。',
+  },
   'componentCanvas.level.overrides': {
     other: '此處有 {count} 個框架保留自己的值。重設即可讓它們使用此值。',
   },

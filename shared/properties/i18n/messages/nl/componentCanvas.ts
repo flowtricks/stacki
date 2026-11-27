@@ -19,6 +19,11 @@ export const messages = {
     one: 'Het {count} frame hier toont een andere waarde. Een waarde die je hier instelt, laat de eigen waarde van een frame ongewijzigd.',
     other: 'De {count} frames hier tonen verschillende waarden. Een waarde die je hier instelt, laat de eigen waarde van elk frame ongewijzigd.',
   },
+  'componentCanvas.level.mixedLayout': 'Deze groepen zijn verschillend ingedeeld. Kies een indeling om ze allemaal hetzelfde in te delen.',
+  'componentCanvas.level.mixedShared': {
+    one: 'Het {count} frame hier toont een andere waarde. Een waarde die je hier instelt, geldt ervoor.',
+    other: 'De {count} frames hier tonen verschillende waarden. Een waarde die je hier instelt, geldt voor allemaal.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} frame hier houdt een eigen waarde. Reset om het deze waarde te geven.',
     other: '{count} frames hier houden een eigen waarde. Reset om ze deze waarde te geven.',

@@ -19,6 +19,11 @@ export const messages = {
     one: 'Buradaki {count} çerçeve farklı bir değer gösteriyor. Burada ayarlanan değer, bir çerçevenin kendi değerini olduğu gibi bırakır.',
     other: 'Buradaki {count} çerçeve farklı değerler gösteriyor. Burada ayarlanan değer, her çerçevenin kendi değerini olduğu gibi bırakır.',
   },
+  'componentCanvas.level.mixedLayout': 'Bu gruplar farklı şekilde düzenlenmiş. Hepsini aynı şekilde düzenlemek için birini seçin.',
+  'componentCanvas.level.mixedShared': {
+    one: 'Buradaki {count} çerçeve farklı bir değer gösteriyor. Burada ayarlanan değer ona uygulanır.',
+    other: 'Buradaki {count} çerçeve farklı değerler gösteriyor. Burada ayarlanan değer hepsine uygulanır.',
+  },
   'componentCanvas.level.overrides': {
     one: 'Buradaki {count} çerçeve kendi değerini koruyor. Ona bu değeri vermek için sıfırlayın.',
     other: 'Buradaki {count} çerçeve kendi değerini koruyor. Onlara bu değeri vermek için sıfırlayın.',

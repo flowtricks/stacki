@@ -18,6 +18,10 @@ export const messages = {
   'componentCanvas.level.mixed': {
     other: '여기의 프레임 {count}개에 서로 다른 값이 표시됩니다. 여기에서 값을 설정해도 각 프레임의 자체 값은 그대로 유지됩니다.',
   },
+  'componentCanvas.level.mixedLayout': '이 그룹들은 배치가 서로 다릅니다. 하나를 선택하면 모두 같은 방식으로 배치됩니다.',
+  'componentCanvas.level.mixedShared': {
+    other: '여기의 프레임 {count}개는 값이 서로 다릅니다. 여기에서 설정한 값은 모두에 적용됩니다.',
+  },
   'componentCanvas.level.overrides': {
     other: '여기에서 프레임 {count}개가 자체 값을 유지합니다. 재설정하면 이 값이 적용됩니다.',
   },

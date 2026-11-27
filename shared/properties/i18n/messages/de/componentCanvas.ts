@@ -20,6 +20,11 @@ export const messages = {
     one: 'Der {count} Frame hier zeigt einen anderen Wert. Ein hier festgelegter Wert lässt den eigenen Wert eines Frames unverändert.',
     other: 'Die {count} Frames hier zeigen unterschiedliche Werte. Ein hier festgelegter Wert lässt den eigenen Wert jedes Frames unverändert.',
   },
+  'componentCanvas.level.mixedLayout': 'Diese Gruppen sind unterschiedlich angeordnet. Wähle eine Anordnung, um alle gleich anzuordnen.',
+  'componentCanvas.level.mixedShared': {
+    one: 'Der {count} Frame hier zeigt einen anderen Wert. Ein hier gesetzter Wert gilt dann für ihn.',
+    other: 'Die {count} Frames hier zeigen unterschiedliche Werte. Ein hier gesetzter Wert gilt dann für alle.',
+  },
   'componentCanvas.level.overrides': {
     one: '{count} Frame hier behält seinen eigenen Wert. Setze zurück, um ihm diesen zu geben.',
     other: '{count} Frames hier behalten ihren eigenen Wert. Setze zurück, um ihnen diesen zu geben.',
