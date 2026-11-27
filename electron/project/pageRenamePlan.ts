@@ -112,7 +112,7 @@ function renameOrder(source: string, change: PageRename): string {
 export function renameOrigins(root: string, files: readonly string[]): readonly string[] {
   const origins = new Set<string>();
   for (const file of files) {
-    if (/^astro\.config\./.test(file) || file === '.stacki/publish.json') {
+    if (/^astro\.config\./.test(file) || file === '.stacki/publish.json' || file === '.stacki/publish-destinations.json') {
       const read = readRenameText(root, file);
       if (read === undefined) {
         continue;

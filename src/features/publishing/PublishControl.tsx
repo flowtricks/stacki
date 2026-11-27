@@ -1,7 +1,9 @@
 import { ChevronDownIcon } from '../../ui/Icons';
 import { useEffect, useRef, useState } from 'react';
-import type { PublishConfig, PublishTarget } from '../../../shared/properties/publishConfig';
-import { parsePublishConfig, parsePublishSource } from '../../../shared/properties/publishConfig';
+import type { PublishConfig } from '../../../shared/properties/publishConfig';
+import { deploysFromStacki, parsePublishConfig, parsePublishSource, publishDefaultTarget } from '../../../shared/properties/publishConfig';
+import type { PublishRequestTarget } from '../../../shared/properties/publishDestinations';
+import { useStagingConfiguration } from './useStagingConfiguration';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import Popup from '../../ui/Popup';
 import { PublishSettings } from './PublishSettings';
@@ -16,11 +18,11 @@ interface Props {
   readonly projectPath: string;
   readonly busy: boolean;
   readonly availability?: PublishAvailability;
-  readonly publish: (target: PublishTarget) => void;
+  readonly publish: (target: PublishRequestTarget) => void;
   readonly settingsClosed?: () => void;
   readonly refreshAvailability?: () => void;
 }
-type PublishChoice = PublishTarget | 'default';
+type PublishChoice = PublishRequestTarget | 'default';
 
 export function PublishControl({
   projectPath,
@@ -33,7 +35,8 @@ export function PublishControl({
   const translate = useTranslate();
   const { open, setOpen, settings, checking, run, openSettings, closeSettings } = usePublishMenu(projectPath, publish, settingsClosed, refreshAvailability);
   const configuration = usePublishConfiguration(projectPath, { open, settings, checking });
-  const defaultTarget = 'config' in configuration ? configuration.config.defaultTarget : 'all';
+  const staging = useStagingConfiguration(projectPath, { open, settings, checking });
+  const defaultTarget = 'config' in configuration ? publishDefaultTarget(configuration.config) : 'all';
   const availability = configuredPublishAvailability(checkedAvailability, configuration);
   const provider = 'config' in configuration ? configuration.config.hosting.provider : 'none';
   const repositoryURL = usePublishRepositoryURL(projectPath, availability);
@@ -49,7 +52,15 @@ export function PublishControl({
         }
       }}
     >
-      <PublishButtons busy={busy} checking={checking} state={state} open={open} publish={() => run('default')} toggle={() => setOpen(!open)} />
+      <PublishButtons
+        busy={busy}
+        checking={checking}
+        state={state}
+        custom={'config' in configuration && configuration.config.customHosting !== undefined}
+        open={open}
+        publish={() => run('default')}
+        toggle={() => setOpen(!open)}
+      />
       <Popup
         mode="popover"
         portal={false}
@@ -68,6 +79,7 @@ export function PublishControl({
           busy={busy || checking}
           provider={provider}
           config={'config' in configuration ? configuration.config : undefined}
+          staging={staging}
           openSettings={openSettings}
         />
       </Popup>
@@ -131,6 +143,8 @@ function PublishButtons(props: {
   readonly busy: boolean;
   readonly checking: boolean;
   readonly state: PublishButtonState;
+  /** A custom host's progress past GitHub is not Stacki's to see, so "up to date" is not claimed for it. */
+  readonly custom: boolean;
   readonly open: boolean;
   readonly publish: () => void;
   readonly toggle: () => void;
@@ -139,15 +153,16 @@ function PublishButtons(props: {
   // keeps its blue so "Publishing…" still reads as the app at work.
   const translate = useTranslate();
   const current = props.state === 'current';
+  const rest = translate(props.custom ? 'publish.custom.nothingNew' : 'publish.upToDate');
   // An unconfirmed state rests as the same neutral control but stays clickable: no check has said there is anything to publish.
   const resting = props.state !== 'ready' && !props.busy;
   return (
     <div className="stacki-publish-split" data-state={resting ? props.state : 'ready'}>
-      <span className="stacki-publish-main" title={current ? translate('publish.upToDate') : undefined}>
+      <span className="stacki-publish-main" title={current ? rest : undefined}>
         <button
           className={resting ? undefined : 'primary'}
           disabled={props.busy || props.checking || current}
-          aria-description={current ? translate('publish.upToDate') : undefined}
+          aria-description={current ? rest : undefined}
           onClick={props.publish}
         >
           {props.busy ? translate('publish.busy') : translate('publish.label')}
@@ -194,18 +209,22 @@ function usePublishSetup(projectPath: string, publish: Props['publish']) {
   return { settings, setSettings, checking, prepare };
 }
 
-async function preparePublishTarget(projectPath: string, choice: PublishChoice): Promise<PublishTarget | undefined> {
+async function preparePublishTarget(projectPath: string, choice: PublishChoice): Promise<PublishRequestTarget | undefined> {
+  // Staging reads its own settings when it runs, and never saves or changes production's.
+  if (choice === 'staging') {
+    return choice;
+  }
   const file = await readMetadata(projectPath, 'publish');
   const config = parsePublishSource(file.source);
   // Resolve on click so edits from either host apply without restarting the editor.
-  const target = choice === 'default' ? config.defaultTarget : choice;
+  const target = choice === 'default' ? publishDefaultTarget(config) : choice;
   if (target === 'github') {
     return target;
   }
   if (file.source === undefined) {
     return (await saveLinkedHosting(projectPath, config)) ? target : undefined;
   }
-  if (target === 'hosting' && config.hosting.provider === 'none') {
+  if (target === 'hosting' && !deploysFromStacki(config)) {
     return undefined;
   }
   return target;

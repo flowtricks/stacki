@@ -21,6 +21,7 @@ import { GUIDE_FILE } from './files/guideFile';
 import { INSTRUCTIONS_FILE } from './files/instructionsFile';
 import { PAGES_FILE } from './files/pagesFile';
 import { PUBLISH_FILE } from './files/publishFile';
+import { PUBLISH_DESTINATIONS_FILE } from './files/publishDestinationsFile';
 import { ROLES_FILE } from './files/rolesFile';
 import { STYLES_FILE } from './files/stylesFile';
 import { VARIABLES_FILE } from './files/variablesFile';
@@ -40,6 +41,7 @@ export const STACKI_FILES: readonly FileSchema[] = [
   INSTRUCTIONS_FILE,
   PAGES_FILE,
   PUBLISH_FILE,
+  PUBLISH_DESTINATIONS_FILE,
   ROLES_FILE,
   STYLES_FILE,
   VARIABLES_FILE,

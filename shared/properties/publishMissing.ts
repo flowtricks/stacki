@@ -4,19 +4,23 @@
 // so it is answered as a value (AGENTS.md §3) naming the field, and the form says exactly which one to fill.
 import { err, ok, type Result } from '../core/result';
 import type { PublishConfig } from './publishConfig';
+import type { Destination } from './publishDestinations';
 
 /** The empty fields a person can fill, in the order the form shows them. */
-export type MissingPublishField = 'cloudflareAccount' | 'hostingProject' | 'vercelOrganization' | 'buildScript';
+export type MissingPublishField = 'cloudflareAccount' | 'hostingProject' | 'vercelOrganization' | 'deployScript' | 'buildScript';
 export interface MissingPublishError {
   readonly field: MissingPublishField;
 }
 
 // The parser accepts a hosting destination whether or not its toggle is on, so the toggle does not excuse
 // an empty field here either: a check that passed what the parser then rejects would only move the vague toast.
-export function findMissingPublishField(config: Pick<PublishConfig, 'hosting' | 'buildScript'>): Result<undefined, MissingPublishError> {
+export function findMissingPublishField(config: Pick<PublishConfig, 'hosting' | 'customHosting' | 'buildScript'>): Result<undefined, MissingPublishError> {
   const { hosting } = config;
   switch (hosting.provider) {
     case 'none':
+      if (config.customHosting?.deploy === 'script' && config.customHosting.script.trim() === '') {
+        return err({ field: 'deployScript' });
+      }
       break;
     case 'cloudflare':
     case 'cloudflare-workers':
@@ -49,4 +53,32 @@ export function findMissingPublishField(config: Pick<PublishConfig, 'hosting' | 
     return err({ field: 'buildScript' });
   }
   return ok(undefined);
+}
+
+export type MissingStagingField = 'stagingEnvironment' | 'stagingWorker' | 'stagingBranch' | 'stagingAlias' | 'stagingScript';
+
+/** The staging field a person still has to fill, named before the parser would refuse the whole destination. */
+export function findMissingStagingField(staging: Pick<Destination, 'target'>): Result<undefined, { readonly field: MissingStagingField }> {
+  const { target } = staging;
+  const empty = (value: string, field: MissingStagingField) => (value.trim() === '' ? err({ field }) : ok(undefined));
+  switch (target.kind) {
+    case 'cloudflare-environment':
+      return empty(target.environment, 'stagingEnvironment');
+    case 'cloudflare-worker':
+      return empty(target.project, 'stagingWorker');
+    case 'cloudflare-pages':
+    case 'github-branch':
+    case 'link':
+      return empty(target.branch, 'stagingBranch');
+    case 'netlify':
+      return empty(target.alias, 'stagingAlias');
+    case 'script':
+      return empty(target.script, 'stagingScript');
+    case 'vercel':
+      return ok(undefined);
+    default: {
+      const exhaustive: never = target;
+      return exhaustive;
+    }
+  }
 }

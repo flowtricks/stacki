@@ -4,7 +4,7 @@ import { gitWorkspaceAvailability } from '../history/gitWorkspaceAvailability';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { NativeRepository } from '../github/nativeRepository';
 import type { PublishAvailability } from '../../../vendor/stacki/shared/properties/publishState';
-import { parsePublishSource } from '../../../vendor/stacki/shared/properties/publishConfig';
+import { deploysFromStacki, parsePublishSource } from '../../../vendor/stacki/shared/properties/publishConfig';
 import { readMetadataSource } from '../settings/projectMetadata';
 import { readPublishedStatusTree, readDeployedStatusRevision } from './publishStatusRemote';
 import { PublishStatusSource } from './publishStatusSource';
@@ -81,7 +81,7 @@ async function readAvailability(
         (sha) => (!changed && sha === remote.sha ? ('current' as const) : ('pending' as const)),
         () => 'unknown' as const,
       )
-    : config.hosting.provider === 'none'
+    : !deploysFromStacki(config)
       ? ('unconfigured' as const)
       : ('unknown' as const);
   return {

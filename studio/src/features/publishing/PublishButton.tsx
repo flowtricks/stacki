@@ -1,7 +1,7 @@
 import { showPublishingFavicon } from './publishFavicon';
 import { usePublishAvailability } from './usePublishAvailability';
 import { PublishControl } from '../../../vendor/stacki/src/features/publishing/PublishControl';
-import type { PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
+import type { PublishRequestTarget } from '../../../vendor/stacki/shared/properties/publishDestinations';
 import { useEffect, useRef, useState } from 'react';
 import { publishProject } from './publishClient';
 import type { PublishState } from './publish';
@@ -31,7 +31,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
   const active = useRef<AbortController>();
   usePublishBroadcast(shared, setState, setVisible, setFailed);
   useEffect(() => () => active.current?.abort(), []);
-  async function publish(target: PublishTarget) {
+  async function publish(target: PublishRequestTarget) {
     if (active.current && !active.current.signal.aborted) {
       return;
     }
@@ -116,6 +116,10 @@ function publishMessage(state: PublishState, translate: Translator, translateDes
   }
   if (state.kind !== 'committed') {
     return translate('publish.studio.toast.started');
+  }
+  if (state.custom !== undefined) {
+    // A script that ran or a push is all Studio saw: it does not say the site is live.
+    return translate(state.custom === 'script' && state.deployment === 'live' ? 'publish.status.title.scriptDone' : 'publish.status.title.pushed');
   }
   const message =
     state.deployment === 'live'

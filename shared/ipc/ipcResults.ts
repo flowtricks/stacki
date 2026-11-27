@@ -45,6 +45,7 @@ import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { WorkerSetupResult } from '../properties/publishWorkerSetup';
 import type { NetlifySiteResult } from '../properties/publishNetlify';
+import type { CustomPublishResult } from '../properties/publishDeployLink';
 import type { ComponentOpError } from '../properties/componentOps';
 import type { ComponentRenameSummary } from '../properties/componentRename';
 import type { PageSettingsApplied, PageSettingsSummary } from '../properties/pageSettings';
@@ -594,6 +595,7 @@ export interface IpcResults extends AiResults, AgentResults, FileExplorerResults
   readonly 'publish:account': AccountState;
   readonly 'publish:workerSetup': WorkerSetupResult;
   readonly 'publish:netlifySite': NetlifySiteResult;
+  readonly 'publish:custom': CustomPublishResult;
   readonly 'cmsConnections:list': CmsConnectionList;
   readonly 'cmsConnections:save': CmsSaveResult;
   readonly 'cmsConnections:remove': CmsConnectionList;

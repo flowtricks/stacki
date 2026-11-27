@@ -5,7 +5,12 @@ import { err, ok, type AppError, type Result } from '../../shared/core/result';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { readPublishConfig } from './publishConfig';
 import { ensureToolPath } from '../lib/nodeTools';
-import { parsePublishCommitMessage, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
+import { deploysFromStacki, parsePublishCommitMessage, type CustomDeploy, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
+import type { DeployLinkStore } from './deployLinkStore';
+import type { PublishRequestTarget } from '../../shared/properties/publishDestinations';
+import { STAGING_SERVICES, type StagingServices } from './publishStaging';
+import { publishStagingJob } from './publisherStaging';
+import { DEPLOY_TRANSPORT, sendDeployRequest, type DeployTransport } from './deployRequest';
 import { parseDesktopPublishProgress, type DesktopPublishState } from '../../shared/properties/publishState';
 import { checkHostingReady, deployHosting, runPublishScripts } from './publishCommands';
 import { createPublishSnapshot, createPublishSource, type PublishSource, type PublishSnapshot } from './publishSnapshot';
@@ -36,14 +41,26 @@ export class DesktopPublisher {
   private project = '';
   private current: DesktopPublishState = { kind: 'idle' };
 
-  // The seams let a test make directory removal fail the way Windows does, without a real lock.
-  constructor(private readonly temporary: PublishTemporarySeams = PUBLISH_TEMPORARY_SEAMS) {}
+  private readonly deployLinks: DeployLinkSender;
+  private readonly stagingServices: StagingServices;
+  /** The running job's custom host, if it has one, so every outcome says what was only handed over. */
+  private custom: CustomDeploy | undefined;
+
+  // The seams let a test make directory removal fail the way Windows does, without a real lock, and stand in
+  // for the network a deploy link is sent over.
+  constructor(
+    private readonly temporary: PublishTemporarySeams = PUBLISH_TEMPORARY_SEAMS,
+    options: { readonly deployLinks?: DeployLinkStore; readonly transport?: DeployTransport; readonly staging?: StagingServices } = {},
+  ) {
+    this.deployLinks = { store: options.deployLinks, transport: options.transport ?? DEPLOY_TRANSPORT };
+    this.stagingServices = options.staging ?? STAGING_SERVICES;
+  }
 
   state(root: string): DesktopPublishState {
     return this.project === root ? this.current : { kind: 'idle' };
   }
 
-  start(root: string, target: PublishTarget, commitMessage?: string): DesktopPublishState {
+  start(root: string, target: PublishRequestTarget, commitMessage?: string): DesktopPublishState {
     if (this.current.kind === 'running') {
       if (this.project === root) {
         return this.current;
@@ -52,10 +69,36 @@ export class DesktopPublisher {
     }
     const message = commitMessage === undefined ? undefined : parsePublishCommitMessage(commitMessage);
     this.project = root;
+    this.custom = undefined;
     const preparing = described('error.publish.preparing');
     this.current = { kind: 'running', step: preparing.message, stepRef: preparing.messageRef };
-    void this.publish(root, target, message);
+    if (target === 'staging') {
+      // A flow of its own: nothing production's publish does (a commit, a push of this branch) can happen here.
+      void this.publishStaging(root);
+    } else {
+      void this.publish(root, target, message);
+    }
     return this.current;
+  }
+
+  private async publishStaging(root: string): Promise<void> {
+    ensureToolPath();
+    await sweepPublishTemporaries(this.temporary);
+    const canonical = await realpath(root).then(ok, publishFilesystemFailure);
+    if (!canonical.ok) {
+      this.fail(canonical.error, { github: false, hosting: false });
+      return;
+    }
+    await publishStagingJob({
+      root: canonical.value,
+      show: (state) => {
+        this.current = state;
+      },
+      temporary: this.temporary,
+      services: this.stagingServices,
+      deployLinks: this.deployLinks.store,
+      transport: this.deployLinks.transport,
+    });
   }
 
   private async publish(root: string, target: PublishTarget, message: string | undefined): Promise<void> {
@@ -68,15 +111,18 @@ export class DesktopPublisher {
       return;
     }
     const job = prepared.value;
+    this.custom = job.config.customHosting?.deploy;
     if (job.plan.kind === 'hosting') {
       // Before any build or push: a site that cannot deploy says so now, and the dialog can offer to set it up.
-      const ready = await checkHostingReady(job.root, job.config);
+      const ready = await this.checkReady(job);
       if (!ready.ok) {
         this.fail(ready.error, { github: false, hosting: false });
         return;
       }
     }
-    const captured = job.plan.kind === 'github' ? await createPublishSource(job.root, 'github') : await createPublishSnapshot(job.root);
+    // A deploy link with no hooks runs nothing here, so it needs no checkout and no installed dependencies.
+    const checkout = job.plan.kind === 'hosting' && needsCheckout(job.config);
+    const captured = checkout ? await createPublishSnapshot(job.root) : await createPublishSource(job.root, 'github');
     if (!captured.ok) {
       this.fail(captured.error, { github: false, hosting: false });
       return;
@@ -99,17 +145,49 @@ export class DesktopPublisher {
         } else if (pushed.value.warning !== undefined) {
           this.fail(pushed.value.warning, { github: true, hosting: false });
         } else {
-          this.current = { kind: 'done', github: true, hosting: false };
+          this.current = { kind: 'done', github: true, hosting: false, ...this.handoff({ hosting: false }) };
         }
-      } else {
+      } else if (checkout) {
         assert('root' in captured.value, 'Hosting owns a materialized snapshot');
         assert(typeof captured.value.root === 'string', 'Hosting snapshot has a directory');
         await this.deploy(job, { ...captured.value, root: captured.value.root });
+      } else {
+        await this.deploy(job, { ...captured.value, root: job.root });
       }
     } finally {
       // Housekeeping after the outcome is decided: a directory that will not go is logged and swept, never reported as a failed publish.
       await releasePublishTemporary(captured.value.temporary, this.temporary);
     }
+  }
+
+  private async checkReady(job: PublishJob): Promise<Result<void, Described>> {
+    if (job.config.customHosting?.deploy !== 'link') {
+      return checkHostingReady(job.root, job.config);
+    }
+    const link = await this.deployLink(job.root);
+    return link.ok ? ok(undefined) : link;
+  }
+
+  private async deployLink(root: string): Promise<Result<string, Described>> {
+    const store = this.deployLinks.store;
+    return store === undefined ? err(described('publish.custom.link.unavailable')) : store.linkToSend(root);
+  }
+
+  /** The destination's own step: its provider's tool, the chosen script, or one request to the deploy link. */
+  private async runDeployment(job: PublishJob, root: string): Promise<Result<unknown, Pick<AppError, 'message' | 'messageRef'>>> {
+    if (job.config.customHosting?.deploy !== 'link') {
+      return deployHosting(root, job.config, productionEnvironment(job.target)).then(ok, publishFilesystemFailure);
+    }
+    // Read again at the moment of sending: the repository may have been reconnected while the push ran.
+    const link = await this.deployLink(job.root);
+    return link.ok ? sendDeployRequest(link.value, this.deployLinks.transport) : link;
+  }
+
+  private handoff(completed: { readonly hosting: boolean }): { readonly handoff?: CustomDeploy } {
+    if (this.custom === undefined) {
+      return {};
+    }
+    return { handoff: completed.hosting ? this.custom : 'github' };
   }
 
   private async push(job: PublishJob, source: PublishSource, repository: PublishRepository): Promise<Result<PublishPush>> {
@@ -152,7 +230,7 @@ export class DesktopPublisher {
         return;
       }
     }
-    this.current = runningState(described('publish.status.step.runningHooks'), 1, 5);
+    this.current = runningState(buildStep(job.config), 1, 5);
     const built = await buildPublishSnapshot(job, snapshot);
     if (!built.ok) {
       this.fail(built.error, completed);
@@ -170,31 +248,26 @@ export class DesktopPublisher {
         return;
       }
     }
-    this.current = runningState(described('publish.status.step.deployingTo', { provider: job.config.hosting.provider }), 3, 5);
-    const deployed = await deployHosting(snapshot.root, job.config).then(ok, publishFilesystemFailure);
+    this.current = runningState(deployStep(job.config), 3, 5);
+    const deployed = await this.runDeployment(job, snapshot.root);
     if (!deployed.ok) {
       this.fail(deployed.error, completed);
       return;
     }
     completed.hosting = true;
-    const recorded = await recordDeployment(job.root, {
-      version: 1,
-      tree: snapshot.tree,
-      configuration: deploymentConfiguration(job.config),
-    }).then(ok, publishFilesystemFailure);
+    const push = completed.github ? 'pushed' : 'not-pushed';
+    const recorded = await recordCompletedDeployment(job, snapshot, push).then(ok, publishFilesystemFailure);
     if (!recorded.ok) {
       this.fail(recorded.error, completed);
       return;
     }
     this.current = runningState(described('publish.status.step.afterScripts'), 4, 5);
-    const after = await runPublishScripts(snapshot.root, job.config.afterPublish, {
-      STACKI_PUBLISH_TARGET: job.target,
-    }).then(ok, publishFilesystemFailure);
+    const after = await runPublishScripts(snapshot.root, job.config.afterPublish, productionEnvironment(job.target)).then(ok, publishFilesystemFailure);
     if (!after.ok) {
       this.fail(after.error, completed);
       return;
     }
-    this.current = { kind: 'done', ...completed };
+    this.current = { kind: 'done', ...completed, ...this.handoff(completed) };
   }
 
   private fail(problem: Pick<AppError, 'message' | 'messageRef'>, completed: { readonly github: boolean; readonly hosting: boolean }): void {
@@ -204,8 +277,65 @@ export class DesktopPublisher {
       ...(problem.messageRef === undefined ? {} : { messageRef: problem.messageRef }),
       github: completed.github,
       hosting: completed.hosting,
+      ...this.handoff(completed),
     };
   }
+}
+
+interface DeployLinkSender {
+  /** Absent where nothing keeps links; a deploy link publish then refuses before doing anything. */
+  readonly store: DeployLinkStore | undefined;
+  readonly transport: DeployTransport;
+}
+
+function needsCheckout(config: PublishConfig): boolean {
+  if (config.customHosting?.deploy !== 'link') {
+    return true;
+  }
+  return config.beforePublish.length > 0 || config.afterPublish.length > 0;
+}
+
+function buildStep(config: PublishConfig): Described {
+  return described(config.customHosting?.deploy === 'link' ? 'publish.status.preparing' : 'publish.status.step.runningHooks');
+}
+
+function deployStep(config: PublishConfig): Described {
+  switch (config.customHosting?.deploy) {
+    case 'script':
+      return described('publish.status.step.deployScript');
+    case 'link':
+      return described('publish.status.step.deployLink');
+    case 'github':
+    case undefined:
+      return described('publish.status.step.deployingTo', { provider: config.hosting.provider });
+  }
+}
+
+/**
+ * Remembers what the destination now has. A deploy link's host builds what is on GitHub, not what is on this
+ * computer, so a request sent without a push is recorded only when GitHub already holds exactly these files.
+ */
+async function recordCompletedDeployment(job: PublishJob, source: PublishSource, push: 'pushed' | 'not-pushed'): Promise<void> {
+  if (job.config.customHosting?.deploy === 'link' && push === 'not-pushed') {
+    if ((await publishedTree(job.root)) !== source.tree) {
+      return;
+    }
+  }
+  await recordDeployment(job.root, { version: 1, tree: source.tree, configuration: deploymentConfiguration(job.config) });
+}
+
+/** The files on this branch as GitHub last had them, from the tracking ref availability reads too. */
+async function publishedTree(root: string): Promise<string | undefined> {
+  const branch = await runPublishGit(root, ['symbolic-ref', '--short', 'HEAD']);
+  if (!branch.ok) {
+    return undefined;
+  }
+  const tree = await runPublishGit(root, ['rev-parse', '--verify', `refs/remotes/origin/${branch.value.trim()}^{tree}`]);
+  return tree.ok ? tree.value.trim() : undefined;
+}
+
+function productionEnvironment(target: PublishTarget): Readonly<Record<string, string>> {
+  return { STACKI_PUBLISH_TARGET: target, STACKI_PUBLISH_ENV: 'production' };
 }
 
 function runningState(step: Described, completed: number, total: number): DesktopPublishState {
@@ -236,10 +366,10 @@ async function preparePublishJob(root: string, target: PublishTarget, message: s
         ...described('error.publish.reviewHint'),
       });
     }
-    if (config.hosting.provider === 'none') {
+    if (!deploysFromStacki(config)) {
       return err({
         code: 'hosting-required',
-        ...described('error.publish.chooseHosting'),
+        ...described(config.customHosting === undefined ? 'error.publish.chooseHosting' : 'publish.custom.autoDeploy'),
       });
     }
     return ok({
@@ -254,7 +384,7 @@ async function preparePublishJob(root: string, target: PublishTarget, message: s
   if (!repository.ok) {
     return repository;
   }
-  const kind = target === 'github' || config.hosting.provider === 'none' || config.githubWorkflow?.kind === 'pull-request' ? 'github' : 'hosting';
+  const kind = target === 'github' || !deploysFromStacki(config) || config.githubWorkflow?.kind === 'pull-request' ? 'github' : 'hosting';
   return ok({
     root: canonical.value,
     target,
@@ -281,11 +411,13 @@ async function preparePublishRepository(root: string, config: PublishConfig): Pr
 }
 
 async function buildPublishSnapshot(job: PublishJob, snapshot: PublishSnapshot): Promise<Result<void>> {
-  const before = await runPublishScripts(snapshot.root, job.config.beforePublish, {
-    STACKI_PUBLISH_TARGET: job.target,
-  }).then(ok, publishFilesystemFailure);
+  const before = await runPublishScripts(snapshot.root, job.config.beforePublish, productionEnvironment(job.target)).then(ok, publishFilesystemFailure);
   if (!before.ok) {
     return before;
   }
-  return runPublishScripts(snapshot.root, [job.config.buildScript]).then(ok, publishFilesystemFailure);
+  // The host behind a deploy link does its own build from GitHub.
+  if (job.config.customHosting?.deploy === 'link') {
+    return ok(undefined);
+  }
+  return runPublishScripts(snapshot.root, [job.config.buildScript], { STACKI_PUBLISH_ENV: 'production' }).then(ok, publishFilesystemFailure);
 }

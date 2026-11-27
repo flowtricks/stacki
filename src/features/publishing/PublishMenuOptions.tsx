@@ -1,29 +1,46 @@
-import type { Hosting, PublishConfig, PublishTarget } from '../../../shared/properties/publishConfig';
+import { deploysFromStacki, type Hosting, type PublishConfig } from '../../../shared/properties/publishConfig';
+import { stagingBranchOf, type Destination, type PublishRequestTarget } from '../../../shared/properties/publishDestinations';
 import { ExternalIcon, GearIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import type { PublishAvailability } from '../../../shared/properties/publishState';
 import { usePublishedSiteURL } from './usePublishedSiteURL';
-import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
+import { CustomHostOption } from './PublishCustomOption';
+import { OpenSiteLink } from './PublishSiteLink';
+import { StagingOption } from './PublishStagingOption';
 
 interface Props {
   readonly projectPath: string;
-  readonly publish: (target: PublishTarget) => void;
+  readonly publish: (target: PublishRequestTarget) => void;
   readonly openSettings: () => void;
   readonly availability: PublishAvailability;
   readonly repositoryURL: string | undefined;
   readonly busy: boolean;
   readonly provider: Hosting['provider'];
   readonly config: PublishConfig | undefined;
+  readonly staging: Destination | undefined;
 }
 
-export function PublishMenuOptions({ projectPath, publish, openSettings, availability, repositoryURL, busy, provider, config }: Props) {
+export function PublishMenuOptions(props: Props) {
   const translate = useTranslate();
+  const { staging, config } = props;
+  // With staging, a production that is GitHub alone is the push row: there is no host to offer a deploy to.
+  const gitHubOnly = config !== undefined && config.customHosting === undefined && !deploysFromStacki(config);
   return (
     <>
-      <GitHubPushOption availability={availability} repositoryURL={repositoryURL} busy={busy} publish={publish} />
-      <HostingDeployOption projectPath={projectPath} provider={provider} config={config} availability={availability} busy={busy} publish={publish} />
+      <GitHubPushOption availability={props.availability} repositoryURL={props.repositoryURL} busy={props.busy} publish={props.publish} />
+      {staging !== undefined && (
+        <StagingOption
+          staging={staging}
+          availability={props.availability}
+          busy={props.busy}
+          publish={() => props.publish('staging')}
+          pushes={stagingBranchOf(staging.target)}
+        />
+      )}
+      {staging !== undefined && gitHubOnly ? undefined : <HostingDeployOption {...props} />}
       <hr />
-      <button onClick={openSettings}>
+      <button onClick={props.openSettings}>
         <GearIcon />
         <span>{translate('publish.menu.settings')}</span>
       </button>
@@ -31,16 +48,22 @@ export function PublishMenuOptions({ projectPath, publish, openSettings, availab
   );
 }
 
-function HostingDeployOption({
-  projectPath,
-  availability,
-  busy,
-  publish,
-  provider,
-  config,
-}: Pick<Props, 'projectPath' | 'availability' | 'busy' | 'publish' | 'provider' | 'config'>) {
+function HostingDeployOption({ projectPath, availability, busy, publish, provider, config, staging }: Props) {
   const translate = useTranslate();
+  const format = useFormat();
   const url = usePublishedSiteURL(projectPath, config);
+  if (config?.customHosting !== undefined) {
+    return (
+      <CustomHostOption
+        custom={config.customHosting}
+        availability={availability}
+        busy={busy}
+        publish={() => publish('hosting')}
+        url={url}
+        staged={staging !== undefined}
+      />
+    );
+  }
   const current = availability.hosting === 'current';
   const descriptions = {
     current: translate('publish.menu.hostingCurrent'),
@@ -48,27 +71,24 @@ function HostingDeployOption({
     unknown: translate('publish.menu.hostingUnknown'),
     unconfigured: translate('publish.menu.hostingChoose'),
   } as const;
+  const status = descriptions[availability.hosting];
+  // Last published is shown beside staging's, so the two can be told apart at a glance.
+  const publishedAtMs = staging === undefined ? undefined : availability.hostingPublishedAtMs;
+  const title = current ? translate('publish.upToDate') : staging === undefined ? undefined : translate('publish.staging.menu.productionTip');
   return (
-    <span className="stacki-publish-option stacki-publish-hosting" title={current ? translate('publish.upToDate') : undefined}>
+    <span className="stacki-publish-option stacki-publish-hosting" title={title}>
       <button disabled={busy || current} onClick={() => publish('hosting')}>
         {provider === 'none' ? <UploadCloudIcon /> : <PublishProviderIcon provider={provider} />}
         <span>
-          {translate('publish.menu.deploy')}
-          <small>{descriptions[availability.hosting]}</small>
+          {translate(staging === undefined ? 'publish.menu.deploy' : 'publish.staging.menu.production')}
+          <small>
+            {publishedAtMs === undefined
+              ? status
+              : translate('publish.staging.menu.published', { status, time: format.formatRelativeTime(publishedAtMs, Date.now()) })}
+          </small>
         </span>
       </button>
-      {url !== undefined && (
-        <a
-          className="stacki-publish-repository"
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={translate('publish.menu.openSite')}
-          title={translate('publish.menu.openUrl', { url })}
-        >
-          <ExternalIcon size={12} />
-        </a>
-      )}
+      {url !== undefined && <OpenSiteLink url={url} label={translate('publish.menu.openSite')} />}
     </span>
   );
 }
