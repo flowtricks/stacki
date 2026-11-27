@@ -46,6 +46,7 @@ reads the operation union, checks every named module exists and that nothing is 
 | Attribute, class, prop on a plain element, rename attribute | Set or removed | `shared/page/canvasEdit.ts`, `framePendingEdit.ts` |
 | Words of an element, rename tag | Words set, element replaced with children moved | same |
 | A class added to or taken off an element or instance (`avb:class-patch`) | Only the names that really changed, taken back like every other shown edit | same |
+| Words typed on the canvas, until their save renders | Kept in the page's text nodes, taken back like every other shown edit | `frameTextNative.ts` (`showTypedWords`) |
 | Component props, expressions, component rename | Old DOM, `updating` cue after 80 ms | same |
 | Undo, redo | The step's result applied from the model diff the moment it is installed (including the one node an undo added or removed) | `src/editor/canvasEditShow.ts` |
 

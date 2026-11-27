@@ -1,3 +1,5 @@
+import { assert } from '../../shared/core/assert';
+import { sourceStamps } from './frameMove';
 import type { TextMatch } from './frameTextMatch';
 import type { CanvasTextBreaks } from '../../shared/properties/canvasText';
 import { createTextBuffer, type TextRunChange } from './frameTextBuffer';
@@ -119,6 +121,111 @@ export function openNativeText(match: TextMatch, space: TextSpace, event: MouseE
       return pointOnWords(match.nodes, click.clientX, click.clientY) || (isCanvasTextEditing(click.target) && !!range && !!textSelection(match.nodes, range));
     },
   };
+}
+
+/** How long typed words wait for their rendering: the canvas's bound for what it shows ahead of one. */
+const TYPED_HOLD_MS_MAX = 20_000;
+/** Saves shown at once before any rendering: past it the page's own words come back at once. */
+const TYPED_PENDING_MAX = 64;
+let typedPending = 0;
+
+interface TypedWords {
+  readonly node: Text;
+  readonly rendered: string;
+  readonly typed: string;
+}
+
+/**
+ * Shows the typed words again while their save is on its way; `write` puts them into `nodes`.
+ * They are a guess like every other instant edit: taken back just before the patch, shown again
+ * over a render of the old file, and dropped when the save is refused or never renders.
+ *
+ * They used to stay in the page's own text nodes. The patch only writes a text node that still
+ * says what the last rendering said, so words the render did not repeat exactly (a component
+ * that reshapes them, a refused save) stayed on the canvas, and no later edit could replace
+ * them: only a refresh did.
+ */
+export function showTypedWords(nodes: readonly Text[], write: () => void): void {
+  // Read before the words change: which source the page shows now.
+  let shownFrom = sourceStamps(document);
+  const rendered = nodes.map((node) => node.data);
+  write();
+  const words: readonly TypedWords[] = nodes.flatMap((node, at) => {
+    const before = rendered[at];
+    return before === undefined || before === node.data ? [] : [{ node, rendered: before, typed: node.data }];
+  });
+  if (words.length === 0) {
+    return;
+  }
+  if (typedPending >= TYPED_PENDING_MAX) {
+    takeWordsBack(words);
+    return;
+  }
+  typedPending += 1;
+  const waiting = new AbortController();
+  const listen = { signal: waiting.signal };
+  let stale = false;
+  const end = () => {
+    clearTimeout(timer);
+    waiting.abort();
+    typedPending -= 1;
+    assert(typedPending >= 0, 'showTypedWords: each guess ends once');
+  };
+  const drop = () => {
+    takeWordsBack(words);
+    end();
+  };
+  const timer = setTimeout(drop, TYPED_HOLD_MS_MAX);
+  document.addEventListener(
+    'avb:before-morph',
+    (event) => {
+      const incoming = event instanceof CustomEvent && event.detail instanceof Document ? sourceStamps(event.detail) : undefined;
+      stale = shownFrom !== undefined && shownFrom !== '' && incoming === shownFrom;
+      shownFrom = incoming;
+      takeWordsBack(words);
+    },
+    listen,
+  );
+  document.addEventListener(
+    'avb:after-patch',
+    () => {
+      // A render of the old file leaves the words it said; any other has answered the save.
+      if (stale) {
+        showWordsAgain(words);
+      } else {
+        end();
+      }
+    },
+    listen,
+  );
+  window.addEventListener(
+    'message',
+    (event) => {
+      const data: unknown = event.data;
+      const type: unknown = typeof data === 'object' && data !== null && 'type' in data ? data.type : undefined;
+      if (type === 'avb:insert-revert' || type === 'avb:move-revert') {
+        drop();
+      }
+    },
+    listen,
+  );
+}
+
+// Only a node still holding what the guess left there, or found there, is written.
+function takeWordsBack(words: readonly TypedWords[]): void {
+  for (const { node, rendered, typed } of words) {
+    if (node.data === typed) {
+      node.data = rendered;
+    }
+  }
+}
+
+function showWordsAgain(words: readonly TypedWords[]): void {
+  for (const { node, rendered, typed } of words) {
+    if (node.isConnected && node.data === rendered) {
+      node.data = typed;
+    }
+  }
 }
 
 function holdsSelection(root: HTMLElement): boolean {

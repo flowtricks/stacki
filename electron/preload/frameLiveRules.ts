@@ -108,8 +108,8 @@ export function receiveLiveRules(input: unknown): boolean {
 /** One element a hover preview set, and its own inline declarations before it. */
 interface HoverEntry {
   readonly element: ElementCSSInlineStyle & Element;
-  /** Each previewed property's own inline value and priority, in declaration order. */
-  readonly own: readonly { readonly property: string; readonly value: string; readonly priority: string }[];
+  /** Each previewed property's own inline value and priority, and what the preview left there, in declaration order. */
+  readonly own: readonly { readonly property: string; readonly value: string; readonly priority: string; readonly set: string }[];
   /** Whether the element had a style attribute at all: one the preview added goes again. */
   readonly hadStyle: boolean;
 }
@@ -167,15 +167,17 @@ function showHoverStyle(path: string, declarations: readonly HoverDeclaration[])
     if (!hasInlineStyle(element)) {
       continue;
     }
-    const own = declarations.map(({ property }) => ({
+    const hadStyle = element.hasAttribute('style');
+    const before = declarations.map(({ property }) => ({
       property,
       value: element.style.getPropertyValue(property),
       priority: element.style.getPropertyPriority(property),
     }));
-    entries.push({ element, own, hadStyle: element.hasAttribute('style') });
     for (const { property, value, important } of declarations) {
       element.style.setProperty(property, value, important ? 'important' : '');
     }
+    const own = before.map((declared) => ({ ...declared, set: element.style.getPropertyValue(declared.property) }));
+    entries.push({ element, own, hadStyle });
   }
   hover = { declarations, entries, settle: undefined };
 }
@@ -198,6 +200,10 @@ function putOwnStyleBack(entry: HoverEntry): void {
   for (let index = entry.own.length - 1; index >= 0; index -= 1) {
     const own = entry.own[index];
     assert(own !== undefined, 'putOwnStyleBack: index within declarations');
+    // A render can write the style while the preview is on: its value stands, not the one from before.
+    if (entry.element.style.getPropertyValue(own.property) !== own.set) {
+      continue;
+    }
     if (own.value === '') {
       entry.element.style.removeProperty(own.property);
     } else {
