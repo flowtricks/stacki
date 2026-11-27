@@ -760,6 +760,9 @@ export interface AuditFinding {
   readonly custom?: AuditCustomRef;
   /** On the second and later of matches that read the same: the first one's id, whose ignore covers them all. */
   readonly repeatOf?: string;
+  /** Ids this finding was listed under before it moved to where its value is written (a link
+   * once listed on the component that renders it): an ignore saved against one still holds. */
+  readonly formerIds?: readonly string[];
 }
 
 /** Where a raw CSS value is: its rule's selector, the declaration, the token, the file's line, and what kind of value it is. */
@@ -913,7 +916,8 @@ export function uniqueFindings(findings: readonly AuditFinding[]): readonly Audi
     }
     const kept = seen.source === 'rendered' && finding.source === 'static' ? finding : seen;
     const routes = [...new Set([...(seen.routes ?? []), ...(finding.routes ?? [])])].sort();
-    byId.set(finding.id, routes.length === 0 ? kept : { ...kept, routes });
+    const former = [...new Set([...(seen.formerIds ?? []), ...(finding.formerIds ?? [])])].sort();
+    byId.set(finding.id, { ...kept, ...(routes.length === 0 ? {} : { routes }), ...(former.length === 0 ? {} : { formerIds: former }) });
   }
   const unique = [...byId.values()];
   assert(unique.length <= findings.length, 'uniqueFindings: only removes');

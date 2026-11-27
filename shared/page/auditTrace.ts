@@ -72,8 +72,9 @@ export interface ChainTraceInput {
   readonly resolve: (from: AuditFileInput, tag: string) => string | undefined;
   /** The marked nodes the rendered element sits inside, outermost first (RenderedSource.within). */
   readonly within: readonly { readonly file: string; readonly path: readonly number[] }[];
-  /** The element that holds the value, and the attribute it is in. */
-  readonly leaf: { readonly file: string; readonly path: readonly number[]; readonly attr: string };
+  /** The element that holds the value, the attribute it is in, and, when known, the value as rendered:
+   * what the instances are searched for when the component's markup does not say which prop it came from. */
+  readonly leaf: { readonly file: string; readonly path: readonly number[]; readonly attr: string; readonly value?: string };
 }
 
 /**
@@ -87,21 +88,55 @@ export function traceThrough(input: ChainTraceInput): Authored | undefined {
   assert(input.within.length <= LIMITS.treeDepthMax * 4, 'traceThrough: the markers around one element are bounded');
   const leafFile = input.files.get(input.leaf.file);
   const element = leafFile === undefined ? undefined : nodeAt(leafFile.nodes, input.leaf.path);
-  if (leafFile === undefined || element === undefined || (element.kind !== 'element' && element.kind !== 'raw')) {
+  // A component node holds a rendered element too: a dynamic tag (`<Tag href>`, where Tag is 'a').
+  if (leafFile === undefined || element === undefined || (element.kind !== 'element' && element.kind !== 'raw' && element.kind !== 'component')) {
     return undefined;
   }
   const here: Authored = { kind: 'node', file: leafFile.file, path: input.leaf.path, tag: element.name, prop: undefined };
   const value = valueOf(element, input.leaf.attr);
-  if (value === undefined || value.kind === 'literal') {
+  if (value?.kind === 'literal') {
     return here;
   }
-  const prop = propBehind(leafFile, value.code);
-  if (prop === undefined) {
-    return importedIdentifier(leafFile, value.code) ?? here;
-  }
+  const prop = value === undefined ? undefined : propBehind(leafFile, value.code);
   const hops = markedChain(input, leafFile);
   assert(hops.length <= HOPS_MAX, 'traceThrough: the chain is bounded');
+  if (prop === undefined) {
+    // The markup does not say which prop holds it: the attribute arrives through a spread
+    // (`<Tag {...tagAttrs}>`), or from code. The instances that rendered this copy do.
+    const passed = passedValue(hops, input.leaf.value);
+    return passed ?? (value === undefined ? here : (importedIdentifier(leafFile, value.code) ?? here));
+  }
   return hops.length === 0 ? (defaultOf(leafFile, prop) ?? here) : climb(hops, leafFile, prop);
+}
+
+/** Prop names that carry a link's destination. */
+const LINK_PROP = /href|link|url|^to$/i;
+
+// Where the rendered value was handed in: the innermost instance that writes it as a literal
+// prop. With no literal anywhere, the innermost instance that sets a link prop from its own
+// code (data, a loop, the CMS), passing over one that only hands its own prop on. Undefined
+// when no instance of this copy does either: the component writes the value itself.
+function passedValue(hops: readonly Hop[], value: string | undefined): Authored | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  let computed: Authored | undefined;
+  for (let index = hops.length - 1; index >= 0; index--) {
+    const hop = hops[index];
+    assert(hop !== undefined, 'passedValue: the hop exists');
+    const props = Object.entries(nodeProps(nodeAt(hop.caller.nodes, hop.path) ?? hopNodeMissing()) ?? {});
+    const literals = props.filter(([, attr]) => attr.type === 'string' && attr.value.trim() === value.trim());
+    const literal = literals.find(([key]) => LINK_PROP.test(key)) ?? literals[0];
+    const instance = { kind: 'node', file: hop.caller.file, path: hop.path, tag: hop.tag } as const;
+    if (literal !== undefined) {
+      return { ...instance, prop: literal[0] };
+    }
+    const coded = props.find(([key, attr]) => LINK_PROP.test(key) && attr.type === 'expr' && propBehind(hop.caller, attr.value) === undefined);
+    if (computed === undefined && coded !== undefined) {
+      computed = { ...instance, prop: coded[0] };
+    }
+  }
+  return computed;
 }
 
 // The instances that rendered the leaf's file, innermost first found, returned outermost first. A

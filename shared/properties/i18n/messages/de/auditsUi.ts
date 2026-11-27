@@ -14,6 +14,7 @@ export const messages = {
   'auditsUi.breakdown.unit': { one: '{count} Einheit', other: '{count} Einheiten' },
   'auditsUi.category': 'Kategorie',
   'auditsUi.changeLink': 'Link ändern …',
+  'auditsUi.copyOf': '{index} von {total}',
   'auditsUi.createPage': '{route} erstellen',
   'auditsUi.empty.auditing': 'Prüfung läuft …',
   'auditsUi.empty.clean': 'Keine Probleme · geprüft um {time}.',
@@ -77,6 +78,10 @@ export const messages = {
   'auditsUi.ignoredManyToast': 'Funde ignoriert',
   'auditsUi.ignoredNote': 'Ignoriert: {reason}',
   'auditsUi.ignoredToast': 'Fund ignoriert',
+  'auditsUi.link.noPage': 'Verweist auf {url} · Seite fehlt',
+  'auditsUi.link.noPageTitle': 'Keine Seite, Datei oder Weiterleitung in diesem Projekt beantwortet {url}.',
+  'auditsUi.link.noSection': 'Verweist auf {url} · Abschnitt fehlt',
+  'auditsUi.link.noSectionTitle': 'Auf der Seite gibt es kein Sprungziel für {url}.',
   'auditsUi.linkTo': 'Verlinken auf',
   'auditsUi.linkToLabel': 'Verlinken auf {route}',
   'auditsUi.menu.closeFind': 'Suchen und Ersetzen schließen',
@@ -160,4 +165,11 @@ export const messages = {
   'auditsUi.stopIgnoring': 'Nicht mehr ignorieren',
   'auditsUi.title': 'Prüfungen',
   'auditsUi.variableToUse': 'Zu verwendende Variable',
+  'auditsUi.where.component': 'Komponente',
+  'auditsUi.where.layout': 'Layout', // same
+  'auditsUi.where.more': '{pages} +{count}', // same
+  'auditsUi.where.page': 'Seite',
+  'auditsUi.where.pageAt': 'Seite · {route}',
+  'auditsUi.where.title': 'Verwendet auf {pages}. Eine Korrektur hier ändert alle.',
+  'auditsUi.where.usedOn': '{place} · auf {pages}',
 } as const satisfies CatalogOf<MessageKey>;

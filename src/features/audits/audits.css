@@ -304,6 +304,17 @@
   align-items: center;
   gap: 2px;
 }
+/* The row's actions take its tag's place while they show, so the words keep their room. */
+.audits-occurrence-row:hover .audits-tag,
+.audits-occurrence-row:focus-within .audits-tag {
+  display: none;
+}
+.audits-group-row:has(.audits-place-line) {
+  height: auto;
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
 .audits-row:hover .audits-hover-actions,
 .audits-row:focus-within .audits-hover-actions {
   display: flex;
@@ -1157,7 +1168,8 @@
 .audits-occurrence-text .audits-title {
   flex: none;
 }
-.audits-note-line {
+.audits-note-line,
+.audits-place-line {
   overflow: hidden;
   color: var(--text-faint);
   font-size: 11px;

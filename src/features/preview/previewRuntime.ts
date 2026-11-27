@@ -35,6 +35,8 @@ export type JudgeCanvasEvent = (token: Digest | undefined, render: PreviewRender
 export interface PreviewRuntimeProps {
   readonly selPath: string | undefined;
   readonly navigatorSelectionTick?: number;
+  /** A selection an audit went to: its scroll also asks the canvas to show whatever hides the element. */
+  readonly unhidePath?: string | undefined;
   readonly navHoverPath?: string | undefined;
   readonly navHoverPseudo?: PseudoLayer | undefined;
   readonly selPseudo?: PseudoLayer | undefined;
@@ -857,6 +859,7 @@ function useSelectionScroll(props: PreviewRuntimeProps, iframeRef: React.RefObje
           type: 'avb:scroll-to',
           path: pseudo === undefined ? props.selPath : pseudoPath(props.selPath, pseudo),
           occ: navigatorSelected ? 0 : refs.selectedOccurrence.current,
+          ...(refs.props.current.unhidePath === props.selPath ? { unhide: true } : {}),
         },
         '*',
       );

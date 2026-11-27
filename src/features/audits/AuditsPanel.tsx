@@ -18,6 +18,7 @@ import type { PageNode } from '../../../shared/page/pageNode';
 import { nodeAt } from '../../../shared/page/auditTrace';
 import { describeNode } from '../../ui/navigatorLabel';
 import { type AuditFinding, type AuditPriority, type AuditRuleGroup } from '../../../shared/page/auditFindings';
+import { brokenLink, copyNumbers, ignoresWithout, namedRoutes, nodeWords, placeKind, routesUsing } from './auditPlaces';
 import { auditPrompt, promptBatches, AUDIT_PROMPT_FINDINGS_MAX } from '../../../shared/page/auditPrompt';
 import { linkFix, relinkTarget } from '../../../shared/page/auditRepairs';
 import { agentTask } from '../../../shared/properties/agentTask';
@@ -85,9 +86,10 @@ export interface AuditsPanelProps {
   readonly fixDeps: () => FixDeps;
   /**
    * Opens the file; with a path, selects that element, scrolls to it and flashes it; with a prop, shows its field in Settings;
-   * with code, also opens the code window at that declaration's line.
+   * with code, also opens the code window at that declaration's line. For a component or layout, `routes` are the pages it
+   * shows on: the canvas shows one of them behind it, so the element is there to outline.
    */
-  readonly onReveal: (file: string, path: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget) => void;
+  readonly onReveal: (file: string, path: readonly number[] | undefined, prop: string | undefined, code?: AuditCodeTarget, routes?: readonly string[]) => void;
   /** Outlines the element on the canvas while the pointer is on its occurrence; undefined clears it. */
   readonly onHover: (file: string, path: readonly number[] | undefined) => void;
   /** Starts a new page at `route`, for a link that points nowhere yet. */
@@ -215,11 +217,7 @@ export default function AuditsPanel(props: AuditsPanelProps) {
     unignorePage: async (file) => void (await writeIgnores(props, translate, (value) => withoutIgnoredPage(value, file))),
     unignoreIds: async (ids) => void (await writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value))),
     unignoreAll: async () => void (await writeIgnores(props, translate, withoutAnyIgnores)),
-    restore: async (finding) => {
-      // A repeat may be hidden by the first match's entry: that is the one to take away.
-      const ids = finding.repeatOf === undefined ? [finding.id] : [finding.id, finding.repeatOf];
-      await writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value));
-    },
+    restore: async (finding) => void (await writeIgnores(props, translate, (value) => ignoresWithout(value, finding, allFindings(auditState())))),
     ignoredOf: (finding) => reasons.get(finding.id),
     changeTokens: (message, change) => changeTokenSettings(props, translate, message, change),
     customAudit: (id) => customAudits.find((audit) => audit.id === id),
@@ -782,6 +780,13 @@ function FileGroup(props: {
   const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
   const toggle = (): void => setOpen((value) => !value);
   const [first] = props.findings;
+  const usage = useAuditState().report?.usage;
+  const routes = routesUsing(props.file, props.findings, usage);
+  const place = usePlaceLine(props.file, first?.fileKind, routes);
+  const auditText = useAuditText();
+  // Links that read the same (five "Get started" buttons) are told apart by number, in the order the file holds them.
+  const links = props.findings.filter((finding) => finding.check === 'link-broken');
+  const copies = copyNumbers(links, (finding) => `${occurrenceView(finding, props.nodes, auditText).label}\n${finding.detail}`);
   return (
     <div className={`audits-file-group ${open ? 'open' : ''}`}>
       <div className="list-item audits-row audits-group-row" role="button" tabIndex={0} aria-expanded={open} onClick={toggle} onKeyDown={activateOnKey(toggle)}>
@@ -789,8 +794,15 @@ function FileGroup(props: {
           <ChevronRightIcon size={10} />
         </span>
         <FileKindIcon file={props.file} kind={first?.fileKind} />
-        <span className="label audits-title" title={props.file}>
-          {first === undefined ? props.file : occurrenceName(first)}
+        <span className="audits-occurrence-text">
+          <span className="label audits-title" title={props.file}>
+            {first === undefined ? props.file : occurrenceName(first)}
+          </span>
+          {place !== undefined && (
+            <span className="audits-place-line" title={place.title}>
+              {place.line}
+            </span>
+          )}
         </span>
         <span className="audits-count">{props.findings.length}</span>
         <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
@@ -806,9 +818,17 @@ function FileGroup(props: {
         <div className="audits-file-body">
           {sameElementRuns(props.findings).map(([only, ...others]) =>
             only === undefined ? undefined : others.length === 0 && !declarationUnderElement(only) ? (
-              <Occurrence key={only.id} finding={only} nodes={props.nodes} actions={props.actions} panel={props.panel} />
+              <Occurrence
+                key={only.id}
+                finding={only}
+                nodes={props.nodes}
+                routes={routes}
+                copy={copies.get(only)}
+                actions={props.actions}
+                panel={props.panel}
+              />
             ) : (
-              <ElementGroup key={only.id} findings={[only, ...others]} nodes={props.nodes} actions={props.actions} panel={props.panel} />
+              <ElementGroup key={only.id} findings={[only, ...others]} nodes={props.nodes} routes={routes} actions={props.actions} panel={props.panel} />
             ),
           )}
         </div>
@@ -842,6 +862,7 @@ export function sameElementRuns(findings: readonly AuditFinding[]): readonly (re
 function ElementGroup(props: {
   readonly findings: readonly AuditFinding[];
   readonly nodes: readonly PageNode[] | undefined;
+  readonly routes: readonly string[];
   readonly actions: Actions;
   readonly panel: AuditsPanelProps;
 }) {
@@ -853,7 +874,7 @@ function ElementGroup(props: {
   // A `<style>` block's row also goes to its code, at its first declaration, each time it is clicked.
   const toggle = (): void => {
     if (code !== undefined) {
-      props.panel.onReveal(first.file, first.element?.path, undefined, code);
+      props.panel.onReveal(first.file, first.element?.path, undefined, code, props.routes);
     }
     setOpen((value) => !value);
   };
@@ -883,12 +904,49 @@ function ElementGroup(props: {
       {open && (
         <div className="audits-file-body">
           {props.findings.map((finding) => (
-            <Occurrence key={findingRowKey(finding)} finding={finding} nodes={props.nodes} actions={props.actions} panel={props.panel} nested={true} />
+            <Occurrence
+              key={findingRowKey(finding)}
+              finding={finding}
+              nodes={props.nodes}
+              routes={props.routes}
+              actions={props.actions}
+              panel={props.panel}
+              nested={true}
+            />
           ))}
         </div>
       )}
     </div>
   );
+}
+
+// A group heading's second line: what the place is and, for a component or layout, the pages it is on, so
+// what a fix there changes is in view; the tooltip names every one.
+function usePlaceLine(
+  file: string,
+  kind: AuditFinding['fileKind'] | undefined,
+  routes: readonly string[],
+): { readonly line: string; readonly title: string } | undefined {
+  const translate = useTranslate();
+  const what = placeKind(file, kind);
+  if (what === 'file') {
+    return undefined;
+  }
+  if (what === 'page') {
+    const [route] = routes;
+    const line = route === undefined ? translate('auditsUi.where.page') : translate('auditsUi.where.pageAt', { route });
+    return { line, title: line };
+  }
+  const label = translate(what === 'layout' ? 'auditsUi.where.layout' : 'auditsUi.where.component');
+  if (routes.length === 0) {
+    return { line: label, title: label };
+  }
+  const { named, more } = namedRoutes(routes);
+  const pages = more === 0 ? named : translate('auditsUi.where.more', { pages: named, count: more });
+  return {
+    line: translate('auditsUi.where.usedOn', { place: label, pages }),
+    title: translate('auditsUi.where.title', { pages: routes.join(', ') }),
+  };
 }
 
 /** The two scopes the panel offers: the whole site (the default) or the open page and what it uses. */
@@ -984,8 +1042,11 @@ export function occurrenceView(
   }
   const node = nodes === undefined ? undefined : nodeAt(nodes, element.path);
   const described = node === undefined ? { icon: elementIcon(element.tag, 14), label: element.tag } : describeNode(node, undefined);
-  // An instance found by its prop names the prop too, `Button · href`: the field to edit in Settings.
-  const label = finding.prop !== undefined && node?.kind === 'component' ? `${described.label} · ${finding.prop}` : described.label;
+  // A link reads by its words, `Button “Get started”`; any other instance found by its prop names the prop,
+  // `Button · alt`: the field to edit in Settings.
+  const words = finding.check === 'link-broken' && node !== undefined ? nodeWords(node) : undefined;
+  const named = words === undefined ? described.label : `${described.label} “${words}”`;
+  const label = finding.prop !== undefined && finding.check !== 'link-broken' && node?.kind === 'component' ? `${named} · ${finding.prop}` : named;
   return { icon: <span className="audits-occurrence-icon">{described.icon}</span>, label };
 }
 
@@ -1031,6 +1092,9 @@ export function occurrenceNote(
 function Occurrence(props: {
   readonly finding: AuditFinding;
   readonly nodes: readonly PageNode[] | undefined;
+  readonly routes: readonly string[];
+  /** Which one this is among rows that read the same. */
+  readonly copy?: { readonly index: number; readonly count: number } | undefined;
   readonly actions: Actions;
   readonly panel: AuditsPanelProps;
   /** Under its element's own row (ElementGroup): the row says what is wrong, not which element, which the parent row says. */
@@ -1047,7 +1111,7 @@ function Occurrence(props: {
   const selected = active.key === rowKey;
   const go = (): void => {
     active.pick(rowKey);
-    panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop, codeTarget(finding));
+    panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop, codeTarget(finding), props.routes);
   };
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
   const brokenRoute = missingRoute(finding, panel.routes);
@@ -1059,10 +1123,21 @@ function Occurrence(props: {
   // A raw value reads as its declaration wherever it is listed: under its block's row, or alone for a stylesheet's (no element).
   const declaration = finding.css !== undefined && (props.nested === true || element === undefined);
   const view = declaration ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label, auditText) } : whole;
+  const link = ignoredBecause === undefined ? brokenLink(finding, brokenRoute) : undefined;
   const note =
     declaration && finding.css !== undefined && ignoredBecause === undefined
       ? declarationNote(finding.css, translate)
-      : occurrenceNote(finding, ignoredBecause, translate);
+      : link === undefined
+        ? occurrenceNote(finding, ignoredBecause, translate)
+        : translate(link.missing === 'page' ? 'auditsUi.link.noPage' : 'auditsUi.link.noSection', { url: link.url });
+  const noteTitle =
+    link === undefined ? note : translate(link.missing === 'page' ? 'auditsUi.link.noPageTitle' : 'auditsUi.link.noSectionTitle', { url: link.url });
+  const tag =
+    finding.measure !== undefined
+      ? auditText.measure(finding)
+      : props.copy === undefined
+        ? undefined
+        : translate('auditsUi.copyOf', { index: props.copy.index, total: props.copy.count });
   return (
     <div className="audits-occurrence">
       <div
@@ -1081,12 +1156,12 @@ function Occurrence(props: {
             {view.label}
           </span>
           {note !== undefined && (
-            <span className="audits-note-line" title={note}>
+            <span className="audits-note-line" title={noteTitle}>
               {note}
             </span>
           )}
         </span>
-        {finding.measure !== undefined && <span className="audits-tag">{auditText.measure(finding)}</span>}
+        {tag !== undefined && <span className="audits-tag">{tag}</span>}
         <span className="audits-hover-actions" onClick={(event) => event.stopPropagation()}>
           {fix !== undefined && (
             <button className="audits-link" title={auditText.fixLabel(fix)} onClick={() => setMode(mode === 'preview' ? 'idle' : 'preview')}>

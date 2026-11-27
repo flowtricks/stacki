@@ -14,6 +14,7 @@ export const messages = {
   'auditsUi.breakdown.unit': { one: '{count} unit', other: '{count} unit' },
   'auditsUi.category': 'Category',
   'auditsUi.changeLink': 'Change link…',
+  'auditsUi.copyOf': '{index} of {total}',
   'auditsUi.createPage': 'Create {route}',
   'auditsUi.empty.auditing': 'Auditing…',
   'auditsUi.empty.clean': 'No issues · checked {time}.',
@@ -77,6 +78,10 @@ export const messages = {
   'auditsUi.ignoredManyToast': 'Findings ignored',
   'auditsUi.ignoredNote': 'Ignored: {reason}',
   'auditsUi.ignoredToast': 'Finding ignored',
+  'auditsUi.link.noPage': 'Links to {url} · no such page',
+  'auditsUi.link.noPageTitle': 'No page, file or redirect in this project answers {url}.',
+  'auditsUi.link.noSection': 'Links to {url} · no such section',
+  'auditsUi.link.noSectionTitle': 'The page has nothing for {url} to jump to.',
   'auditsUi.linkTo': 'Link to',
   'auditsUi.linkToLabel': 'Link to {route}',
   'auditsUi.menu.closeFind': 'Close find & replace',
@@ -160,6 +165,13 @@ export const messages = {
   'auditsUi.stopIgnoring': 'Stop ignoring',
   'auditsUi.title': 'Audits',
   'auditsUi.variableToUse': 'Variable to use',
+  'auditsUi.where.component': 'Component',
+  'auditsUi.where.layout': 'Layout',
+  'auditsUi.where.more': '{pages} +{count}',
+  'auditsUi.where.page': 'Page',
+  'auditsUi.where.pageAt': 'Page · {route}',
+  'auditsUi.where.title': 'Used on {pages}. A fix here changes every one.',
+  'auditsUi.where.usedOn': '{place} · on {pages}',
 } as const satisfies CatalogOf<`auditsUi.${string}`>;
 
 export type MessageKey = keyof typeof messages;

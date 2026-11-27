@@ -50,6 +50,7 @@ interface PreviewPaneProps {
   readonly onRestart?: () => void;
   readonly selPath?: string | undefined;
   readonly navigatorSelectionTick?: number;
+  readonly unhidePath?: string | undefined;
   readonly navHoverPath?: string | undefined;
   /** The ::before or ::after row hovered in the navigator, of `navHoverPath`. */
   readonly navHoverPseudo?: PseudoLayer | undefined;

@@ -32,6 +32,9 @@ export interface RenderedSource {
    * instance, the component markup around it, a nested instance. Absent when there are none. A
    * value traced up from a component reads which instance rendered this copy from here. */
   readonly within?: readonly RenderedPlace[];
+  /** The instances that handed this element its path, outermost first (the rest of its `data-avb-p`).
+   * Slot content loses the marker comments `within` reads, and keeps these. */
+  readonly callers?: readonly RenderedPlace[];
 }
 
 /** A marked node: the file and the structural path its marker names. */
@@ -216,7 +219,8 @@ function checkLinks(page: RenderedPage, elements: readonly Visit[], ids: Readonl
     }
     const target = linkTarget(href, facts, page.route);
     const finding = (): AuditFinding => renderedFinding(page, element, 'link-broken', `href="${href}"`, {}, { byComponent: false });
-    const within = element.source?.within ?? [];
+    // The callers go last: a trace walks from the end, and the immediate caller is the innermost hop.
+    const within = [...(element.source?.within ?? []), ...(element.source?.callers ?? [])];
     switch (target.tag) {
       case 'ignored':
         break;

@@ -616,6 +616,7 @@ export const runOrder = (run: readonly Node[]): number | undefined => runOrders.
 
 export const collectRegions = () => {
   forgetHollowRegions();
+  forgetLostCopies();
   pruneRegions();
   const { starts, markers, iterations } = findMarkers();
   // What each path was found to hold this pass, so a tag left on an element
@@ -654,6 +655,7 @@ export const collectRegions = () => {
   }
   promoteInstanceTags();
   collectHollowRegions();
+  collectLostCopies();
   focusCache = undefined; // new runs — the focused instance may be among them
 };
 
@@ -805,6 +807,147 @@ function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly st
     .filter((other) => callers.has(namespaceOf(other)))
     .sort();
   return `${holderIndex} ${others.join(' ')}`;
+}
+
+// --- Copies that lost their markers while another kept them -------------------
+// One node of a component file renders once per instance. An instance written into
+// a slot that its component renders to a string (`slotContent`) loses its marker
+// comments; another instance of the same component, rendered directly, keeps
+// them. The path then has ONE marker run and several tagged elements, which read
+// as one split element (a text animation's clones), so every copy was unioned into
+// one box: opening a Button and selecting its root outlined a rectangle from the
+// skip link to the footer, around nothing. A copy that lost its markers is told
+// apart from a clone by the paths the calling files gave it (a clone carries the
+// same ones), and gets a run of its own, so it is outlined, counted, revealed and
+// clicked as the separate copy it is. Derived on every pass, like the hollow runs.
+const lostRuns = new Set<Node[]>();
+
+const forgetLostCopies = () => {
+  if (lostRuns.size === 0) {
+    return;
+  }
+  for (const [nodePath, runs] of regions) {
+    const kept = runs.filter((run) => !lostRuns.has(run));
+    if (kept.length === runs.length) {
+      continue;
+    }
+    if (kept.length > 0) {
+      regions.set(nodePath, kept);
+    } else {
+      regions.delete(nodePath);
+    }
+  }
+  lostRuns.clear();
+};
+
+// What a marked path's runs hold: their nodes, and every ancestor of one.
+interface MarkedReach {
+  readonly held: ReadonlySet<Node>;
+  readonly around: ReadonlySet<Node>;
+  /** The callers' names for the copies the markers hold; empty when no held element carries the path. */
+  readonly keys: Set<string>;
+  readonly strays: { readonly element: Element; readonly key: string }[];
+}
+
+function markedReach(runs: readonly (readonly Node[])[]): MarkedReach {
+  const held = new Set<Node>(runs.flat());
+  const around = new Set<Node>();
+  for (const node of held) {
+    let up: Node | undefined = node.parentNode ?? undefined;
+    for (let depth = 0; up !== undefined && !around.has(up) && depth < PRELOAD_LIMITS.domDepthMax; depth++) {
+      around.add(up);
+      up = up.parentNode ?? undefined;
+    }
+  }
+  return { held, around, keys: new Set(), strays: [] };
+}
+
+// Whether the element is a marked node or inside one.
+function insideHeld(element: Element, held: ReadonlySet<Node>): boolean {
+  let at: Node | undefined = element;
+  for (let depth = 0; at !== undefined && depth < PRELOAD_LIMITS.domDepthMax; depth++) {
+    if (held.has(at)) {
+      return true;
+    }
+    at = at.parentNode ?? undefined;
+  }
+  return false;
+}
+
+// The names the calling files gave the instance this element belongs to, from the markup as served.
+function copyCallerKey(element: Element, nodePath: string, callers: ReadonlySet<string>): string {
+  const namespace = namespaceOf(nodePath);
+  return writtenPaths(element)
+    .filter((other) => namespaceOf(other) !== namespace)
+    .filter((other) => callers.has(namespaceOf(other)))
+    .sort()
+    .join(' ');
+}
+
+const collectLostCopies = () => {
+  const reaches = new Map<string, MarkedReach>();
+  const callers = new Map<Node, ReadonlySet<string>>();
+  for (const element of Array.from(document.querySelectorAll(`[${PATH_ATTR}]`))) {
+    const holder = element.parentNode;
+    if (holder === null) {
+      continue;
+    }
+    for (const nodePath of writtenPaths(element)) {
+      const runs = regions.get(nodePath);
+      if (runs === undefined || hollowPaths.has(nodePath)) {
+        continue;
+      }
+      const reach = reaches.get(nodePath) ?? markedReach(runs);
+      reaches.set(nodePath, reach);
+      const key = copyCallerKey(element, nodePath, callerNamespaces(holder, callers));
+      if (insideHeld(element, reach.held) || reach.around.has(element)) {
+        reach.keys.add(key);
+      } else {
+        reach.strays.push({ element, key });
+      }
+    }
+  }
+  for (const [nodePath, reach] of reaches) {
+    // With nothing to compare against, a tagged element outside the runs stays a piece of the marked node.
+    const separate = reach.keys.size === 0 ? [] : reach.strays.filter((stray) => !reach.keys.has(stray.key));
+    if (separate.length > 0) {
+      addLostCopies(nodePath, separate);
+    }
+  }
+};
+
+// One run per lost copy (a holder and its callers' names), among the marked ones in document order.
+function addLostCopies(nodePath: string, strays: MarkedReach['strays']): void {
+  const holders = new Map<Node, number>();
+  const copies = new Map<string, Element[]>();
+  for (const { element, key } of strays) {
+    const holder = element.parentNode ?? element;
+    const holderIndex = holders.get(holder) ?? holders.size;
+    holders.set(holder, holderIndex);
+    const copy = `${holderIndex} ${key}`;
+    const elements = copies.get(copy) ?? [];
+    copies.set(copy, elements);
+    if (!elements.some((outer) => outer.contains(element))) {
+      elements.push(element);
+    }
+  }
+  const added = Array.from(copies.values(), hollowRunSpan);
+  for (const run of added) {
+    lostRuns.add(run);
+  }
+  const all = [...(regions.get(nodePath) ?? []), ...added].sort(compareRuns);
+  assert(all.length > added.length, 'addLostCopies: the marked copies stay');
+  regions.set(nodePath, all);
+}
+
+function compareRuns(left: readonly Node[], right: readonly Node[]): number {
+  const [first] = left;
+  const [second] = right;
+  if (first === undefined || second === undefined) {
+    return 0;
+  }
+  const following = (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  return following ? -1 : 1;
 }
 
 export { parentPath } from './framePaths';
