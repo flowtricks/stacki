@@ -48,6 +48,7 @@ export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeatu
   breakpointSync: ['settings:breakpoints'],
   pages: ['panel:pages'],
   publish: ['publish'],
+  publishDestinations: ['publish'],
   roles: ['settings:roles'],
   styles: ['panel:selectors'],
   variables: ['panel:style'],

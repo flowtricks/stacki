@@ -41,9 +41,9 @@ interface NetlifySettings {
 }
 
 /** How this site would deploy, or why it cannot. Read before Publish builds anything, and again when it deploys. */
-export async function netlifyBuildPlan(root: string): Promise<Result<NetlifyBuildPlan, Described>> {
+export async function netlifyBuildPlan(root: string, contexts: readonly string[] = ['production']): Promise<Result<NetlifyBuildPlan, Described>> {
   assert(path.isAbsolute(root), 'A Netlify deploy reads an absolute site folder');
-  const settings = await netlifySettings(root);
+  const settings = await netlifySettings(root, contexts);
   if (!settings.ok) {
     return settings;
   }
@@ -104,7 +104,7 @@ export async function deployNetlify(root: string, hosting: NetlifyHosting, run: 
   }
 }
 
-async function requireNetlifySite(root: string, hosting: NetlifyHosting): Promise<void> {
+export async function requireNetlifySite(root: string, hosting: NetlifyHosting): Promise<void> {
   const site = await netlifyAPI(root, 'getSite', { site_id: hosting.siteId });
   if (!site.ok) {
     throw new DescribedError(netlifyDeployProblem(site.error));
@@ -151,8 +151,8 @@ function adapterProblem(config: string): Described | undefined {
   return undefined;
 }
 
-// netlify.toml's build settings, with the production context's winning as it does for Netlify.
-async function netlifySettings(root: string): Promise<Result<NetlifySettings, Described>> {
+// netlify.toml's build settings, with the deploy's contexts winning, later ones over earlier, as they do for Netlify.
+async function netlifySettings(root: string, contexts: readonly string[]): Promise<Result<NetlifySettings, Described>> {
   const filename = path.join(root, 'netlify.toml');
   const source = await siteFile(filename);
   if (source === undefined) {
@@ -160,8 +160,11 @@ async function netlifySettings(root: string): Promise<Result<NetlifySettings, De
   }
   try {
     const file = record(parseTOML(source));
-    const production = optionalTable(optionalTable(file['context'])['production']);
-    const build = { ...optionalTable(file['build']), ...production };
+    const declared = optionalTable(file['context']);
+    let build: Readonly<Record<string, unknown>> = optionalTable(file['build']);
+    for (const context of contexts) {
+      build = { ...build, ...optionalTable(declared[context]) };
+    }
     const base = build['base'] === undefined ? '' : netlifyBase(text(build['base']));
     const command = build['command'] === undefined ? '' : text(build['command']);
     const publish = build['publish'] === undefined ? undefined : text(build['publish']);
@@ -198,7 +201,7 @@ export function siteDirectory(base: string, input: string): string | undefined {
   return base === '' ? folder : path.posix.join(base, folder);
 }
 
-async function requireBuildOutput(root: string, directory: string): Promise<void> {
+export async function requireBuildOutput(root: string, directory: string): Promise<void> {
   const folder = path.join(root, directory);
   if (!existsSync(folder)) {
     throw new DescribedError(described('publish.netlify.error.outputFolder'));

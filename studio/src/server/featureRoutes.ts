@@ -9,6 +9,7 @@ import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
 import { workerRoute } from '../features/publishing/workerRoutes';
 import { netlifySiteRoute } from '../features/publishing/netlifySiteRoutes';
+import { customRoute } from '../features/publishing/customRoutes';
 import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
 import { cmsRemoteRoutes } from '../features/cms/cmsRemoteServer';
@@ -58,6 +59,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await accountRoute(root, request, response, pathname, readBody)) ||
       (await workerRoute(root, request, response, pathname, readBody)) ||
       (await netlifySiteRoute(root, request, response, pathname, readBody)) ||
+      (await customRoute(root, request, response, pathname)) ||
       (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||

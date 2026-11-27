@@ -395,7 +395,7 @@ function bracketed(source: string, opening: RegExp): string | undefined {
 }
 
 export function isConfigFile(file: string): boolean {
-  return /^astro\.config\.[cm]?[jt]s$/.test(file) || file === '.stacki/publish.json';
+  return /^astro\.config\.[cm]?[jt]s$/.test(file) || file === '.stacki/publish.json' || file === '.stacki/publish-destinations.json';
 }
 
 function firstUnparsable(texts: readonly RenameText[], files: readonly FileChange[]): string | undefined {

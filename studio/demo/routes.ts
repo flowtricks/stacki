@@ -7,7 +7,7 @@ import { managedAsset } from '../src/features/assets/assetStateTypes';
 import { record, sourcePath, string } from '../src/shared/validation';
 import { UPLOAD_LIMITS, type DemoFiles } from './projectFiles';
 import { DEMO_PUBLISH_SOURCE, type DemoPublish } from './publish';
-import { publishAccount, publishDiscovery, publishNetlifySite, publishRepositories } from './publishConnections';
+import { publishAccount, publishCustomHost, publishDiscovery, publishNetlifySite, publishRepositories } from './publishConnections';
 import type { DemoRooms } from './room';
 import { componentUsage } from './componentUsage';
 import { pageAddress } from './pageAddress';
@@ -169,6 +169,8 @@ function readRoute(context: RouteContext, url: URL): Response | undefined {
       return json(200, context.publish.availability());
     case '/studio/api/publish/site-url':
       return json(200, {}); // The demo's site has no domain of its own to link to.
+    case '/studio/api/publish/custom':
+      return json(200, publishCustomHost());
     case '/studio/api/project':
       return json(200, { ...context.snapshot.project, workspaceId: context.workspace });
     case '/studio/api/assets':

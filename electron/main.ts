@@ -117,6 +117,7 @@ import { registerSelectorHandlers } from './handlers/selectorHandlers';
 import { registerAuditHandlers } from './handlers/auditHandlers';
 import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
 import { attachmentThumbnail } from './handlers/ai/attachmentThumbnail';
+import { DeployLinkStore } from './project/deployLinkStore';
 import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
 import { createFolderOpenQueue, folderOpenChoice, launchFolderArguments } from './project/folderOpen';
 
@@ -151,6 +152,16 @@ const cmsConnections = new CmsConnectionStore(
 const mediaConnections = new MediaConnectionStore(
   {
     available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+  },
+  () => app.getPath('userData'),
+);
+// A custom host's deploy link is a secret too (project/deployLinkStore.ts). Linux's `basic_text` backend is not
+// encryption, so a link is refused there rather than kept readable.
+const deployLinks = new DeployLinkStore(
+  {
+    available: () => safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text'),
     encrypt: (text) => safeStorage.encryptString(text),
     decrypt: (data) => safeStorage.decryptString(data),
   },
@@ -1448,7 +1459,7 @@ registerInstructionHandlers(host);
 registerAgentHandlers(host);
 registerSecretsHandlers(host);
 registerMcpHandlers(host);
-registerPublishHandlers(host);
+registerPublishHandlers(host, deployLinks);
 registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
 registerMediaHostingHandlers(host, mediaConnections);
 // App settings' secrets are sealed by the operating system too, in a folder of

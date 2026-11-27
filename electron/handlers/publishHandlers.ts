@@ -13,9 +13,13 @@ import { translateMain } from '../lib/mainLocale';
 import { setUpWorkerHosting } from '../project/publishWorkerSetup';
 import { createNetlifySite } from '../project/publishNetlify';
 import { described } from '../../shared/properties/i18n/messageRef';
+import type { CustomPublishRequest, CustomPublishResult } from '../../shared/properties/publishDeployLink';
+import type { DeployLinkStore } from '../project/deployLinkStore';
+import { readPackageScripts } from '../project/publishCustom';
+import { readWorkerEnvironments } from '../project/publishStagingWorker';
 
-export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
-  const publisher = new DesktopPublisher();
+export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>, deployLinks: DeployLinkStore): void {
+  const publisher = new DesktopPublisher(undefined, { deployLinks });
   const account = new PublishingAccount();
   host.ipcMain.handle('publish:discover', async (_event, input) => {
     const project = root(input.projectPath);
@@ -50,6 +54,7 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
     await ensureToolPath();
     return createNetlifySite(project, input.site);
   });
+  host.ipcMain.handle('publish:custom', (_event, input) => customPublishRequest(root(input.projectPath), input.request, deployLinks));
   host.ipcMain.handle('publish:start', (_event, input) => publisher.start(root(input.projectPath), input.target, input.commitMessage));
   host.ipcMain.handle('publish:state', (_event, projectPath) => publisher.state(root(projectPath)));
   host.ipcMain.handle('publish:availability', (_event, projectPath) => readPublishAvailability(root(projectPath)));
@@ -64,4 +69,24 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       return undefined;
     }
   });
+}
+
+// Nothing here sends or runs anything: it lists the site's script and environment names and keeps deploy links. Only a publish uses either.
+async function customPublishRequest(project: string, request: CustomPublishRequest, deployLinks: DeployLinkStore): Promise<CustomPublishResult> {
+  await ensureToolPath();
+  const changed =
+    request.action === 'saveLink'
+      ? await deployLinks.save(project, request.link, request.destination)
+      : request.action === 'removeLink'
+        ? deployLinks.remove(project, request.destination)
+        : undefined;
+  if (changed !== undefined && !changed.ok) {
+    return { kind: 'failed', ...changed.error };
+  }
+  return {
+    kind: 'ready',
+    scripts: await readPackageScripts(project),
+    environments: await readWorkerEnvironments(project),
+    links: { production: await deployLinks.state(project, 'production'), staging: await deployLinks.state(project, 'staging') },
+  };
 }

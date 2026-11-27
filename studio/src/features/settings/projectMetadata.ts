@@ -34,6 +34,7 @@ export async function metadataFiles(root: string): Promise<readonly string[]> {
     'componentCanvas',
     'guide',
     'publish',
+    'publishDestinations',
     'pages',
     'componentSources',
     'styles',

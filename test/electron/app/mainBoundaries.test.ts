@@ -141,7 +141,8 @@ test('the complete channel inventory matches real main and terminal registration
   // The code editor's intelligence adds one (codeIntel:request; shared/ipc/codeIntel.ts), 344 in all.
   // Signing in to MCP servers adds one (ai:mcpAuth; shared/properties/mcp.ts), 345 in all.
   // The Files panel's git marks add one (files:gitStatus; shared/ipc/fileExplorer.ts), 346 in all.
-  assert.equal(harness.handlers.size, 346); // Design mode (experimental): docs/design-mode/REMOVE.md
+  // Publish's Custom host and staging add one (publish:custom: script names, environments and deploy links), 347 in all.
+  assert.equal(harness.handlers.size, 347); // Design mode (experimental): docs/design-mode/REMOVE.md
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

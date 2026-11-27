@@ -209,6 +209,7 @@ interface InvokeChannels {
   readonly publishingAccount: 'publish:account';
   readonly setUpPublishWorker: 'publish:workerSetup';
   readonly createNetlifySite: 'publish:netlifySite';
+  readonly publishingCustomHost: 'publish:custom';
   readonly cmsConnections: 'cmsConnections:list';
   readonly saveCmsConnection: 'cmsConnections:save';
   readonly removeCmsConnection: 'cmsConnections:remove';

@@ -1712,6 +1712,58 @@ It stores provider/project identifiers, a Desktop GitHub username, and bounded n
 credentials stay in each host's authentication store or environment. Metadata reads and writes use
 the existing witnessed, conflict-checked project metadata transport.
 
+### Custom hosting
+
+A host Stacki has no integration for is `customHosting` beside `hosting`, which stays
+`{ "provider": "none" }`: `{ deploy: "github" | "script" | "link", script?, hostName?, siteUrl? }`.
+The shape is deliberate. Stacki 1.4.21 throws on an unknown provider but ignores an unknown key, so
+it reads such a project as GitHub only (and its own Save drops the block). A file naming both a
+provider and `customHosting` is refused, as is any unknown key inside it. `github` only ever pushes;
+`script` builds the publish snapshot and runs that package.json script; `link` pushes, then sends
+one POST to the deploy link, with no local build. `script` is a name, never a command, and nothing
+runs or is sent except from an explicit publish to the host.
+
+A deploy link is a secret. It is never in a project file, receipt, log, message or child process
+environment. `publish:custom` (`shared/properties/publishDeployLink.ts`) carries it once, from the
+form to main; only its mask (`https://host/••••••••`) comes back. `deployLinkStore.ts` seals it with
+`safeStorage` in `<userData>/deploy-links.json` together with the project path, the origin repository
+and the destination, and refuses to keep it where real encryption is unavailable (including Linux
+`basic_text`). A binding that does not match is never sent. `deployRequest.ts` requires https, sends
+once with a 30-second deadline, never retries, follows only same-origin 307/308 redirects (at most
+three), drops the response body, and never repeats a transport error. Studio and the demo keep no
+links: the option is unavailable there and Studio refuses such a publish before committing.
+
+### Staging
+
+`.stacki/publish-destinations.json` (`shared/properties/publishDestinations.ts`) holds the
+destinations besides production: a bounded list, today only `staging`. It is a separate file because
+1.4.21 rewrites `publish.json` from the keys it knows, sometimes without a Save. Provider kinds borrow
+production's account and project and say only how they differ. `publish:start` accepts the target
+`staging`; it is never a `defaultTarget`. Staging runs its own flow (`publisherStaging.ts`), its own
+hooks and its own receipt, with `STACKI_PUBLISH_ENV=staging` (production's scripts get `production`).
+
+**Publishing to staging never changes production.** It never commits to or pushes the person's
+branch. Only the `github-branch` and `link` kinds touch GitHub, pushing the captured files to the
+staging branch, never forced, never with tags, and never to the checked-out branch, the repository's
+default branch, a conventional production name or a Pages project's production branch. Every check
+fails closed, before anything is built or pushed:
+
+- Workers (`publishStagingWorker.ts`): wrangler uses `--name` verbatim even with `--env`, so staging
+  passes its own resolved name, which must differ from production's. `env.*` inherits top-level
+  `routes`, so a route naming a production hostname is refused, as are workflows, queue consumers and
+  containers production declares. A separate Worker drops routes, triggers and queue consumers.
+  `WRANGLER_CI_OVERRIDE_NAME` and the computer's `CLOUDFLARE_ENV` are withheld. A generated
+  (redirected) config must target the chosen environment.
+- Pages: the project's production branch is read from Cloudflare and must differ.
+- Vercel: never `--prod`, and a ready production deployment must exist, because a project's first
+  deployment is production regardless.
+- Netlify: `--alias` draft deploys only, never `--prod` or `--prod-if-unlocked`.
+- Custom: the script cannot be production's or be named like a production deploy (its content cannot
+  be checked); a staging deploy link is stored apart from production's and may not equal it.
+
+A project with the pull request review workflow cannot publish to staging. Studio does not publish to
+staging; both Studio and Desktop treat the destinations file as publish settings (`publish` access).
+
 `defaultTarget` selects the main Publish button's action: `all`, `github`, or `hosting`.
 Missing settings and older version-1 files default to `all`. Desktop and Studio share the
 same settings form and resolve this preference from project metadata when Publish is clicked;

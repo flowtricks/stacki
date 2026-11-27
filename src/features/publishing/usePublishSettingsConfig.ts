@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Hosting, PublishConfig } from '../../../shared/properties/publishConfig';
+import { withHosting, type Hosting, type PublishConfig } from '../../../shared/properties/publishConfig';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
 
 export function usePublishSettingsConfig(projectPath: string, stored: { readonly config: PublishConfig; readonly base: string | undefined }) {
@@ -44,7 +44,7 @@ export function usePublishSettingsConfig(projectPath: string, stored: { readonly
   function changeHosting(hosting: Hosting) {
     // An explicit choice, including None, cancels automatic prefilling.
     setState((previous) => ({
-      config: { ...previous.config, hosting },
+      config: withHosting(previous.config, hosting),
       hostingOrigin: 'settled',
     }));
   }
