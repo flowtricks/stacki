@@ -22,7 +22,9 @@ import Menu, { type MenuEntry } from '../../ui/Menu';
 import { registerMenuEditTarget } from '../../ui/menuEditTarget';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { tooltipAnchor, tooltipHost } from '../../ui/delayedTooltip';
-import { FileEntryIcon } from './fileIcons';
+import { FileEntryIcon } from '../../ui/ElementIcons';
+import { GitStatusBadge, gitTone, gitWords } from '../../ui/GitStatus';
+import { fileGitMark } from './fileGitMarks';
 import { importInto, trashPaths, transferInto, type FilesActionContext } from './filesActions';
 import { revealEntry } from './filesBridge';
 import { openInEditor } from './fileEditorControl';
@@ -38,7 +40,7 @@ import {
   type TreeKey,
   type TreeRow,
 } from './fileTreeModel';
-import { updateFilesView, type FilesView } from './filesState';
+import { gitMarksOf, updateFilesView, type FilesView } from './filesState';
 
 /** One row's height: every row is the same, so the window is arithmetic. */
 export const ROW_PX = 32;
@@ -407,6 +409,7 @@ export function FileTree(props: FileTreeProps) {
             const selected = view.selected.has(row.path);
             const cut = view.clipboard?.mode === 'cut' && view.clipboard.paths.includes(row.path);
             const dirty = view.editor?.path === row.path && view.editor.dirty;
+            const mark = fileGitMark(gitMarksOf(view), row.path, { folder: isFolderKind(row.entryKind) });
             return (
               <div
                 key={row.path}
@@ -417,7 +420,9 @@ export function FileTree(props: FileTreeProps) {
                 aria-selected={selected}
                 aria-expanded={row.open}
                 aria-busy={row.loading ? 'true' : undefined}
-                aria-description={row.protected ? translate('workspace.files.protected') : undefined}
+                // A dimmed row has no badge to speak for it; a letter or dot says its own words (ui/GitStatus.tsx).
+                aria-description={row.protected ? translate('workspace.files.protected') : mark?.kind === 'ignored' ? gitWords(mark, translate) : undefined}
+                data-git={gitTone(mark)}
                 data-selected={selected ? 'true' : undefined}
                 data-focused={index === focusedIndex ? 'true' : undefined}
                 data-open-file={view.editor?.path === row.path ? 'true' : undefined}
@@ -467,6 +472,7 @@ export function FileTree(props: FileTreeProps) {
                   </span>
                 )}
                 {dirty && <span className="files-dirty" aria-label={translate('workspace.files.editor.unsaved')} />}
+                <GitStatusBadge mark={mark} />
               </div>
             );
           })}

@@ -78,6 +78,8 @@ export const messages = {
   'git.busy.pulling': 'Melakukan pull…',
   'git.busy.switching': 'Beralih…',
   'git.busy.working': 'Memproses…',
+  'git.changes.more': { other: '{count} file lainnya tidak ditampilkan' },
+  'git.changes.title': 'Perubahan',
   'git.chip.committed': 'Perubahan di-commit',
   'git.chip.committedSwitched': 'Di-commit ke {from}, kini di {branch}',
   'git.chip.controls': 'Kontrol repositori',

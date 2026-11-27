@@ -79,6 +79,8 @@ export const messages = {
   'git.busy.pulling': 'Baixando…',
   'git.busy.switching': 'Alternando…',
   'git.busy.working': 'Trabalhando…',
+  'git.changes.more': { one: 'Mais {count} arquivo não exibido', other: 'Mais {count} arquivos não exibidos' },
+  'git.changes.title': 'Alterações',
   'git.chip.committed': 'Alterações salvas',
   'git.chip.committedSwitched': 'Salvo em {from}, agora em {branch}',
   'git.chip.controls': 'Controles do repositório',

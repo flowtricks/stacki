@@ -166,7 +166,7 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     assert.equal(document.querySelector('h2').textContent, 'Git');
     assert.equal(document.querySelector('.history-body').firstElementChild.className, 'git-panel-controls');
     // The graph's section reads as designers name it, with its chevron at the row's end.
-    const graphHead = document.querySelector('.history-section-head');
+    const graphHead = document.querySelector('.history-body > .history-section > .history-section-head');
     assert.equal(graphHead.querySelector('.history-section-title').textContent, 'Version history');
     assert.ok(graphHead.lastElementChild.classList.contains('history-section-chevron'));
     assert.equal(document.body.textContent.includes('Source Control Graph'), false);

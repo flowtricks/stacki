@@ -3143,6 +3143,21 @@ collision, and for `filesystem` the system's error code; never a path or file co
   a folder again when it is opened, keeping the held listing on screen. So the panel's first frame is the tree. A
   `files:list` that rejects, refuses or does not answer in 10 s is a failure: no placeholder rows stay, the open panel
   says so in a toast and offers Refresh (a listing already held stays on screen).
+- **Git marks.** `files:gitStatus` (`shared/ipc/fileExplorer.ts`, read by `electron/git/gitFileStatus.ts` from the
+  porcelain the Git panel reads) answers `none` outside a repository, `too-many` past 20,000 changed entries (the panel
+  then marks nothing and says so once, never a partial list), or the changed and ignored entries relative to the project,
+  which may sit below the repository's root. An untracked or ignored folder is one entry. Past 20,000 ignored entries
+  nothing is dimmed. The rows, find results and the open file's header wear a letter (`!` `M` `D` `R` `A` `U`, each told
+  in words by a tooltip) in the `--git-*` colours the Git panel's badges use; the working tree's column wins over the
+  index's. A folder holding changes wears a dot in the strongest one's colour (that order). Ignored entries are dimmed.
+  A deleted file has no row; unlike VS Code, the folders above it still get the dot. There is no timer of its own: the
+  keeper reads when the app's git read answers (`useGitInfo`), on every `files:changed`, and on window return. Main
+  follows the git directory (index and HEAD) and sends `files:changed` with no folders, so a commit or switch made
+  anywhere shows at once. The tree never waits for git, and an unchanged answer draws nothing again.
+- **Git panel's list of changes.** Under the commit box (`ChangesList`, `features/git/CommitFilePicker.tsx`, Desktop
+  and Studio), closed each time the panel opens: `git:status`, one row per file with the same icons, colours and letters
+  (`ui/GitStatus.tsx`), deleted files included, at most 200 rows and then a count of the rest. It does not choose what
+  a commit takes; the picker still does. Desktop opens a clicked file in the Files panel; Studio's rows only show.
 - **Access.** The panel follows `code:edit` (`src/lib/roleAccess.ts`). Its shortcut is ⌥F. Studio has no Files panel yet.
 
 ## Code intelligence

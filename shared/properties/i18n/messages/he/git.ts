@@ -79,6 +79,8 @@ export const messages = {
   'git.busy.pulling': 'מושכים…',
   'git.busy.switching': 'עוברים…',
   'git.busy.working': 'עובדים…',
+  'git.changes.more': { one: 'קובץ אחד נוסף לא מוצג', two: 'שני קבצים נוספים לא מוצגים', other: '{count} קבצים נוספים לא מוצגים' },
+  'git.changes.title': 'שינויים',
   'git.chip.committed': 'השינויים נשמרו בקומיט',
   'git.chip.committedSwitched': 'נשמר בקומיט ב-{from}, ועכשיו ב-{branch}',
   'git.chip.controls': 'בקרי המאגר',

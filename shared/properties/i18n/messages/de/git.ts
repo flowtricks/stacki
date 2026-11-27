@@ -80,6 +80,8 @@ export const messages = {
   'git.busy.pulling': 'Wird abgerufen …',
   'git.busy.switching': 'Wird gewechselt …',
   'git.busy.working': 'Wird bearbeitet …',
+  'git.changes.more': { one: '{count} weitere Datei nicht angezeigt', other: '{count} weitere Dateien nicht angezeigt' },
+  'git.changes.title': 'Änderungen',
   'git.chip.committed': 'Änderungen gespeichert',
   'git.chip.committedSwitched': 'Auf {from} gespeichert, jetzt auf {branch}',
   'git.chip.controls': 'Repository-Steuerung',

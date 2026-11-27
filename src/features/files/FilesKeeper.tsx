@@ -3,15 +3,28 @@
 // It reads the root and the folders left open as soon as the project opens, reads again the folders main reports changed
 // (explorerWatch.ts) and every shown folder when the window comes back, and tells main which folders to follow. Only
 // open folders are ever read, so a closed `node_modules` costs nothing.
+//
+// It keeps the git marks current the same way (filesGitReader.ts), with no timer of its own: they are read again each
+// time the app's git read answers (`gitSignal`: the Git panel's source, which runs after saves, git actions, on window
+// return and routinely), on every change main reports, the git directory's included, and on window return.
 import { useEffect, useMemo, useRef } from 'react';
 import { FILE_EXPLORER_LIMITS, parentPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { onFoldersChanged, watchFolders } from './filesBridge';
+import { refreshGitMarks } from './filesGitReader';
 import { isReadingFolder, refreshFolders } from './filesReader';
 import { wantedFolders } from './fileTreeModel';
 import { filesView, useFilesView } from './filesState';
 
-export function FilesKeeper({ projectPath }: { readonly projectPath: string }) {
+export function FilesKeeper({
+  projectPath,
+  gitSignal,
+}: {
+  readonly projectPath: string;
+  /** Whatever the app's last git read answered: a new value means git was just read, and the marks are read with it. */
+  readonly gitSignal: unknown;
+}) {
+  useEffect(() => refreshGitMarks(projectPath), [projectPath, gitSignal]);
   const view = useFilesView(projectPath);
   const wanted = useMemo(() => wantedFolders(view.open), [view.open]);
 
@@ -56,8 +69,14 @@ export function FilesKeeper({ projectPath }: { readonly projectPath: string }) {
 
   useEffect(() => {
     const held = (folder: ExplorerPath): boolean => filesView(projectPath).listings.has(folder) || filesView(projectPath).failed.has(folder);
-    const offChanged = onFoldersChanged((directories) => refreshFolders(projectPath, directories.filter(held)));
-    const offReturn = onWindowReturn(() => refreshFolders(projectPath, wantedFolders(filesView(projectPath).open)));
+    const offChanged = onFoldersChanged((directories) => {
+      refreshFolders(projectPath, directories.filter(held));
+      refreshGitMarks(projectPath);
+    });
+    const offReturn = onWindowReturn(() => {
+      refreshFolders(projectPath, wantedFolders(filesView(projectPath).open));
+      refreshGitMarks(projectPath);
+    });
     return () => {
       offChanged();
       offReturn();

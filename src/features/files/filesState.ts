@@ -7,7 +7,16 @@
 // most `PROJECTS_MAX` projects, and at most `watchDirectoriesMax` open folders remembered in browser storage.
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { FILE_EXPLORER_LIMITS, isWithinPath, parseExplorerPath, rebasePath, type ExplorerListing, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
+import {
+  FILE_EXPLORER_LIMITS,
+  isWithinPath,
+  parseExplorerPath,
+  rebasePath,
+  type ExplorerListing,
+  type ExplorerPath,
+  type FileGitStatus,
+} from '../../../shared/ipc/fileExplorer';
+import type { FileGitMarks } from './fileGitMarks';
 
 const LISTINGS_MAX = 2_000;
 const PROJECTS_MAX = 8;
@@ -29,7 +38,14 @@ export interface FilesView {
   /** The file the editor shows, and whether its text differs from the disk. */
   readonly editor: { readonly path: ExplorerPath; readonly dirty: boolean; readonly opening: number } | undefined;
   readonly clipboard: FilesClipboard | undefined;
+  /** Git's last answer, as text to tell a new one from the same one again, and the marks it makes. */
+  readonly git: FilesGit;
 }
+
+export type FilesGit =
+  | { readonly kind: 'unread' | 'none'; readonly answer: string }
+  | { readonly kind: 'too-many'; readonly answer: string; readonly limit: number }
+  | { readonly kind: 'marked'; readonly answer: string; readonly marks: FileGitMarks };
 
 const views = new Map<string, FilesView>();
 const listeners = new Set<() => void>();
@@ -44,6 +60,7 @@ function emptyView(projectPath: string): FilesView {
     anchor: undefined,
     editor: undefined,
     clipboard: undefined,
+    git: { kind: 'unread', answer: '' },
   };
 }
 
@@ -83,6 +100,35 @@ export function useFilesView(projectPath: string): FilesView {
     },
     () => filesView(projectPath),
   );
+}
+
+/** The view with git's answer taken. The same answer again changes nothing, so nothing is drawn again. */
+export function withGit(
+  view: FilesView,
+  status: FileGitStatus,
+  build: (repository: Extract<FileGitStatus, { readonly kind: 'repository' }>) => FileGitMarks,
+): FilesView {
+  const answer = JSON.stringify(status);
+  if (view.git.answer === answer) {
+    return view;
+  }
+  switch (status.kind) {
+    case 'none':
+      return { ...view, git: { kind: 'none', answer } };
+    case 'too-many':
+      return { ...view, git: { kind: 'too-many', answer, limit: status.limit } };
+    case 'repository':
+      return { ...view, git: { kind: 'marked', answer, marks: build(status) } };
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+/** The marks to draw, if any: a view with none draws the tree as if git did not exist. */
+export function gitMarksOf(view: FilesView): FileGitMarks | undefined {
+  return view.git.kind === 'marked' ? view.git.marks : undefined;
 }
 
 /** The view with a folder's listing stored, the oldest listings dropped past the bound. */

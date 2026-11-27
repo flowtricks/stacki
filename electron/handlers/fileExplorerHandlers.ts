@@ -16,7 +16,9 @@ import {
   trashEntries,
   writeExplorerFile,
 } from '../project/explorerOps';
-import { createExplorerWatch } from '../project/explorerWatch';
+import { createExplorerWatch, createGitDirectoryWatch } from '../project/explorerWatch';
+import { readFileGitStatus } from '../git/gitFileStatus';
+import { git } from '../lib/nodeTools';
 import { relinkMovedDefaultAssets } from '../project/componentDefaultRelink';
 import type { MainHost } from './mainHost';
 
@@ -41,6 +43,8 @@ export function registerFileExplorerHandlers(
   const { ipcMain, openProject, send, shell } = host;
   const disk = { trash: (absolute: string) => shell.trashItem(absolute) };
   const watch = createExplorerWatch((directories) => send('files:changed', { directories }));
+  // A change inside the git directory names no folder of the tree: the panel reads git again and nothing else.
+  const gitWatch = createGitDirectoryWatch(() => send('files:changed', { directories: [] }));
   // Whether the editor holds text not yet on disk, as the renderer last said; a close asks first only then.
   let unsaved = false;
   let asking = false;
@@ -124,6 +128,19 @@ export function registerFileExplorerHandlers(
     }
     return { watching: watch.follow(root.value, directories) };
   });
+  ipcMain.handle('files:gitStatus', async (_event, { projectPath }) => {
+    const root = explorerRoot(projectPath, openProject());
+    if (!root.ok) {
+      gitWatch.close();
+      return { kind: 'none' as const };
+    }
+    const read = await readFileGitStatus(git, root.value.lexical);
+    // The project may have been left while git ran: its git directory is not followed then.
+    if (explorerRoot(projectPath, openProject()).ok) {
+      gitWatch.follow(read.gitDirectory);
+    }
+    return read.status;
+  });
   ipcMain.handle('files:guardClose', (_event, { unsaved: next }) => {
     unsaved = next;
     return { ok: true as const };
@@ -150,7 +167,10 @@ export function registerFileExplorerHandlers(
       }
       return true;
     },
-    stopWatching: () => watch.close(),
+    stopWatching: () => {
+      watch.close();
+      gitWatch.close();
+    },
   };
 }
 

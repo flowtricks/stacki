@@ -79,6 +79,8 @@ export const messages = {
   'git.busy.pulling': 'Pullen…',
   'git.busy.switching': 'Overschakelen…',
   'git.busy.working': 'Bezig…',
+  'git.changes.more': { one: 'Nog {count} bestand niet weergegeven', other: 'Nog {count} bestanden niet weergegeven' },
+  'git.changes.title': 'Wijzigingen',
   'git.chip.committed': 'Wijzigingen gecommit',
   'git.chip.committedSwitched': 'Gecommit naar {from}, nu op {branch}',
   'git.chip.controls': 'Repositorybesturing',

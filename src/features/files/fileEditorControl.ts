@@ -2,7 +2,7 @@
 // registers a settler while it is mounted; switching files, closing the editor, leaving the project and closing the
 // window all ask it first, so unsaved text is never dropped without the person choosing to (save, discard or stay).
 import { assert } from '../../../shared/core/assert';
-import { isWithinPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
+import { FILE_EXPLORER_LIMITS, isWithinPath, parentPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
 import { filesView, updateFilesView } from './filesState';
 
 export type Settled = 'proceed' | 'cancel';
@@ -40,6 +40,26 @@ export async function openInEditor(projectPath: string, path: ExplorerPath): Pro
   openings += 1;
   const opening = openings;
   updateFilesView(projectPath, (view) => ({ ...view, editor: { path, dirty: false, opening } }));
+}
+
+/** Opens every folder above `path` in the tree and selects it; a file also opens in the editor. */
+export function revealInFiles(projectPath: string, path: ExplorerPath, kind: 'file' | 'folder'): void {
+  updateFilesView(projectPath, (view) => {
+    const open = new Set(view.open);
+    let parent = parentPath(path);
+    // Bounded by the path's own segment bound.
+    for (let depth = 0; depth < FILE_EXPLORER_LIMITS.pathSegmentsMax && parent !== undefined && parent !== ''; depth++) {
+      open.add(parent);
+      parent = parentPath(parent);
+    }
+    if (kind === 'folder') {
+      open.add(path);
+    }
+    return { ...view, open, selected: new Set([path]), focused: path, anchor: path };
+  });
+  if (kind === 'file') {
+    void openInEditor(projectPath, path);
+  }
 }
 
 /** Closes the editor once its text is settled; answers whether it closed. */

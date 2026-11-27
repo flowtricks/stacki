@@ -69,13 +69,6 @@
   align-items: center;
   color: var(--text-dim);
 }
-.files-icon-brand {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-}
 
 /* The Navigator's collapse slot: 18px wide and as tall as the row, so the chevron is easy to hit (TreeDragHandle). */
 .files-chevron {
@@ -114,6 +107,17 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--text-dim);
+}
+
+/* Git's marks on a row (ui/GitStatus.tsx, styles.css): the name takes the colour of what happened, VS Code's way. */
+.files-row[data-git] .files-name,
+.files-result[data-git] .files-name,
+.files-editor-title[data-git] .files-editor-name {
+  color: var(--files-git);
+}
+.files-row[data-git='ignored'] .files-icon,
+.files-result[data-git='ignored'] .files-icon {
+  opacity: 0.5;
 }
 
 .files-name-input {
@@ -181,6 +185,7 @@
   color: var(--text);
   font-size: 12px;
   text-align: start;
+  white-space: nowrap;
 }
 .files-result:hover,
 .files-result:focus-visible {

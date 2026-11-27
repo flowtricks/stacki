@@ -61,6 +61,15 @@
   --flow-purple-soft: rgba(146, 116, 255, 0.32);
   --red: #ff453a;
   --amber: #ffd60a;
+  /* What git says happened to a file: VS Code's dark colours, shared by the Files panel's marks (files.css) and the Git
+     panel's file badges. Its deleted red is lightened a step to stay readable on a selected row. */
+  --git-modified: #e2c08d;
+  --git-added: #81b88b;
+  --git-untracked: #73c991;
+  --git-renamed: #73c991;
+  --git-deleted: #e8735c;
+  --git-conflicted: #ff8589;
+  --git-ignored: #8c8c8c;
   --orange: #ff9f0a;
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -9436,25 +9445,141 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   color: var(--text-faint);
   background: var(--surface-2, rgba(255, 255, 255, 0.06));
 }
+/* Git's marks (ui/GitStatus.tsx): `data-git` names what happened, and sets the colour its row and badge take. */
+[data-git='conflicted'] {
+  --files-git: var(--git-conflicted);
+}
+[data-git='modified'] {
+  --files-git: var(--git-modified);
+}
+[data-git='deleted'] {
+  --files-git: var(--git-deleted);
+}
+[data-git='renamed'] {
+  --files-git: var(--git-renamed);
+}
+[data-git='added'] {
+  --files-git: var(--git-added);
+}
+[data-git='untracked'] {
+  --files-git: var(--git-untracked);
+}
+[data-git='ignored'] {
+  --files-git: var(--git-ignored);
+}
+.git-badge {
+  /* One width for a letter and a dot, so they stand in one column down the end of the rows. */
+  width: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--files-git);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.git-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+/* Astro's mark in a file row's 16px icon box (ui/ElementIcons.tsx, file-type icons). */
+.files-icon-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* The Git panel's list of changes (features/git/CommitFilePicker.tsx): closed until asked for, then its own bounded
+   scroll, under the commit controls so opening it never moves them. */
+.git-changes-list {
+  max-height: 232px;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.git-panel-controls .git-change {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: start;
+  white-space: nowrap;
+}
+.git-panel-controls button.git-change:hover,
+.git-panel-controls button.git-change:focus-visible {
+  background: var(--bg-hover);
+}
+.git-change-icon {
+  display: flex;
+  flex: none;
+  color: var(--text-dim);
+}
+/* The name keeps its room first; the folder takes what is left and is cut at its end. */
+.git-change-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.git-change[data-git] .git-change-name {
+  color: var(--files-git);
+}
+.git-change[data-git='deleted'] .git-change-name {
+  text-decoration: line-through;
+}
+.git-change-folder {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.git-changes-more {
+  padding: 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* The colours of the Files panel's marks: one meaning, one colour, wherever a file is listed. */
 .file-status.s-A {
-  color: var(--green);
-  background: rgba(48, 193, 88, 0.14);
+  --file-status-color: var(--git-added);
 }
 .file-status.s-M {
-  color: var(--accent);
-  background: var(--accent-soft);
+  --file-status-color: var(--git-modified);
 }
 .file-status.s-D {
-  color: var(--red);
-  background: rgba(255, 69, 58, 0.14);
+  --file-status-color: var(--git-deleted);
 }
 .file-status.s-R,
 .file-status.s-C {
-  color: var(--text-dim);
+  --file-status-color: var(--git-renamed);
 }
 .file-status.s-U {
-  color: #ffcb6b;
-  background: rgba(255, 203, 107, 0.14);
+  --file-status-color: var(--git-conflicted);
+}
+.file-status.s-A,
+.file-status.s-M,
+.file-status.s-D,
+.file-status.s-R,
+.file-status.s-C,
+.file-status.s-U {
+  color: var(--file-status-color);
+  background: color-mix(in srgb, var(--file-status-color) 15%, transparent);
 }
 
 .history-commit-actions {

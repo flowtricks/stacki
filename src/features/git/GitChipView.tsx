@@ -8,7 +8,7 @@ import type { WireGitInfo } from '../../../shared/ipc/ipcResults';
 import BranchCreate from './BranchCreate';
 import BranchActions from './BranchActions';
 import type FileBrowser from './FileBrowser';
-import CommitFilePicker from './CommitFilePicker';
+import CommitFilePicker, { ChangesList } from './CommitFilePicker';
 import { CommitSubjectPreview, CommitTypeDetails, CommitTypeScopeError, CommitTypeSelect, type CommitTypeControl } from './CommitTypePicker';
 import { BranchIcon } from '../../ui/Icons';
 import Tooltip from '../../ui/Tooltip';
@@ -16,6 +16,8 @@ import Tooltip from '../../ui/Tooltip';
 type ChangedFiles = React.ComponentProps<typeof FileBrowser>['files'];
 
 interface GitChipViewProps {
+  /** The list of changes under the commit box (CommitFilePicker.tsx). */
+  readonly changes: React.ComponentProps<typeof ChangesList>;
   readonly info: WireGitInfo;
   readonly busy: string | undefined;
   readonly error: string | undefined;
@@ -261,6 +263,7 @@ export default function GitChipView(props: GitChipViewProps) {
         onPick={props.onPick}
         onCommit={props.onCommit}
       />
+      <ChangesList key={props.changes.projectPath} {...props.changes} />
     </div>
   );
 }

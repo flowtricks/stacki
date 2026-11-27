@@ -79,6 +79,8 @@ export const messages = {
   'git.busy.pulling': 'पुल हो रहा है…',
   'git.busy.switching': 'स्विच हो रहा है…',
   'git.busy.working': 'काम जारी है…',
+  'git.changes.more': { one: '{count} और फ़ाइल नहीं दिखाई गई', other: '{count} और फ़ाइलें नहीं दिखाई गईं' },
+  'git.changes.title': 'बदलाव',
   'git.chip.committed': 'बदलाव कमिट हो गए',
   'git.chip.committedSwitched': '{from} में कमिट किया, अब {branch} पर',
   'git.chip.controls': 'रिपॉज़िटरी नियंत्रण',

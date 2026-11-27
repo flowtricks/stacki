@@ -2,6 +2,7 @@ import { gitTransport } from '../../ipc/gitTransport';
 import type { IpcResults, WireFileKind, WireGitInfo } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, count, list, object, optional, pathText, record, text } from '../../../shared/core/boundary';
+import { parseFileGitState } from '../../../shared/ipc/fileExplorer';
 import { parseOptionalMessageRef } from '../../../shared/core/i18n/messageReference';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { failureOf, type Failure } from '../../lib/cleanError';
@@ -48,7 +49,9 @@ const statusFileFields = object({
 });
 function statusFile(input: unknown) {
   const value = record(input);
-  return { ...statusFileFields(value), from: optional(pathText)(value['from']) };
+  const state = optional(parseFileGitState)(value['state']);
+  const file = { ...statusFileFields(value), from: optional(pathText)(value['from']) };
+  return state === undefined ? file : { ...file, state };
 }
 export function parseGitInfo(input: unknown): IpcResults['git:info'] {
   const value = record(input);
