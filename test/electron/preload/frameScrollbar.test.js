@@ -1,6 +1,7 @@
 // Goal: the frame half of the canvas scrollbar (electron/preload/frameScrollbar.ts) hides the page's own scrollbar once
-// the app says so, at every width (one behaviour, no setting), tells the truth about which bar is drawn (Chromium's
-// until the app's word arrives), reports the page's scroll at most once per animation frame and only when it changed,
+// the app says so, at every width (one behaviour, no setting), and in a canvas frame (#avb-design) before the page
+// paints, through an adopted style sheet that adds nothing to the page; tells the truth about which bar is drawn
+// (Chromium's until it is hidden), reports the page's scroll at most once per animation frame and only when it changed,
 // follows a page that scrolls <body> instead of <html>, and scrolls when the canvas's bar asks.
 // Method: the real module, bundled with esbuild, runs in a fresh jsdom window per test (its state is per page, as in a
 // frame). jsdom has no layout, so the test owns the root's and the body's scroll position and heights; animation
@@ -29,10 +30,23 @@ function moduleSource() {
   return bundle;
 }
 
-// A frame holding a page `heightPx` tall that scrolls <html>, the module loaded and reporting into `sent`.
-function frame({ heightPx }) {
-  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>');
+// A constructable style sheet as Chromium has one, keeping its rule as text. jsdom has neither these nor a document's
+// adopted sheets, so a frame asked for them gets this stand-in; the real browser's is held by canvasScrollbarChromium.
+class ConstructedSheet {
+  replaceSync(text) {
+    this.text = text;
+  }
+}
+
+// A frame holding a page `heightPx` tall that scrolls <html>, the module loaded and reporting into `sent`. `url` is the
+// frame's address: the app's canvas loads every page with #avb-design. `adoptedSheets` gives the document Chromium's
+// adopted style sheets.
+function frame({ heightPx, url = 'http://localhost/', adoptedSheets = false }) {
+  const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url });
   const window = dom.window;
+  if (adoptedSheets) {
+    Object.defineProperty(window.document, 'adoptedStyleSheets', { configurable: true, writable: true, value: [] });
+  }
   const root = window.document.documentElement;
   const page = { heightPx, topPx: 0 };
   Object.defineProperty(root, 'scrollTop', { configurable: true, get: () => page.topPx });
@@ -49,6 +63,7 @@ function frame({ heightPx }) {
     window,
     document: window.document,
     HTMLStyleElement: window.HTMLStyleElement,
+    CSSStyleSheet: ConstructedSheet,
     requestAnimationFrame: (callback) => {
       queued.push(callback);
       return queued.length;
@@ -114,6 +129,52 @@ test('the app’s word hides the page’s own bar at every width, and the canvas
   assert.equal(view.sheet(), 'html, body { scrollbar-width: none !important; }');
   assert.equal(view.reports().at(-1).chromium, false);
   assert.equal(view.window.document.querySelectorAll('#avb-canvas-scrollbar').length, 1, 'one stylesheet, however often told');
+});
+
+test('a canvas frame hides the page’s bar before its first paint, without waiting for the app’s word', (context) => {
+  const view = frame({ heightPx: 4000, url: 'http://localhost/about/#avb-design', adoptedSheets: true });
+  context.after(view.close);
+  const childrenBefore = view.window.document.querySelectorAll('*').length;
+  view.install();
+  // Array.from: the module's array comes from its own context, so it is copied before a strict comparison.
+  assert.deepEqual(
+    Array.from(view.window.document.adoptedStyleSheets, (sheet) => sheet.text),
+    ['html, body { scrollbar-width: none !important; }'],
+    'hidden as the module installs',
+  );
+  assert.equal(view.window.document.querySelectorAll('*').length, childrenBefore, 'no element added to the page, which other frame code watches');
+  view.flush();
+  assert.deepEqual(
+    view.reports(),
+    [{ type: 'avb:page-scroll', topPx: 0, heightPx: 4000, viewHeightPx: 800, chromium: false }],
+    'the first report has no Chromium bar',
+  );
+  // The app's word still comes on load and writes the <style> element, as for any frame: the same rule.
+  assert.equal(view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar' }), true);
+  assert.equal(view.sheet(), 'html, body { scrollbar-width: none !important; }');
+  assert.equal(view.window.document.adoptedStyleSheets.length, 1, 'adopted once');
+});
+
+test('a frame without the canvas’s mark keeps its bar until the app’s word', (context) => {
+  const plain = frame({ heightPx: 4000, url: 'http://localhost/about/#section', adoptedSheets: true });
+  context.after(plain.close);
+  plain.install();
+  plain.flush();
+  assert.equal(plain.window.document.adoptedStyleSheets.length, 0, 'a page opened on its own keeps its bar');
+  assert.equal(plain.sheet(), undefined);
+  assert.equal(plain.reports().at(-1).chromium, true);
+});
+
+test('a canvas frame in a document without adopted style sheets waits for the app’s word', (context) => {
+  const view = frame({ heightPx: 4000, url: 'http://localhost/#avb-design' });
+  context.after(view.close);
+  view.install();
+  view.flush();
+  assert.equal(view.sheet(), undefined, 'nothing written into the page');
+  assert.equal(view.reports().at(-1).chromium, true, 'and the report says Chromium still draws its bar');
+  assert.equal(view.module.receiveCanvasScrollbar({ type: 'avb:canvas-scrollbar' }), true);
+  view.flush();
+  assert.equal(view.reports().at(-1).chromium, false);
 });
 
 test('a page that holds <html> still and scrolls <body> is read and scrolled through <body>', (context) => {

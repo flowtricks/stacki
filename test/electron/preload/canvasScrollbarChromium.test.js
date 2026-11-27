@@ -2,18 +2,20 @@
 //
 //   node test/electron/preload/canvasScrollbarChromium.test.js
 //
-// Goal: a canvas frame the app has told lays its page out at the frame's full width at every breakpoint, as a phone or
-// a tablet does (a 320px frame is 320px of page, not 305px beside a classic scrollbar; a 1440px frame is 1440px), and
-// an older app's width threshold in the message no longer brings Chromium's bar back. A frame nobody told keeps the
-// bar Chromium draws. Each frame reports which bar is drawn, and the canvas's own bar scrolls it.
+// Goal: a canvas frame lays its page out at the frame's full width at every breakpoint, as a phone or a tablet does (a
+// 320px frame is 320px of page, not 305px beside a classic scrollbar; a 1440px frame is 1440px), from before its first
+// paint, not only once the app's word arrives on load; an older app's width threshold in the message no longer brings
+// Chromium's bar back. A frame that is not the canvas's keeps the bar Chromium draws. Each frame reports which bar is
+// drawn, and the canvas's own bar scrolls it.
 //
 // Method: a real Electron window (jsdom has no layout and draws no scrollbars) serves a host page over localhost with
-// three canvas iframes at `#avb-design`, the built preload running in each as in the app: a 320px phone frame told to
-// hide its bar, a 1440px desktop frame told the same with an older app's `chromiumFromPx: 1023` (now ignored), and a
-// 1440px control frame that is told nothing. The pages are taller than their frames, so each scrolls. The probe draws
-// classic scrollbars whatever the computer is set to (test/helpers/classicScrollbars.js), and the control frame must
-// lose width: on overlay scrollbars (macOS with a trackpad) the checks would pass with no rule at all. Every wait is a
-// bounded poll for what the frames report (test/helpers/waitFor.js), never a fixed pause.
+// three iframes, the built preload running in each as in the app: a 320px phone frame and a 1440px desktop frame at
+// `#avb-design`, as the canvas loads them, later told to hide the bar (the desktop one with an older app's
+// `chromiumFromPx: 1023`, now ignored), and a 1440px control frame without the mark that is told nothing. The pages are
+// taller than their frames, so each scrolls. The probe draws classic scrollbars whatever the computer is set to
+// (test/helpers/classicScrollbars.js), and the control frame must lose width: on overlay scrollbars (macOS with a
+// trackpad) the checks would pass with no rule at all. Every wait is a bounded poll for what the frames report
+// (test/helpers/waitFor.js), never a fixed pause.
 
 const fs = require('fs');
 const http = require('http');
@@ -40,7 +42,7 @@ const HOST_PAGE =
   '<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}iframe{border:0;height:600px;display:block}</style></head><body>' +
   '<iframe id="phone" style="width:320px" src="/frame.html#avb-design"></iframe>' +
   '<iframe id="desktop" style="width:1440px" src="/frame.html#avb-design"></iframe>' +
-  '<iframe id="control" style="width:1440px" src="/frame.html#avb-design"></iframe>' +
+  '<iframe id="control" style="width:1440px" src="/frame.html"></iframe>' +
   '<script>window.reports = {};' +
   'addEventListener("message", (event) => {' +
   '  if (!event.data || event.data.type !== "avb:page-scroll") { return; }' +
@@ -104,7 +106,7 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
        const run = (code) => win.webContents.executeJavaScript(code);
        const read = () => run(${JSON.stringify(READ_FRAMES)});
        await win.loadURL('http://127.0.0.1:${port}/host.html');
-       // Each frame reports once its preload runs: Chromium's bar until the app's word arrives.
+       // Each frame reports once its preload runs: a canvas frame has hidden its bar already, the control frame has not.
        const before = await waitFor({ what: 'every frame reports', read, until: (frames) => frames.phone.report && frames.desktop.report && frames.control.report });
        await run(${JSON.stringify(tell('phone', { type: 'avb:canvas-scrollbar' }))});
        await run(${JSON.stringify(tell('desktop', { type: 'avb:canvas-scrollbar', chromiumFromPx: 1023 }))});
@@ -144,7 +146,13 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
   } else {
     const { before, told, scrolled } = JSON.parse(line);
     const detail = (frame) => JSON.stringify(frame);
-    check('before the app’s word, every frame says Chromium draws its bar', before.phone.report.chromium && before.control.report.chromium, detail(before));
+    check(
+      'before the app’s word, a canvas frame has hidden its bar already and says so',
+      before.phone.report.chromium === false && before.desktop.report.chromium === false,
+      detail(before),
+    );
+    check('and the 320px phone frame lays its page out at 320px from the start', before.phone.clientWidth === 320, detail(before.phone));
+    check('a frame that is not the canvas’s says Chromium draws its bar', before.control.report.chromium === true, detail(before.control));
     check('classic scrollbars are on: the untold frame loses width to its bar', told.control.clientWidth < told.control.innerWidth, detail(told.control));
     check('a 320px phone frame lays its page out at 320px', told.phone.innerWidth === 320 && told.phone.clientWidth === 320, detail(told.phone));
     check('and says the canvas draws its bar', told.phone.report.chromium === false, detail(told.phone));
