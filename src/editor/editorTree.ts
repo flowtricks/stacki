@@ -92,6 +92,25 @@ export function isDescendantOf(candidateParent: PageNode, id: string): boolean {
   return candidateParent.id === id || !!findNodeById(children, id);
 }
 
+/**
+ * The node of a newer tree that a selected `id` of an older one now is: itself, or, where its own bytes changed and
+ * the parse gave it a new handle, the node of the same kind at the same place.
+ */
+export function followedNode<Node extends TreeNodeLike<Node> & { readonly kind: string }>(
+  before: readonly Node[],
+  after: readonly Node[],
+  id: string,
+): Node | undefined {
+  const kept = findNodeById(after, id);
+  if (kept !== undefined) {
+    return kept;
+  }
+  const was = findNodeById(before, id);
+  const trail = pathOfNode(before, id);
+  const now = trail ? nodeAtPath(after, trail) : undefined;
+  return now && was && now.kind === was.kind ? now : undefined;
+}
+
 export function nodeAtPath<Node extends TreeNodeLike<Node>>(nodes: readonly Node[] | undefined, trail: readonly number[]): Node | undefined {
   let list = nodes;
   let node: Node | undefined;

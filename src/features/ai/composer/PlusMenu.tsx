@@ -6,7 +6,7 @@ import { currentDesktopPlatform } from '../../../lib/shortcutLabel';
 import { ComponentIcon, CopyIcon, FileIcon, PaperclipIcon, PlusIcon, SearchIcon, SparkleIcon } from '../../../ui/Icons';
 import { chatShortcutLabel } from '../chatShortcuts';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
-import { selectionLabel, useSelectionMention } from '../mentions/selectionMention';
+import { useSelectedElementOffer } from '../addToChat';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 
 export function PlusMenu({
@@ -18,7 +18,6 @@ export function PlusMenu({
   onFind,
   onCopyChat,
   canCopyChat,
-  onAddSelection,
 }: {
   readonly disabled: boolean;
   /** The draft is empty, which is the only place a command can start. */
@@ -33,22 +32,21 @@ export function PlusMenu({
   readonly onCopyChat: () => void;
   /** The chat has a message to copy. */
   readonly canCopyChat: boolean;
-  /** Adds what is selected on the canvas with every value it writes (selectionMention.ts); offered only while something is. */
-  readonly onAddSelection?: (() => void) | undefined;
 }) {
   const translate = useTranslate();
-  const selection = useSelectionMention();
+  // The same "Add to chat" as the element menus and ⌘L: the selected element's code and the file it is in.
+  const selected = useSelectedElementOffer();
   // A row that cannot be used now is not shown: the selection with nothing selected, a command with a draft started, a copy of an empty chat.
   const selectionEntries =
-    onAddSelection === undefined || selection === undefined
+    selected === undefined
       ? []
       : [
           {
             kind: 'item' as const,
             id: 'selection',
-            label: translate('ai.selection.addSelected', { name: selectionLabel(selection) }),
+            label: selected.name === undefined ? translate('ai.selection.addNone') : translate('ai.selection.addSelected', { name: selected.name }),
             icon: <ComponentIcon size={14} />,
-            onSelect: onAddSelection,
+            onSelect: selected.add,
           },
         ];
   const commandEntries: readonly MenuEntry[] = canInsertSlash

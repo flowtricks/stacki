@@ -93,7 +93,7 @@ import { ViewAsChip } from '../roles/ViewAsChip';
 import { AppsTab, DesktopAppsHost } from './DesktopApps';
 import { AuditsHost, AuditsTab } from './DesktopAudits';
 import { AiCover, AiHost, AiTab, useAiAvailable, useAiRailButton } from './DesktopAi';
-import { addSelectionOfOpenFile } from './aiAddToChat';
+import { addCodeToChat } from './aiAddToChat';
 import { PinsHost } from './DesktopPins';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -997,7 +997,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       }}
       extensions={[codeChips.extension ?? [], intelligence]}
       overlay={codeChips.overlay}
-      onAddToChat={aiAvailable ? (selection) => addSelectionOfOpenFile(app, selection, translate) : undefined}
+      onAddToChat={aiAvailable ? (request) => addCodeToChat(app, request, translate) : undefined}
     />
   );
 }

@@ -50,7 +50,6 @@ import { ComposerStatusLine } from './ComposerStatusLine';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
-import { addSelectionToDraft } from '../mentions/selectionMention';
 import { composerCaretMemory, registerComposerTarget } from '../composerTargets';
 import { DictationLine } from './VoiceLine';
 import { MicButton } from './MicButton';
@@ -301,7 +300,6 @@ export function ChatComposer({
             onFind={() => requestChatFind(chat)}
             onCopyChat={copyChat}
             canCopyChat={hasExportableMessages(view.items)}
-            onAddSelection={() => void addSelectionToDraft(chat)}
           />
           <ComposerInput
             agent={agent}

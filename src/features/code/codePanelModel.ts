@@ -128,25 +128,54 @@ export function textSelectionOf(source: string, range: SourceRange): SourceSelec
   return { code, startLine: sourceLineAt(source, range.from), endLine: sourceLineAt(source, range.to - 1), element: undefined };
 }
 
+/** What the Code panel asks to add: the text selected in the editor, or the selected element. */
+export type CodeAddRequest = { readonly kind: 'text'; readonly selection: SourceSelection } | { readonly kind: 'node'; readonly id: string };
+
+/** Whether node `id` has code of its own in the open file, and what to call it: a component's name, an element's `<tag>`. */
+export function offeredNodeOf(model: EditorModel | undefined, id: string): { readonly name: string | undefined } | undefined {
+  if (model === undefined) {
+    return undefined;
+  }
+  if (id === 'frontmatter') {
+    return { name: undefined };
+  }
+  const node = sourceNodeById(model.nodes, id);
+  // A chunk group's code is in another file.
+  if (node === undefined || node.kind === 'chunk-group') {
+    return undefined;
+  }
+  return { name: node.kind === 'component' ? node.name : node.kind === 'element' ? `<${node.name}>` : undefined };
+}
+
 /**
  * Node `id`'s own code: from the start of its first line when only the indent precedes it, so the code reads as
  * it is laid out. Undefined for a node with no code of its own, or one whose place no longer matches the source (an
  * edit the tree has not read yet): a wrong slice would be worse than none.
  */
-export function nodeSelectionOf(source: string, model: EditorModel | undefined, id: string | undefined): SourceSelection | undefined {
+export function nodeSelectionOf(source: string, model: EditorModel | undefined, id: string | undefined, path: string): SourceSelection | undefined {
   const range = sourceRangeForSelection(model, id, source.length);
   if (model === undefined || id === undefined || range === undefined || range.to <= range.from) {
     return undefined;
   }
   const node = id === 'frontmatter' ? undefined : sourceNodeById(model.nodes, id);
   const tagged = node?.kind === 'element' || node?.kind === 'component';
-  if (tagged && source.charAt(range.from) !== '<') {
+  // Markdown writes its elements in its own syntax; anywhere else a tag's code opens with the tag.
+  if (tagged && !/\.mdx?$/iu.test(path) && !source.startsWith(`<${node.name}`, range.from)) {
     return undefined;
   }
-  const lineStart = source.lastIndexOf('\n', range.from - 1) + 1;
-  const from = range.from > 0 && /^[ \t]*$/u.test(source.slice(lineStart, range.from)) ? lineStart : range.from;
-  const selection = textSelectionOf(source, { from, to: range.to });
+  // A text node runs from tag to tag, with the line breaks around its words: those are not part of the selection.
+  const own = node?.kind === 'text' ? trimmedRange(source, range) : range;
+  const lineStart = source.lastIndexOf('\n', own.from - 1) + 1;
+  const from = own.from > 0 && /^[ \t]*$/u.test(source.slice(lineStart, own.from)) ? lineStart : own.from;
+  const selection = textSelectionOf(source, { from, to: own.to });
   return selection === undefined ? undefined : { ...selection, element: tagged ? node.name : undefined };
+}
+
+function trimmedRange(source: string, range: SourceRange): SourceRange {
+  const code = source.slice(range.from, range.to);
+  const from = range.from + (code.length - code.trimStart().length);
+  const to = range.to - (code.length - code.trimEnd().length);
+  return { from, to: Math.max(from, to) };
 }
 
 export function sourceLineLabel(source: string, range: SourceRange | undefined): string | undefined {

@@ -29,14 +29,12 @@ esbuild.buildSync({
       "export { ComposerInput } from './src/features/ai/composer/ComposerInput';",
       // The shell lends the Properties panel's field to the chip popover; the test loads it the same way.
       "import './src/app/shell/aiMemberField';",
-      "export { selectionMentionOf, locatorOf } from './src/app/shell/aiSelection';",
       "export { mentionIndexOf } from './src/app/shell/aiMentionIndex';",
       "export * from './src/features/ai/mentions/projectMentions';",
       "export { stillMatching } from './src/features/ai/mentions/useMentionRows';",
       "export { CHIP_PICKER_HEIGHT_PX } from './src/ui/chipEditor/ChipPicker';",
       "export { CHIP_STYLES, CHIP_STYLE_COLOURS, CHIP_STYLE_ICONS, chipStyleOf } from './src/features/ai/mentions/mentionChips';",
       "export { PaintBrushIcon, VariableIcon } from './src/ui/Icons';",
-      "export { appendSelection, shortText, setSelectionMention, addSelectionToDraft, SELECTION_MEMBERS_MAX } from './src/features/ai/mentions/selectionMention';",
       "export * from './src/features/ai/mentions/componentMentions';",
       "export { chipLook, PICKER_ROWS_MAX } from './src/features/ai/mentions/mentionChips';",
       "export { aiState, loadAiProject, openChat, queuePrompt, resetAiStore, sendPrompt, setDraft, steerPrompt } from './src/features/ai/aiStore';",
@@ -761,83 +759,8 @@ test('an invalid component chip opens no popover', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Add selected element, and one member chip's popover
+// One member chip's popover
 // ---------------------------------------------------------------------------
-
-const instance = {
-  kind: 'component',
-  id: 'n1',
-  name: 'Button',
-  children: [{ kind: 'text', id: 't1', value: 'Go' }],
-  props: {
-    element: { type: 'string', value: 'link' },
-    href: { type: 'string', value: '/about' },
-    variant: { type: 'string', value: 'main' },
-    render: { type: 'expr', value: 'true' },
-    class: { type: 'string', value: 'cta wide' },
-    'data-track': { type: 'string', value: 'hero' },
-    rest: { type: 'spread', value: 'props' },
-  },
-  attrOrder: ['element', 'href', 'variant', 'render', 'class', 'data-track', 'rest'],
-};
-const buttonScan = {
-  ...scanned('src/components/Button.astro', {
-    schema: [
-      field('element', 'enum', { options: ['button', 'link'], default: 'button' }),
-      field('href', 'string'),
-      field('variant', 'enum', { options: ['main', 'ghost'] }),
-      field('render', 'boolean'),
-      field('emphasis', 'enum', { options: ['primary'], default: 'primary' }),
-    ],
-  }),
-};
-
-test('the selected instance becomes its component chip and every value it writes, defaults it leaves alone left out', () => {
-  const place = model.locatorOf('0.2', 'src/pages/index.astro');
-  assert.deepEqual(place, { file: 'src/pages/index.astro', locator: '0.2' });
-  assert.deepEqual(model.locatorOf('src/components/Card.astro|1.0', 'src/pages/index.astro'), { file: 'src/components/Card.astro', locator: '1.0' });
-  const selection = model.selectionMentionOf({ node: instance, component: buttonScan, file: place.file, locator: place.locator, componentFile: undefined });
-  const draft = model.appendSelection([], selection);
-  assert.equal(
-    model.plainTextOf(draft),
-    'src/components/Button.astro prop:element=link prop:href=/about prop:variant=main prop:render=true attr:class="cta wide" attr:data-track=hero slot:default ',
-    'written props as prop:, the rest as attr:, the filled slot; no emphasis (a default not written), no spread',
-  );
-});
-
-test('a native element becomes its file and locator, its attributes and its short text', () => {
-  const element = {
-    kind: 'element',
-    id: 'n2',
-    name: 'a',
-    children: [{ kind: 'text', id: 't2', value: `  Read ${'more '.repeat(30)}` }],
-    props: { href: { type: 'string', value: '/blog' }, 'aria-label': { type: 'string', value: 'Blog' }, hidden: { type: 'bare' } },
-    attrOrder: ['href', 'aria-label', 'hidden'],
-  };
-  const selection = model.selectionMentionOf({ node: element, component: undefined, file: 'src/pages/index.astro', locator: '0.2', componentFile: undefined });
-  const text = model.plainTextOf(model.appendSelection([text0('See ')], selection));
-  const shortened = model.shortText(`Read ${'more '.repeat(30)}`);
-  assert.equal([...shortened].length, 80);
-  assert.ok(shortened.endsWith('…'));
-  assert.equal(text, `See src/pages/index.astro#0.2 attr:href=/blog attr:aria-label=Blog attr:hidden text=${JSON.stringify(shortened)} `);
-});
-function text0(value) {
-  return { kind: 'text', text: value };
-}
-
-test('more members than the bound: the first forty, then the count of the rest', () => {
-  const many = {
-    kind: 'element',
-    id: 'n3',
-    name: 'div',
-    children: [],
-    props: Object.fromEntries(Array.from({ length: 45 }, (_, index) => [`data-a${index}`, { type: 'string', value: String(index) }])),
-  };
-  const selection = model.selectionMentionOf({ node: many, component: undefined, file: 'src/pages/index.astro', locator: '3', componentFile: undefined });
-  const draft = model.appendSelection([], selection);
-  assert.equal(draft.filter((segment) => segment.kind === 'chip').length, 1 + model.SELECTION_MEMBERS_MAX);
-  assert.ok(model.plainTextOf(draft).endsWith(' +5 more '));
-});
 
 test('clicking a member chip opens its own field: a new value updates the chip, Remove deletes it', async () => {
   model.setMentionComponents(model.mentionComponentsOf([fullScan], PROJECT));
