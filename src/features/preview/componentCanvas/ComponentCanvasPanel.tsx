@@ -77,10 +77,16 @@ function FrameSection({ canvas, state }: { readonly canvas: ComponentCanvasContr
         <CanvasSectionHeading canvas={canvas} state={state} section="background" title={translate('componentCanvas.panel.background')} />
         <BackgroundField canvas={canvas} state={state} />
       </section>
-      {/* Only a group has children to lay out: a frame, or the component in it, has no Layout. */}
-      {state.picked.kind === 'group' && <LayoutSection canvas={canvas} state={state} level={state.picked.key} />}
+      {/* Only a group of several has children to lay out: a frame, its component or a box around one frame has no Layout. */}
+      {state.picked.kind === 'group' && levelsOf(state).groups.includes(state.picked.key) && (
+        <LayoutSection canvas={canvas} state={state} level={state.picked.key} />
+      )}
     </>
   );
+}
+
+function levelsOf(state: CanvasOpen) {
+  return canvasLevels(groupFrames(state.layout.frames), state.layout.frames);
 }
 
 // How the selected level's direct children are laid out: the canvas's own (while <html> is selected) or a group's.
@@ -89,7 +95,7 @@ function FrameSection({ canvas, state }: { readonly canvas: ComponentCanvasContr
 function LayoutSection({ canvas, state, level }: { readonly canvas: ComponentCanvasControl; readonly state: CanvasOpen; readonly level: string }) {
   const translate = useTranslate();
   const title = translate('componentCanvas.panel.layout');
-  const levels = canvasLevels(groupFrames(state.layout.frames), state.layout.frames);
+  const levels = levelsOf(state);
   const { value, chosen } = levelArrangement(state.settings.components[state.component.file], level, levels);
   // Drawn with the Style panel's direction icons; each choice's words are its tooltip and accessible name.
   const option = (arrangement: CanvasArrangement, icon: ReactNode, name: string) => ({

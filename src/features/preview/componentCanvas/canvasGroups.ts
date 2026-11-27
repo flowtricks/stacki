@@ -1,7 +1,8 @@
 // How the canvas groups its frames, so a value is said once over all the frames that show it: frames that share the
 // first split prop's value sit in one box headed with it, within it those that share the next, and so on. A value only
-// one frame shows gets no box; a box that would hold nothing but one box takes its header into its own. Each frame is
-// captioned with what the boxes around it do not already say. Frames keep the order the split makes them in (each
+// one frame shows gets no box of its own unless a sibling is boxed: then it is boxed too, so titles and frame tops at
+// that level line up. A box that would hold nothing but one box takes its header into its own. Each frame is captioned
+// with what the boxes around it do not already say. Frames keep the order the split makes them in (each
 // prop's values in the order the component lists them). Pure; the canvas page and the Navigator both draw this tree.
 import { assert } from '../../../../shared/core/assert';
 import { CANVAS_LIMITS, frameKey, type CanvasFrame, type CanvasLevels, type FramePart } from '../../../../shared/properties/componentCanvas';
@@ -17,7 +18,7 @@ export interface CanvasGroup {
   readonly kind: 'group';
   /** The split values every frame inside shows, as a frame key: the box's name, and its scope. */
   readonly key: string;
-  /** What its header says: one split value, or more where a box held only another. */
+  /** What its header says: one split value, or more where a box held only another, or all a lone frame has left. */
   readonly header: readonly FramePart[];
   readonly children: readonly CanvasTreeItem[];
 }
@@ -43,7 +44,10 @@ export function canvasLevels(items: readonly CanvasTreeItem[], frames: readonly 
       break;
     }
     if (next.kind === 'group') {
-      groups.push(next.key);
+      // A box around one frame has nothing to lay out, so it is no level: no Layout is offered for it.
+      if (next.children.length > 1) {
+        groups.push(next.key);
+      }
       pending.push(...next.children);
     }
   }
@@ -66,7 +70,21 @@ function level(frames: readonly Grouped[], depth: number): readonly CanvasTreeIt
       bucket.push(frame);
     }
   }
-  return [...buckets.values()].map((bucket) => item(bucket, depth));
+  const held = [...buckets.values()];
+  const items = held.map((bucket) => item(bucket, depth));
+  if (!items.some((entry) => entry.kind === 'group')) {
+    return items;
+  }
+  return items.map((entry, index) => (entry.kind === 'group' ? entry : boxedAlone(entry, held[index]?.[0], depth)));
+}
+
+// A lone frame beside boxes, in a box like theirs: headed with all it has left to say. The box reaches that one frame,
+// so it is keyed (and scoped) as the frame is. A frame with no value left has no title to give a box.
+function boxedAlone(leaf: CanvasFrameLeaf, frame: Grouped | undefined, depth: number): CanvasTreeItem {
+  assert(frame !== undefined, 'A lone frame comes from its own bucket');
+  assert(frame.key === leaf.key, 'A box is headed from the frame it holds');
+  const header = frame.parts.slice(depth);
+  return header.length === 0 ? leaf : { kind: 'group', key: leaf.key, header, children: [leaf] };
 }
 
 function item(bucket: readonly Grouped[], depth: number): CanvasTreeItem {

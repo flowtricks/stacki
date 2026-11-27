@@ -493,7 +493,7 @@ const splitButton = {
   ],
 };
 
-test('frames that share a value sit in one box that says it once; a lone value gets no box and a lone inner box no level', () => {
+test('frames that share a value sit in one box that says it once; a lone value beside boxes is boxed too and a lone inner box adds no level', () => {
   const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
   const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
   assert.equal(layout.frames.length, 11);
@@ -506,7 +506,7 @@ test('frames that share a value sit in one box that says it once; a lone value g
   const arrows = ['direction: forward', 'direction: back'];
   assert.deepEqual(drawn(groups.groupFrames(layout.frames)), [
     ['variant: main', both],
-    'variant: link',
+    ['variant: link', ['variant: link']],
     ['variant: play', both],
     ['variant: close', both],
     [
@@ -519,10 +519,70 @@ test('frames that share a value sit in one box that says it once; a lone value g
   ]);
   // A box that would hold nothing but one box takes its header into its own.
   const narrow = layout.frames.filter((frame) => frame.key.includes('emphasis=primary&variant=arrow') || frame.key === 'variant=link');
-  assert.deepEqual(drawn(groups.groupFrames(narrow)), ['variant: link', ['variant: arrow · emphasis: primary', arrows]]);
+  assert.deepEqual(drawn(groups.groupFrames(narrow)), [
+    ['variant: link', ['variant: link']],
+    ['variant: arrow · emphasis: primary', arrows],
+  ]);
   // One split prop makes no boxes.
   const single = groups.groupFrames(model.buildCanvasLayout(splitButton, { split: ['variant'] }).frames);
   assert.ok(single.every((item) => item.kind === 'frame'));
+  // Nor does a level of frames inside a box: no sibling there is boxed, so none of them is.
+  const [main] = groups.groupFrames(layout.frames);
+  assert.ok(main.children.every((item) => item.kind === 'frame'));
+});
+
+test('a box around one frame lines up with its sibling boxes, at any level, and is no level to lay out', () => {
+  const groups = loadRenderer('src/features/preview/componentCanvas/canvasGroups.ts');
+  const layout = model.buildCanvasLayout(splitButton, { split: ['variant', 'emphasis', 'direction'] });
+  const kept = layout.frames.filter((frame) => !frame.key.includes('direction=back&emphasis=secondary'));
+  const tree = groups.groupFrames(kept);
+  const link = tree.find((item) => item.key === 'variant=link');
+  assert.equal(link.kind, 'group');
+  assert.deepEqual(
+    link.children.map((child) => [child.kind, child.key]),
+    [['frame', 'variant=link']],
+    'the box reaches its one frame, so it is keyed as the frame is',
+  );
+  // A level down: the secondary arrow is alone beside the primary arrows' box, so it is boxed as they are.
+  const arrow = tree.find((item) => item.key === 'variant=arrow');
+  assert.deepEqual(
+    arrow.children.map((item) => [item.kind, item.header.map((part) => `${part.prop}=${String(part.value.value)}`), item.children.length]),
+    [
+      ['group', ['emphasis=primary'], 2],
+      ['group', ['emphasis=secondary', 'direction=forward'], 1],
+    ],
+  );
+  const alone = arrow.children[1].key;
+  const levels = groups.canvasLevels(tree, kept);
+  assert.ok(!levels.groups.includes('variant=link'), 'one frame has nothing to lay out');
+  assert.ok(!levels.groups.includes(alone));
+  assert.ok(levels.groups.includes('variant=arrow'));
+  // A single `arrange` saved before levels had their own still stands for the same levels as 1.4.20 read it for.
+  const { chosenLayouts } = loadRenderer('shared/properties/componentCanvas.ts');
+  assert.deepEqual(Object.keys(chosenLayouts({ arrange: 'column' }, levels)).sort(), ['*canvas', ...levels.groups].sort());
+  // The page boxes it, keeps the frame's name for the Navigator and the tag, and draws the title once.
+  const items = (list, depth = 0) => {
+    assert.ok(depth <= LIMITS.splitPropsMax, 'bounded by the split');
+    return list.map((item) =>
+      item.kind === 'frame'
+        ? { kind: 'frame', key: item.key, caption: `caption ${item.key}` }
+        : { kind: 'group', key: item.key, header: `header ${item.key}`, children: items(item.children, depth + 1) },
+    );
+  };
+  const source = pageOf({ ...layout, frames: kept }, { groups: items(tree) });
+  assert.equal(source.split(' data-captionless').length - 1, 2, 'only the two lone frames leave their caption to the box');
+  assert.match(source, /<stacki-frame data-frame=\{"variant=link"\} data-label=\{"caption variant=link"\} data-captionless/);
+  const parsed = parsePage(source);
+  assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
+  const boxes = page.canvasTreeOf(parsed.model.nodes).boxes.filter((box) => box.key === 'variant=link');
+  assert.deepEqual(
+    boxes.map((box) => box.kind),
+    ['group', 'frame'],
+    'the group and its frame are both selectable',
+  );
+  const css = chrome.chromeStyles('dark');
+  assert.match(css, /stacki-frame\[data-frame\]\[data-captionless\]::before \{ visibility: hidden !important; \}/);
+  assert.match(chrome.chromeScript(ID), /hasAttribute\('data-captionless'\)\) \{ crowded\.push\(false\); continue; \}/, 'it crowds nothing');
 });
 
 test('the page draws its boxes as real elements the editor selects, names each by its caption, and finds every frame’s instance', () => {
@@ -537,10 +597,10 @@ test('the page draws its boxes as real elements the editor selects, names each b
     );
   };
   const source = pageOf(layout, { groups: items(groups.groupFrames(layout.frames)) });
-  assert.equal(source.split('<stacki-group data-group={').length - 1, 6, 'groups are marked elements, named by their key');
+  assert.equal(source.split('<stacki-group data-group={').length - 1, 7, 'groups are marked elements, named by their key');
   assert.doesNotMatch(source, /<stacki-(group|frame) data-stacki-unmarked/);
   assert.equal(source.split(' data-depth="1"').length - 1, 2, 'the two emphasis groups inside arrow are a level down');
-  assert.equal(source.split(' data-heading').length - 1, 1, 'the lone top-level frame is headed as the groups are');
+  assert.equal(source.split(' data-captionless').length - 1, 1, 'the lone top-level frame is boxed as its siblings are');
   assert.ok(source.includes('data-label={"A \\"box\\" \\u003c1\\u003e"}'), 'a label is a string expression with nothing the parser reads');
   const parsed = parsePage(source);
   assert.equal(parsed.editable, true, parsed.editable ? '' : parsed.reason);
@@ -550,7 +610,7 @@ test('the page draws its boxes as real elements the editor selects, names each b
     layout.frames.map((frame) => frame.key),
     'instances are found in frame order, however deep their boxes',
   );
-  assert.equal(tree.boxes.filter((box) => box.kind === 'group').length, 6);
+  assert.equal(tree.boxes.filter((box) => box.kind === 'group').length, 7);
   assert.equal(tree.boxes.filter((box) => box.kind === 'frame').length, layout.frames.length);
   assert.ok(
     tree.boxes.every((box) => box.label === (box.kind === 'group' ? 'A "box" <1>' : 'caption')),
@@ -564,7 +624,7 @@ test('the page draws its boxes as real elements the editor selects, names each b
   }
   // Every box is marked with the path the editor selects it by; the page's <body> stays the canvas's own.
   const marked = serializePageMarked(parsed.model, '', undefined, source);
-  assert.equal(marked.split(/<stacki-group[^>]*data-avb-p/).length - 1, 6, 'groups carry a path');
+  assert.equal(marked.split(/<stacki-group[^>]*data-avb-p/).length - 1, 7, 'groups carry a path');
   assert.equal(marked.split(/<stacki-frame[^>]*data-avb-p/).length - 1, layout.frames.length, 'frames carry a path');
   assert.doesNotMatch(marked, /<body[^>]*data-avb-p/);
   // With the canvas open, a box at exactly its path is that box; anything else is no box.
