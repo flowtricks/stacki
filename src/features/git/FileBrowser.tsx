@@ -1,7 +1,7 @@
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon } from '../../ui/Icons';
-import FileStatus from './FileStatus';
+import FileStatus from '../../ui/GitStatus';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 

@@ -81,6 +81,13 @@ export const messages = {
   'git.busy.pulling': 'Получение…',
   'git.busy.switching': 'Переключение…',
   'git.busy.working': 'Выполнение…',
+  'git.changes.more': {
+    one: 'Ещё {count} файл не показан',
+    few: 'Ещё {count} файла не показаны',
+    many: 'Ещё {count} файлов не показано',
+    other: 'Ещё {count} файла не показано',
+  },
+  'git.changes.title': 'Изменения',
   'git.chip.committed': 'Изменения закоммичены',
   'git.chip.committedSwitched': 'Коммит в {from}, теперь вы на {branch}',
   'git.chip.controls': 'Управление репозиторием',

@@ -12,16 +12,18 @@ import { CollapseVerticalIcon, FolderIcon, FolderPlusIcon, PlusIcon, RefreshIcon
 import { PanelHeader } from '../../ui/PanelHeader';
 import { PanelSearch } from '../../ui/PanelSearch';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
-import { FileEntryIcon } from './fileIcons';
+import { FileEntryIcon } from '../../ui/ElementIcons';
+import { GitStatusBadge, gitTone } from '../../ui/GitStatus';
+import { fileGitMark, type FileGitMarks } from './fileGitMarks';
 import { createIn, renameTo, type FilesActionContext } from './filesActions';
 import { findFiles } from './filesBridge';
-import { openInEditor } from './fileEditorControl';
+import { openInEditor, revealInFiles } from './fileEditorControl';
 import type { FilesHost } from './filesHost';
 import { targetFolderOf, visibleRows } from './fileTreeModel';
 import { FilesTipButton } from './FilesTipButton';
 import { FileTree, type Editing } from './FileTree';
 import { refreshFolders } from './filesReader';
-import { filesView, updateFilesView, useFilesView } from './filesState';
+import { filesView, gitMarksOf, updateFilesView, useFilesView, type FilesGit } from './filesState';
 import './files.css';
 
 // Typing rests this long before a find runs, so each keystroke does not walk the project.
@@ -34,6 +36,7 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const refresh = useCallback((folders: readonly ExplorerPath[]) => refreshFolders(projectPath, folders), [projectPath]);
   useReadFailures(host, view.failed);
+  useTooManyChanges(host, view.git);
   const context = useMemo<FilesActionContext>(() => ({ host, translate, refresh }), [host, translate, refresh]);
   const rows = useMemo(() => visibleRows(view), [view]);
 
@@ -92,7 +95,7 @@ export default function FilesPanel({ host }: { readonly host: FilesHost }) {
       />
       <PanelSearch value={query} placeholder={translate('workspace.files.find')} clearLabel={translate('workspace.files.findClear')} onChange={setQuery} />
       {query.trim() !== '' ? (
-        <FindResults projectPath={projectPath} found={found} onPicked={() => setQuery('')} />
+        <FindResults projectPath={projectPath} found={found} marks={gitMarksOf(view)} onPicked={() => setQuery('')} />
       ) : root === undefined && view.failed.has(EXPLORER_ROOT) ? (
         <div className="files-failed">
           <button type="button" onClick={refreshShown}>
@@ -145,6 +148,33 @@ function useReadFailures(host: FilesHost, failed: ReadonlySet<ExplorerPath>): vo
   }, [failed, projectPath, showToast, translate]);
 }
 
+// Projects already told that their changes are past the bound, so reopening the panel does not say it again. Bounded by
+// forgetting everything at the cap: the worst case is one repeated toast.
+const toldTooMany = new Set<string>();
+const TOLD_MAX = 64;
+
+// With more changes than can be marked the tree marks none, never some: this says why, once.
+function useTooManyChanges(host: FilesHost, git: FilesGit): void {
+  const translate = useTranslate();
+  const { projectPath, showToast } = host;
+  const limit = git.kind === 'too-many' ? git.limit : undefined;
+  useEffect(() => {
+    if (limit === undefined) {
+      if (git.kind === 'marked') {
+        toldTooMany.delete(projectPath);
+      }
+      return;
+    }
+    if (!toldTooMany.has(projectPath)) {
+      if (toldTooMany.size >= TOLD_MAX) {
+        toldTooMany.clear();
+      }
+      toldTooMany.add(projectPath);
+      showToast(translate('workspace.files.git.tooMany', { limit }), 'warning');
+    }
+  }, [limit, git.kind, projectPath, showToast, translate]);
+}
+
 type FindState = { readonly kind: 'idle' } | { readonly kind: 'ready'; readonly matches: FindAnswer['matches']; readonly complete: boolean };
 
 // The project-wide find: the latest query wins, and an older answer arriving late is dropped.
@@ -174,7 +204,12 @@ function useFind(projectPath: string, query: string): FindState {
   return state;
 }
 
-function FindResults(props: { readonly projectPath: string; readonly found: FindState; readonly onPicked: () => void }) {
+function FindResults(props: {
+  readonly projectPath: string;
+  readonly found: FindState;
+  readonly marks: FileGitMarks | undefined;
+  readonly onPicked: () => void;
+}) {
   const translate = useTranslate();
   const { found, projectPath } = props;
   if (found.kind === 'idle') {
@@ -189,21 +224,7 @@ function FindResults(props: { readonly projectPath: string; readonly found: Find
   }
   // Picking a result opens every folder above it and selects it in the tree; a file also opens in the editor.
   const pick = (path: ExplorerPath, kind: 'file' | 'folder'): void => {
-    updateFilesView(projectPath, (view) => {
-      const open = new Set(view.open);
-      let parent = parentPath(path);
-      while (parent !== undefined && parent !== EXPLORER_ROOT) {
-        open.add(parent);
-        parent = parentPath(parent);
-      }
-      if (kind === 'folder') {
-        open.add(path);
-      }
-      return { ...view, open, selected: new Set([path]), focused: path, anchor: path };
-    });
-    if (kind === 'file') {
-      void openInEditor(projectPath, path);
-    }
+    revealInFiles(projectPath, path, kind);
     props.onPicked();
   };
   return (
@@ -211,9 +232,10 @@ function FindResults(props: { readonly projectPath: string; readonly found: Find
       {found.matches.map((match) => {
         const name = baseName(match.path);
         const folder = parentPath(match.path) ?? EXPLORER_ROOT;
+        const mark = fileGitMark(props.marks, match.path, { folder: match.folder });
         return (
           <li key={match.path}>
-            <button type="button" className="files-result" onClick={() => pick(match.path, match.folder ? 'folder' : 'file')}>
+            <button type="button" className="files-result" data-git={gitTone(mark)} onClick={() => pick(match.path, match.folder ? 'folder' : 'file')}>
               <span className="files-icon">
                 <FileEntryIcon name={name} kind={match.folder ? 'directory' : 'file'} open={false} />
               </span>
@@ -223,6 +245,7 @@ function FindResults(props: { readonly projectPath: string; readonly found: Find
               <span className="files-result-folder">
                 <bdi dir="ltr">{folder}</bdi>
               </span>
+              <GitStatusBadge mark={mark} />
             </button>
           </li>
         );

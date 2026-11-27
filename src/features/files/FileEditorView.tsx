@@ -19,8 +19,10 @@ import { explorerErrorText } from './filesActions';
 import { allowClose, guardClose, onCloseRequested } from './filesBridge';
 import { closeEditor, noteEditorDirty, registerEditorSettler, settleOpenEditor, type Settled } from './fileEditorControl';
 import type { FilesToastKind } from './filesHost';
-import { updateFilesView } from './filesState';
+import { gitMarksOf, updateFilesView, useFilesView } from './filesState';
 import { editorLanguageFor } from './fileLanguage';
+import { GitStatusBadge, gitTone } from '../../ui/GitStatus';
+import { fileGitMark } from './fileGitMarks';
 import { FilesTipButton } from './FilesTipButton';
 import { useFileDocument, type FileDocument } from './useFileDocument';
 import './files.css';
@@ -53,7 +55,13 @@ function LiveFrame(props: FileEditorViewProps & { readonly name: string }) {
   const translate = useTranslate();
   return (
     <div className="files-editor-frame">
-      <EditorHead name={props.name} path={props.path} status={translate('workspace.files.editor.canvas')} onClose={() => void closeEditor(props.projectPath)}>
+      <EditorHead
+        projectPath={props.projectPath}
+        name={props.name}
+        path={props.path}
+        status={translate('workspace.files.editor.canvas')}
+        onClose={() => void closeEditor(props.projectPath)}
+      >
         {undefined}
       </EditorHead>
       <div className="files-editor-body files-editor-live">{props.liveEditor}</div>
@@ -92,7 +100,7 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
         }
       }}
     >
-      <EditorHead name={name} path={path} status={status} dirty={document.dirty} onClose={() => void closeEditor(projectPath)}>
+      <EditorHead projectPath={projectPath} name={name} path={path} status={status} dirty={document.dirty} onClose={() => void closeEditor(projectPath)}>
         {text?.session.conflict !== undefined && (
           <button type="button" className="files-editor-conflict" onClick={() => void askConflict(name, document, translate)}>
             <WarningTriangleIcon size={12} />
@@ -146,6 +154,7 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
 }
 
 function EditorHead(props: {
+  readonly projectPath: string;
   readonly name: string;
   readonly path: ExplorerPath;
   readonly status: string | undefined;
@@ -154,12 +163,17 @@ function EditorHead(props: {
   readonly onClose: () => void;
 }) {
   const translate = useTranslate();
+  // The open file wears the same colour and letter as its row in the tree.
+  const mark = fileGitMark(gitMarksOf(useFilesView(props.projectPath)), props.path, { folder: false });
   return (
     // The CMS and Instructions views' own header (cms-detail-head): the same height, title, muted mono path and actions.
     <div className="cms-detail-head files-editor-head">
-      <span className="cms-detail-title files-editor-title">
+      <span className="cms-detail-title files-editor-title" data-git={gitTone(mark)}>
         {props.dirty === true && <span className="files-dirty" aria-hidden="true" />}
-        <bdi dir="ltr">{props.name}</bdi>
+        <bdi className="files-editor-name" dir="ltr">
+          {props.name}
+        </bdi>
+        <GitStatusBadge mark={mark} />
       </span>
       {props.path !== props.name && (
         <span className="cms-detail-path files-editor-path">

@@ -1,4 +1,5 @@
-// Element icons shared by the Navigator, canvas labels and insert palette.
+// Element icons shared by the Navigator, canvas labels and insert palette, and (at the end) the file-type icons the
+// Files panel and the Git panel's list of changes share.
 import { centralIcon, centralIconSize } from './central/CentralIcon';
 import {
   bulletList as centralBulletList,
@@ -9,6 +10,7 @@ import {
   home as centralHome,
   homeRoundDoor as centralHomeRoundDoor,
   image as centralImage,
+  fileText as centralFileText,
   input as centralInput,
   info as centralInfo,
   link as centralLink,
@@ -72,6 +74,8 @@ import {
 import type { ReactElement } from 'react';
 import type { HTML_TAGS } from '../editor/elementSchemas';
 import { type IconProps, I } from './IconBase';
+import { mediaKindOf, type ExplorerEntryKind } from '../../shared/ipc/fileExplorer';
+import { AstroIcon, AudioFileIcon, BracesIcon, CodeIcon, ExternalIcon, FolderIcon, FolderOpenIcon, LockIcon, UnlinkIcon } from './Icons';
 import { elementHeading4IconPath1, elementHeading5IconPath1, elementHeading6IconPath1 } from './iconPaths';
 
 // Astro components keep their cube so they stand apart from HTML elements.
@@ -361,4 +365,79 @@ export function elementIcon(tag: unknown, size = 12, className?: string) {
   const name = typeof tag === 'string' ? tag.slice(0, TAG_NAME_LENGTH_MAX + 1).toLowerCase() : '';
   const Icon = TAG_ICONS.get(name) ?? CustomElementIcon;
   return <Icon size={size} className={className} />;
+}
+
+// ---------------------------------------------------------------------------
+// File-type icons
+// ---------------------------------------------------------------------------
+//
+// The icon a file row draws, by what the entry is and, for a file, by its name. Every drawing is from the Central icon
+// system already in the app (src/ui/central/centralGeometry.tsx, docs/central-icons.md), with one exception the owner
+// asked for: an .astro file wears Astro's own mark, the app's `AstroIcon` (the supplied brand paths in
+// src/ui/iconPaths.ts). Nothing new is drawn.
+
+const ImageFileIcon = centralIcon(centralImage);
+const VideoFileIcon = centralIcon(centralVideo);
+const TextFileIcon = centralIcon(centralFileText);
+
+const ASTRO_NAME = /\.astro$/i;
+const CODE_NAME = /\.([cm]?[jt]sx?|css|scss|sass|less|html?|vue|svelte|svg|sh|zsh|bash|toml|ya?ml|xml)$/i;
+const DATA_NAME = /\.(json|jsonc|json5|lock)$/i;
+const TEXT_NAME = /\.(md|mdx|markdown|txt|log|csv)$/i;
+// Files that by convention hold secrets: drawn with a lock, so a person sees what they are opening.
+const SECRET_NAME = /^\.env(\..+)?$|\.(pem|key)$/i;
+
+export function FileEntryIcon(props: { readonly name: string; readonly kind: ExplorerEntryKind; readonly open: boolean | undefined }) {
+  switch (props.kind) {
+    case 'directory':
+    case 'link-directory':
+      return props.open === true ? <FolderOpenIcon size={14} /> : <FolderIcon size={14} />;
+    case 'link-outside':
+      return <ExternalIcon size={14} />;
+    case 'link-broken':
+      return <UnlinkIcon size={14} />;
+    case 'file':
+    case 'link-file':
+    case 'other':
+      return <NamedFileIcon name={props.name} />;
+    default: {
+      const exhaustive: never = props.kind;
+      return exhaustive;
+    }
+  }
+}
+
+function NamedFileIcon({ name }: { readonly name: string }) {
+  if (SECRET_NAME.test(name)) {
+    return <LockIcon size={14} />;
+  }
+  const media = mediaKindOf(name);
+  if (media === 'image' || /\.svg$/i.test(name)) {
+    return <ImageFileIcon size={14} />;
+  }
+  if (media === 'video') {
+    return <VideoFileIcon size={14} />;
+  }
+  if (media === 'audio') {
+    return <AudioFileIcon size={14} />;
+  }
+  if (DATA_NAME.test(name)) {
+    return <BracesIcon size={14} />;
+  }
+  if (ASTRO_NAME.test(name)) {
+    // The other rows' icons draw 16px (CentralIcon rounds the size asked for up) with a margin of their own. The mark
+    // runs to the edges of its drawing, so it is drawn 12px in the same 16px box: names line up and it looks their size.
+    return (
+      <span className="files-icon-brand">
+        <AstroIcon size={12} />
+      </span>
+    );
+  }
+  if (CODE_NAME.test(name)) {
+    return <CodeIcon size={14} />;
+  }
+  if (TEXT_NAME.test(name)) {
+    return <TextFileIcon size={14} />;
+  }
+  return <FileIcon size={14} />;
 }

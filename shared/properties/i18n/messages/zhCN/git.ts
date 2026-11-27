@@ -76,6 +76,8 @@ export const messages = {
   'git.busy.pulling': '正在拉取…',
   'git.busy.switching': '正在切换…',
   'git.busy.working': '正在处理…',
+  'git.changes.more': { other: '另有 {count} 个文件未显示' },
+  'git.changes.title': '更改',
   'git.chip.committed': '更改已提交',
   'git.chip.committedSwitched': '已提交到 {from}，现在位于 {branch}',
   'git.chip.controls': '仓库控制',

@@ -11,18 +11,37 @@
 // that file's one writer, so the two can never write over each other.
 import { useMemo, useRef } from 'react';
 import { isComponentFileName } from '../../../shared/properties/componentNaming';
-import { baseName, parentPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
+import { baseName, parentPath, parseExplorerPath, type ExplorerPath } from '../../../shared/ipc/fileExplorer';
+import { revealInFiles } from '../../features/files/fileEditorControl';
+import { canRailTab } from '../../lib/roleAccess';
 import FilesPanel from '../../features/files/FilesPanel';
 import FileEditorView from '../../features/files/FileEditorView';
 import { codeIntelAnswers } from '../../features/codeIntel/codeIntelSession';
 import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import type { FilesHost, ReferenceMove } from '../../features/files/filesHost';
 import { useFilesView } from '../../features/files/filesState';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import type { ShellView } from '../App';
 import { CodeTab } from './AppShell';
 import { useComponentManagement } from './useComponentManagement';
 
 const PAGE_FILE = /\.(astro|md|mdx)$/i;
+
+/**
+ * What the Git panel's list of changes takes from the Files panel: a signal that moves when the marks do (so the list
+ * follows an edit or a commit made anywhere), and a way to open a changed file there, for a role that has that panel.
+ */
+export function useGitChangesHost(app: ShellView): { readonly changesSignal: string; readonly onOpenFile: ((path: string) => void) | undefined } {
+  const role = useCurrentRole();
+  const projectPath = app.project.path;
+  const changesSignal = useFilesView(projectPath).git.answer;
+  const { setLeftTab } = app;
+  const onOpenFile = (path: string): void => {
+    setLeftTab('files');
+    revealInFiles(projectPath, parseExplorerPath(path), 'file');
+  };
+  return { changesSignal, onOpenFile: canRailTab(role, 'files') ? onOpenFile : undefined };
+}
 
 export function FilesTab({ app }: { readonly app: ShellView }) {
   const host = useFilesHost(app);

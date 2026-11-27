@@ -11,7 +11,7 @@
 // and, for a filesystem failure, the system's error code (`EACCES`), never a path or a file's bytes, so nothing that
 // reaches a log or a toast can carry a secret's contents.
 import { assert } from '../core/assert';
-import { boolean, count, digest, list, object, optional, pathText, record, text } from '../core/boundary';
+import { boolean, count, digest, list, object, optional, pathText, record, text, type Parser } from '../core/boundary';
 import type { Brand, Digest } from '../core/brand';
 import { err, ok, type Result } from '../core/result';
 
@@ -458,6 +458,128 @@ export function parseExplorerResult<T>(input: unknown, parseValue: (value: unkno
 export type ExplorerResult<T> = Result<T, ExplorerError>;
 
 // ---------------------------------------------------------------------------
+// Git marks
+// ---------------------------------------------------------------------------
+//
+// The answer of `files:gitStatus`, which marks files and folders the way VS Code's Explorer does. Paths are relative to
+// the open project even when the repository starts above it, and a folder git reports as a whole (untracked or ignored)
+// is one entry that speaks for everything inside it. The answer is whole or it says so: past a bound it is `too-many`,
+// never a shorter list in which a changed file would look clean.
+
+export const FILE_GIT_LIMITS = {
+  /** Changed entries one answer holds (the Git panel's own bound, electron/lib/mainLimits.ts `statusFilesMax`). */
+  changesMax: 20_000,
+  /** Ignored entries one answer holds; past it nothing is dimmed, since dimming only some would mislead. */
+  ignoredMax: 20_000,
+} as const satisfies Record<string, number>;
+
+/** What happened to an entry, strongest first: a folder holding several shows the first of these that it holds. */
+export const FILE_GIT_STATES = ['conflicted', 'modified', 'deleted', 'renamed', 'added', 'untracked'] as const;
+export type FileGitState = (typeof FILE_GIT_STATES)[number];
+
+export interface FileGitChange {
+  readonly path: ExplorerPath;
+  readonly state: FileGitState;
+  /** A folder git reports as one entry: everything inside it is in this state. */
+  readonly folder: boolean;
+  /** Where a renamed entry was, when that is inside the project. */
+  readonly from: ExplorerPath | undefined;
+}
+
+export interface FileGitIgnored {
+  readonly path: ExplorerPath;
+  readonly folder: boolean;
+}
+
+export type FileGitStatus =
+  /** Not a repository: the panel shows nothing about git. */
+  | { readonly kind: 'none' }
+  /** More changes than the bound: the panel marks nothing and says why. */
+  | { readonly kind: 'too-many'; readonly limit: number }
+  | {
+      readonly kind: 'repository';
+      /** The project folder itself, when git reports all of it as one untracked or ignored folder. */
+      readonly whole: 'tracked' | 'untracked' | 'ignored';
+      readonly changes: readonly FileGitChange[];
+      readonly ignored: readonly FileGitIgnored[];
+    };
+
+export function parseFileGitState(input: unknown): FileGitState {
+  const value = text(input);
+  const known = FILE_GIT_STATES.find((state) => state === value);
+  if (known === undefined) {
+    throw new Error('File git status: unknown state');
+  }
+  return known;
+}
+
+// An entry is something inside the project: the project itself is told by `whole`.
+function gitEntryPath(input: unknown): ExplorerPath {
+  const path = parseExplorerPath(input);
+  if (path === '') {
+    throw new Error('File git status: an entry names a path inside the project');
+  }
+  return path;
+}
+
+function gitChange(input: unknown): FileGitChange {
+  const value = record(input);
+  return {
+    path: gitEntryPath(value['path']),
+    state: parseFileGitState(value['state']),
+    folder: boolean(value['folder']),
+    from: optional(gitEntryPath)(value['from']),
+  };
+}
+
+function gitIgnoredEntry(input: unknown): FileGitIgnored {
+  const value = record(input);
+  return { path: gitEntryPath(value['path']), folder: boolean(value['folder']) };
+}
+
+function boundedGitList<Item>(item: Parser<Item>, limit: number): Parser<readonly Item[]> {
+  assert(limit > 0, 'A git list has a bound');
+  return (input) => {
+    if (Array.isArray(input) && input.length > limit) {
+      throw new Error('File git status: the list exceeds its bound');
+    }
+    return list(item)(input);
+  };
+}
+
+function wholeState(input: unknown): 'tracked' | 'untracked' | 'ignored' {
+  const value = text(input);
+  switch (value) {
+    case 'tracked':
+    case 'untracked':
+    case 'ignored':
+      return value;
+    default:
+      throw new Error('File git status: unknown project state');
+  }
+}
+
+export function parseFileGitStatus(input: unknown): FileGitStatus {
+  const value = record(input);
+  const kind = text(value['kind']);
+  switch (kind) {
+    case 'none':
+      return { kind };
+    case 'too-many':
+      return { kind, limit: count(value['limit']) };
+    case 'repository':
+      return {
+        kind,
+        whole: wholeState(value['whole']),
+        changes: boundedGitList(gitChange, FILE_GIT_LIMITS.changesMax)(value['changes']),
+        ignored: boundedGitList(gitIgnoredEntry, FILE_GIT_LIMITS.ignoredMax)(value['ignored']),
+      };
+    default:
+      throw new Error('File git status: unknown kind');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Requests
 // ---------------------------------------------------------------------------
 
@@ -557,6 +679,7 @@ export const FILE_EXPLORER_PAYLOADS = {
   'files:reveal': object({ ...project, path: parseExplorerPath }),
   'files:find': object({ ...project, query: findQuery }),
   'files:watch': object({ ...project, directories: watchedDirectories }),
+  'files:gitStatus': object({ ...project }),
   'files:guardClose': object({ unsaved: boolean }),
   'files:allowClose': object({ proceed: boolean }),
 } as const;
@@ -595,6 +718,7 @@ export interface FileExplorerResults {
   readonly 'files:reveal': ExplorerResult<{ readonly shown: true }>;
   readonly 'files:find': ExplorerResult<FindAnswer>;
   readonly 'files:watch': { readonly watching: number };
+  readonly 'files:gitStatus': FileGitStatus;
   readonly 'files:guardClose': { readonly ok: true };
   readonly 'files:allowClose': { readonly ok: true };
 }

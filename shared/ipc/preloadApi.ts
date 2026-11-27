@@ -349,6 +349,7 @@ interface InvokeChannels {
   readonly revealFileEntry: 'files:reveal';
   readonly findFiles: 'files:find';
   readonly watchFiles: 'files:watch';
+  readonly fileGitStatus: 'files:gitStatus';
   readonly guardFilesClose: 'files:guardClose';
   readonly allowFilesClose: 'files:allowClose';
 }

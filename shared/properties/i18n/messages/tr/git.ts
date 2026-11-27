@@ -79,6 +79,8 @@ export const messages = {
   'git.busy.pulling': 'Çekiliyor…',
   'git.busy.switching': 'Geçiliyor…',
   'git.busy.working': 'Çalışıyor…',
+  'git.changes.more': { one: '{count} dosya daha gösterilmiyor', other: '{count} dosya daha gösterilmiyor' },
+  'git.changes.title': 'Değişiklikler',
   'git.chip.committed': 'Değişiklikler commit edildi',
   'git.chip.committedSwitched': '{from} dalına commit edildi, şimdi {branch} dalındasınız',
   'git.chip.controls': 'Depo denetimleri',

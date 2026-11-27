@@ -23,6 +23,10 @@ interface GitChipProps {
   readonly withBranchChange?: <Value>(work: () => Promise<Value>) => Promise<Value>;
   /** The chord that pulls from anywhere, where the editor has one; the pull button's tooltip names it. */
   readonly pullShortcut?: string | undefined;
+  /** What changes when the host sees the working tree change, so the list of changes follows it. */
+  readonly changesSignal?: unknown;
+  /** Opens a changed file from that list, where the host has somewhere to open it. */
+  readonly onOpenFile?: ((path: string) => void) | undefined;
 }
 
 interface RepositoryProps extends Pick<GitHost, 'project' | 'showToast'>, Omit<GitChipProps, 'session'> {
@@ -106,6 +110,13 @@ function RepositoryGitChip(props: RepositoryProps) {
   return (
     <>
       <GitChipView
+        changes={{
+          projectPath: props.project.path,
+          info: props.info,
+          signal: props.changesSignal,
+          onOpenFile: props.onOpenFile,
+          showToast: props.showToast,
+        }}
         info={props.info}
         busy={props.busy}
         error={props.error}

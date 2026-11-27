@@ -621,6 +621,7 @@ function eventBridge() {
     revealFileEntry: invoke('files:reveal'),
     findFiles: invoke('files:find'),
     watchFiles: invoke('files:watch'),
+    fileGitStatus: invoke('files:gitStatus'),
     guardFilesClose: invoke('files:guardClose'),
     allowFilesClose: invoke('files:allowClose'),
     onFilesChanged: (callback: (data: unknown) => void) => {

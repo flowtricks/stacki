@@ -3,7 +3,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { ChevronRightIcon, CloseIcon } from '../../ui/Icons';
-import FileStatus from '../git/FileStatus';
+import FileStatus from '../../ui/GitStatus';
 import HistoryFileDiff from './HistoryFileDiff';
 import HistoryFilesToolbar from './HistoryFilesToolbar';
 import { selectHistoryFiles, type HistoryFileFilter, type HistoryFileSort } from './historyFileList';

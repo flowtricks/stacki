@@ -28,6 +28,7 @@
 // translation happens at the IPC edge, and this module stays about git.
 
 import { assert } from '../../shared/core/assert';
+import type { FileGitState } from '../../shared/ipc/fileExplorer';
 import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { gitErrorDetail } from './git';
@@ -201,6 +202,8 @@ export interface StatusFile {
   readonly status: string;
   readonly staged: boolean;
   readonly untracked: boolean;
+  /** What the file lists show (the Files panel's reading of the same two columns). */
+  readonly state: FileGitState;
 }
 
 /**
@@ -214,32 +217,79 @@ export interface StatusFile {
  */
 export function parseStatusRecords(stdout: string, prefix: string, limit: number): StatusFile[] {
   assert(prefix === '' || prefix.endsWith('/'), 'parseStatusRecords: a folder prefix ends with a slash');
-  const records = stdout.split('\0');
   const files: StatusFile[] = [];
   const relative = (entryPath: string): string => (prefix !== '' && entryPath.startsWith(prefix) ? entryPath.slice(prefix.length) : entryPath);
-  for (let index = 0; index < records.length; index++) {
-    const record = records[index];
-    if (record === undefined || record.length < 4) {
-      continue; // The empty record after the final NUL.
-    }
+  for (const { code, path: rootPath, from } of statusRecords(stdout)) {
     if (files.length >= limit) {
       throw new ReferencedError('git.error.statusTooLarge', { count: limit });
     }
-    // "XY path": two status columns, a space, then the path. Never trimmed: the first column is a space for working-tree-only changes.
-    const code = record.slice(0, 2);
-    const entryPath = relative(record.slice(3));
-    const renamed = code.includes('R') || code.includes('C');
-    const from = renamed ? records[++index] : undefined;
     files.push({
-      path: entryPath,
+      path: relative(rootPath),
       from: from === undefined ? undefined : relative(from),
       // The letter to show. `??` is git's "untracked", which to anyone who did not choose that spelling is simply a new file.
       status: code === '??' ? 'A' : code.trim().charAt(0) || 'M',
       staged: code.charAt(0) !== ' ' && code !== '??',
       untracked: code === '??',
+      state: fileGitStateOf(code),
     });
   }
   return files;
+}
+
+// Both columns of every unmerged record.
+const CONFLICT_CODES: ReadonlySet<string> = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+
+/**
+ * The state one porcelain code shows as. The working tree's column wins over the index's, as in VS Code: a staged new
+ * file edited again reads as modified.
+ */
+export function fileGitStateOf(code: string): FileGitState {
+  assert(code.length === 2, 'fileGitStateOf: a porcelain code has two columns');
+  if (CONFLICT_CODES.has(code)) {
+    return 'conflicted';
+  }
+  if (code === '??') {
+    return 'untracked';
+  }
+  const letter = code.charAt(1) === ' ' ? code.charAt(0) : code.charAt(1);
+  switch (letter) {
+    case 'M':
+    case 'T':
+      return 'modified';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    case 'A':
+    case 'C':
+      return 'added';
+    default:
+      throw new Error(`fileGitStateOf: git reported an unknown status "${code}"`);
+  }
+}
+
+export interface StatusRecord {
+  /** The two status columns, index then working tree, exactly as git wrote them. */
+  readonly code: string;
+  /** From the repository root; a folder (untracked or ignored) ends with a slash. */
+  readonly path: string;
+  /** The old path of a rename or copy. */
+  readonly from: string | undefined;
+}
+
+/** The records of `git status --porcelain=v1 -z`, one at a time, so a caller with a bound stops reading at it. */
+export function* statusRecords(stdout: string): Generator<StatusRecord, void, undefined> {
+  const records = stdout.split('\0');
+  for (let index = 0; index < records.length; index++) {
+    const record = records[index];
+    if (record === undefined || record.length < 4) {
+      continue; // The empty record after the final NUL.
+    }
+    // "XY path": two status columns, a space, then the path. Never trimmed: the first column is a space for working-tree-only changes.
+    const code = record.slice(0, 2);
+    const renamed = code.includes('R') || code.includes('C');
+    yield { code, path: record.slice(3), from: renamed ? records[++index] : undefined };
+  }
 }
 
 /**

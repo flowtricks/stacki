@@ -78,6 +78,8 @@ export const messages = {
   'git.busy.pulling': 'プル中…',
   'git.busy.switching': '切り替え中…',
   'git.busy.working': '処理中…',
+  'git.changes.more': { other: 'ほか {count} 件のファイルは表示されていません' },
+  'git.changes.title': '変更',
   'git.chip.committed': '変更をコミットしました',
   'git.chip.committedSwitched': '{from} にコミットし、{branch} に切り替えました',
   'git.chip.controls': 'リポジトリの操作',

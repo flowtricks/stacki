@@ -1,7 +1,7 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useCodeIntel } from '../../features/codeIntel/useCodeIntel';
 import { PREVIEW_SHORTCUT, railShortcutLabel } from '../railShortcuts';
-import { FilesTab } from './DesktopFiles';
+import { FilesTab, useGitChangesHost } from './DesktopFiles';
 import { FilesKeeper } from '../../features/files/FilesKeeper';
 import { DesktopPageSettings } from './PageSettingsDesktop';
 import { CanvasTextFormatBar } from './CanvasTextFormatBar';
@@ -190,7 +190,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
             )}
           </div>
           {/* Reads the project's files ahead and keeps them current, so the Files panel opens on its tree. */}
-          {canRailTab(role, 'files') && <FilesKeeper key={projectPath} projectPath={projectPath} />}
+          {canRailTab(role, 'files') && <FilesKeeper key={projectPath} projectPath={projectPath} gitSignal={app.gitInfo} />}
           <AppOverlays app={app} />
           <AuditsHost app={app} />
           <AiHost app={app} />
@@ -1035,7 +1035,18 @@ export function HistoryTab({ app }: { readonly app: ShellView }) {
 
 function HistoryGitControls({ app }: { readonly app: ShellView }) {
   const { session, shortcut } = useDesktopGitControls();
-  return <GitChip key={app.project.path} session={session} incoming={app.gitIncoming} withBranchChange={app.withBranchChange} pullShortcut={shortcut} />;
+  const changes = useGitChangesHost(app);
+  return (
+    <GitChip
+      key={app.project.path}
+      session={session}
+      incoming={app.gitIncoming}
+      withBranchChange={app.withBranchChange}
+      pullShortcut={shortcut}
+      changesSignal={changes.changesSignal}
+      onOpenFile={changes.onOpenFile}
+    />
+  );
 }
 
 export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, file: HistoryCommitFile, translate: Translator): Promise<void> {

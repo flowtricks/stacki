@@ -20,6 +20,8 @@ import {
   type FindAnswer,
   type TransferMode,
   type TransferPlacement,
+  parseFileGitStatus,
+  type FileGitStatus,
 } from '../../../shared/ipc/fileExplorer';
 import { count } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
@@ -91,6 +93,11 @@ export async function findFiles(projectPath: string, query: string): Promise<Exp
 export async function watchFolders(projectPath: string, directories: readonly ExplorerPath[]): Promise<number> {
   const payload = parseIpcPayload('files:watch', { projectPath, directories });
   return count(record(await window.avb.watchFiles(payload))['watching']);
+}
+
+export async function readFileGitStatus(projectPath: string): Promise<FileGitStatus> {
+  const payload = parseIpcPayload('files:gitStatus', { projectPath });
+  return parseFileGitStatus(await window.avb.fileGitStatus(payload));
 }
 
 export async function guardClose({ unsaved }: { readonly unsaved: boolean }): Promise<void> {

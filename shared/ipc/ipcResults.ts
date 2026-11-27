@@ -7,7 +7,7 @@ import type { PendingStyleMove, StyleMoveResolution } from '../properties/styleM
 import type { AiResults } from './aiChat';
 import type { AgentResults } from './projectAgentChannels';
 import type { CodeIntelReply } from './codeIntel';
-import type { FileExplorerResults } from './fileExplorer';
+import type { FileExplorerResults, FileGitState } from './fileExplorer';
 import type { DesignSessionResults } from './designSession'; // Design mode (experimental): docs/design-mode/REMOVE.md
 import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
@@ -696,6 +696,8 @@ export interface IpcResults extends AiResults, AgentResults, FileExplorerResults
     WireStatusFile &
       WireFileDescription & {
         readonly from: undefined | string;
+        /** Absent from Studio, whose lists derive it from the letter (features/git/CommitFilePicker.tsx). */
+        readonly state?: FileGitState | undefined;
       }
   >;
   readonly 'git:unpark':

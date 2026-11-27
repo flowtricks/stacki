@@ -81,6 +81,13 @@ export const messages = {
   'git.busy.pulling': 'Pobieranie…',
   'git.busy.switching': 'Przełączanie…',
   'git.busy.working': 'Pracuję…',
+  'git.changes.more': {
+    one: 'Nie pokazano jeszcze {count} pliku',
+    few: 'Nie pokazano jeszcze {count} plików',
+    many: 'Nie pokazano jeszcze {count} plików',
+    other: 'Nie pokazano jeszcze {count} pliku',
+  },
+  'git.changes.title': 'Zmiany',
   'git.chip.committed': 'Zmiany zapisane w commicie',
   'git.chip.committedSwitched': 'Zapisano w commicie na {from}, teraz na {branch}',
   'git.chip.controls': 'Sterowanie repozytorium',

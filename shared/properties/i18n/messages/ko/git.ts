@@ -78,6 +78,8 @@ export const messages = {
   'git.busy.pulling': '가져오는 중…',
   'git.busy.switching': '전환 중…',
   'git.busy.working': '작업 중…',
+  'git.changes.more': { other: '파일 {count}개가 더 있지만 표시되지 않음' },
+  'git.changes.title': '변경 사항',
   'git.chip.committed': '변경 사항 커밋됨',
   'git.chip.committedSwitched': '{from}에 커밋하고 {branch}(으)로 전환함',
   'git.chip.controls': '저장소 제어',

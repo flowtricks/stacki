@@ -89,3 +89,61 @@ export function createExplorerWatch(
   };
   return { follow, close };
 }
+
+// The files of a git directory whose rewrite means the working tree's state changed: a stage or commit rewrites the
+// index, a branch switch HEAD, and a merge that stops on a clash leaves MERGE_HEAD.
+const GIT_STATE_FILES: ReadonlySet<string> = new Set(['index', 'HEAD', 'ORIG_HEAD', 'MERGE_HEAD']);
+
+export interface GitDirectoryWatch {
+  /** Follows `directory` from now on; undefined follows nothing. */
+  readonly follow: (directory: string | undefined) => void;
+  readonly close: () => void;
+}
+
+/**
+ * One watcher on the open project's git directory, so a commit, a stage, a switch or a pull made anywhere (a terminal,
+ * another app) moves the Files panel's git marks at once instead of at the next routine git read. Not recursive: the
+ * objects git writes by the thousand are in folders below.
+ */
+export function createGitDirectoryWatch(
+  changed: () => void,
+  watch: (directory: string, listener: (file: string | undefined) => void) => fs.FSWatcher = (directory, listener) =>
+    fs.watch(directory, { persistent: false }, (_event, file) => listener(file ?? undefined)),
+): GitDirectoryWatch {
+  let followed: { readonly directory: string; readonly watcher: fs.FSWatcher } | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const close = (): void => {
+    followed?.watcher.close();
+    followed = undefined;
+    clearTimeout(timer);
+    timer = undefined;
+  };
+  const heard = (file: string | undefined): void => {
+    // Some systems report no name: that may be the index, so it counts.
+    if (file !== undefined && !GIT_STATE_FILES.has(file)) {
+      return;
+    }
+    timer ??= setTimeout(() => {
+      timer = undefined;
+      changed();
+    }, EVENT_SETTLE_MS);
+  };
+  const follow = (directory: string | undefined): void => {
+    if (directory === followed?.directory) {
+      return;
+    }
+    close();
+    if (directory === undefined) {
+      return;
+    }
+    try {
+      const watcher = watch(directory, heard);
+      watcher.on('error', close);
+      followed = { directory, watcher };
+    } catch {
+      // Unwatchable: the routine git read still moves the marks.
+    }
+  };
+  return { follow, close };
+}
