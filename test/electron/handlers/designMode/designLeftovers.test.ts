@@ -28,7 +28,15 @@ import {
   type ListedProcess,
   type RunsFrom,
 } from '#dist/electron/handlers/designMode/designLeftovers.js';
-import { discardSandbox, removeSandboxAtQuit, sandboxesRoot, scrubSecrets, sweepSandboxes } from '#dist/electron/handlers/designMode/designSandbox.js';
+import {
+  DESIGN_SANDBOX_LIMITS,
+  discardSandbox,
+  removeSandboxAsync,
+  removeSandboxAtQuit,
+  sandboxesRoot,
+  scrubSecrets,
+  sweepSandboxes,
+} from '#dist/electron/handlers/designMode/designSandbox.js';
 import waits from '../../../helpers/waitFor.js';
 
 const WAIT = { polls: 600, pollMs: 100 } as const;
@@ -349,6 +357,26 @@ async function lock(copy: { readonly live: string }): Promise<() => Promise<void
       holder.kill('SIGKILL');
     });
 }
+
+// Node's own `maxRetries` multiplies by folder depth (minutes for one held folder on Windows), so the delete asks it
+// for none and counts its own. The refusal is made up, so every system holds this.
+test('a held copy is tried a bounded number of times, whatever its depth, and a lasting refusal is not retried', async (context) => {
+  const asked: unknown[] = [];
+  const refusal = { code: 'EBUSY' };
+  context.mock.method(fs.promises, 'rm', (_root: unknown, options: unknown) => {
+    asked.push(options);
+    return Promise.reject(Object.assign(new Error('held'), refusal));
+  });
+  await assert.rejects(removeSandboxAsync(path.join(os.tmpdir(), 'stacki-held-copy')), /held/);
+  assert.equal(asked.length, DESIGN_SANDBOX_LIMITS.removeRetriesMax + 1);
+  for (const options of asked) {
+    assert.deepEqual(options, { recursive: true, force: true, maxRetries: 0 });
+  }
+  asked.length = 0;
+  refusal.code = 'EACCES';
+  await assert.rejects(removeSandboxAsync(path.join(os.tmpdir(), 'stacki-held-copy')), /held/);
+  assert.equal(asked.length, 1);
+});
 
 const ROOT_IGNORES_MODES = process.getuid?.() === 0 ? { skip: 'root deletes from a folder whatever its mode' } : {};
 

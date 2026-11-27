@@ -396,10 +396,31 @@ async function linkTarget(link: string): Promise<string | undefined> {
   }
 }
 
-/** Deletes a folder without holding the main process: the files go in the background. Rejects where one will not go. */
+/** Refusals that may pass: a file or folder held for the moment, or too many files open at once. */
+const TRANSIENT_REMOVE_CODES: ReadonlySet<unknown> = new Set(['EBUSY', 'EMFILE', 'ENFILE', 'ENOTEMPTY', 'EPERM']);
+
+/**
+ * Deletes a folder without holding the main process: the files go in the background. Rejects where one will not go.
+ *
+ * The retries are this function's own, round the whole delete. Node's `maxRetries` applies again at every folder
+ * level, each retry of a folder running its children's retries over, so one held folder a few levels down kept the
+ * delete (and the secret files' own deletion, and the next session) waiting for minutes, not seconds.
+ */
 export async function removeSandboxAsync(root: string): Promise<void> {
-  const retries = { maxRetries: DESIGN_SANDBOX_LIMITS.removeRetriesMax, retryDelay: DESIGN_SANDBOX_LIMITS.removeRetryMs };
-  await fs.promises.rm(root, { recursive: true, force: true, ...retries });
+  for (let retried = 0; retried < DESIGN_SANDBOX_LIMITS.removeRetriesMax; retried += 1) {
+    try {
+      await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 0 });
+      return;
+    } catch (error: unknown) {
+      const code: unknown = error instanceof Error && 'code' in error ? error.code : undefined;
+      if (!TRANSIENT_REMOVE_CODES.has(code)) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, (retried + 1) * DESIGN_SANDBOX_LIMITS.removeRetryMs));
+    }
+  }
+  // The attempt after the last retry: its refusal is the caller's.
+  await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 0 });
 }
 
 /** A file whose content is a secret: never kept in a draft, and deleted on its own from a copy that cannot go yet. */
