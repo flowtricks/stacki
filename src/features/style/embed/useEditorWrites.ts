@@ -377,7 +377,6 @@ export function useEmbedNav(
 
 // The card's selector props.
 export function useSelectionCard(
-  selectionState: ReturnType<typeof useSelectionState>,
   elementTokens: ReturnType<typeof useElementTokens>,
   activeSelectorHook: ReturnType<typeof useActiveSelector>,
   selectorPick: ReturnType<typeof useSelectorPick>,
@@ -385,9 +384,8 @@ export function useSelectionCard(
   focusPropHook: ReturnType<typeof useFocusProp>,
   selectorChipsHook: ReturnType<typeof useSelectorChips>,
 ) {
-  const { selectedSelectorText } = selectionState;
   const { scan, selectorSuggestions, snapshot } = elementTokens;
-  const { activeSelector } = activeSelectorHook;
+  const { activePicked, activeSelector } = activeSelectorHook;
   const { selectActiveSelector } = selectorPick;
   const { addTypedSelector, deselect } = typedSelector;
   const { onSelectSelector } = focusPropHook;
@@ -396,7 +394,7 @@ export function useSelectionCard(
   const cardSelection = {
     snapshot,
     selectedSelector: activeSelector,
-    activePicked: selectedSelectorText !== undefined,
+    activePicked,
     // No scan at all (the panel's first moments) has nothing on its way to hold for.
     selectionSettled: scan === undefined || scan.settled,
     // Set by a change of element until its first settled answer (ScanState.awaitingFirstAnswer). Until then

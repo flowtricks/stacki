@@ -31,6 +31,8 @@ import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNative
 import { assert } from '../../../../shared/core/assert';
 import { useRefreshDerived } from './useEditorScanning';
 import { useApplyEdit, useElementTokens } from './useEditorRuleEdits';
+import { editTargetOf } from '../model/inlineTarget';
+import { inlineActiveOf, type InlineState } from './useInlineTarget';
 
 // Re-default the picked selector when the element changes.
 export function useTokenDefault(
@@ -197,16 +199,38 @@ export function useActiveSelector(
   selectionState: ReturnType<typeof useSelectionState>,
   nativeState: ReturnType<typeof useNativeState>,
   elementTokens: ReturnType<typeof useElementTokens>,
+  inlineState: InlineState,
 ) {
   const { phase } = scanState;
-  const { selectedSelectorText, selectedTokens } = selectionState;
+  const { selectedSelectorText, selectedTokens, stateKey } = selectionState;
+  const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey } = selectionState;
   const { activeSelectorRef, nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
   const { tokens } = elementTokens;
 
   const selectedSelector = useMemo(() => tokensToSelector(selectedTokens, tokens), [selectedTokens, tokens]);
-  // The full selector currently being edited: an explicit chip/typed pick when set,
-  // else the one composed from the token chips.
-  const activeSelector = selectedSelectorText ?? selectedSelector;
+  // The one edit target: the style attribute, or the full selector being edited (an explicit chip/typed pick
+  // when set, else the one composed from the token chips). With the attribute, no selector is being edited.
+  const target = editTargetOf({
+    attributeActive: inlineActiveOf(inlineState, elementTokens.snapshot),
+    pickedSelector: selectedSelectorText,
+    composedSelector: selectedSelector,
+  });
+  const activeSelector = target.kind === 'rule' ? target.selector : '';
+  const activePicked = target.kind === 'rule' && target.picked;
+  // A rule pick made while the attribute is the target (the default that runs when the element's classes arrive,
+  // useTokenDefault) is dropped, while rendering, so leaving the attribute never brings back a pick nobody made.
+  if (target.kind === 'attribute') {
+    pendingDefaultRef.current = false;
+    if (selectedSelectorText !== undefined) {
+      setSelectedSelectorText(undefined);
+    }
+    if (selectedTokens.length > 0) {
+      setSelectedTokens([]);
+    }
+    if (stateKey !== '') {
+      setStateKey('');
+    }
+  }
   useEffect(() => {
     activeSelectorRef.current = activeSelector;
   }, [activeSelector, activeSelectorRef]);
@@ -238,7 +262,7 @@ export function useActiveSelector(
       cancelled = true;
     };
   }, [phase, standaloneClass, nativeIdentityRef, nativeModelRef, setNativeModel]);
-  return { activeSelector };
+  return { activePicked, activeSelector };
 }
 
 // Pick a selector, or a typed nested one, as the edit target.

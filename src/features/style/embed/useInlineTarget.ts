@@ -63,14 +63,20 @@ export interface InlineChip {
 export type InlineCodeView =
   { readonly kind: 'branches'; readonly view: InlineBranchView } | { readonly kind: 'readonly'; readonly code: string; readonly reason: string };
 
+/** The last word on one node's target: its chip was picked, or left for the rules. */
+export interface InlinePick {
+  readonly nodeId: string;
+  readonly target: 'attribute' | 'rule';
+}
+
 /** The selected element's attribute, and whether its chip is the edit target. */
 export function useInlineState() {
   const node = useSelectedHostNode();
   const attribute = node?.props?.['style'];
   // Read again only when the attribute itself changes, not on every host render.
   const ownStyle = useMemo(() => inlineStyleOf(attribute === undefined ? undefined : { props: { style: attribute } }), [attribute]);
-  // The node the chip was picked on: another selection is never the target.
-  const [pickedFor, setPickedFor] = useState<string | undefined>(undefined);
+  // Whether the chip was picked or left, and on which node: it says nothing about another selection.
+  const [pick, setPick] = useState<InlinePick | undefined>(undefined);
   // The branch edited, by its place in the chain; a missing key falls back to the first.
   const [branchKey, setBranchKey] = useState<string | undefined>(undefined);
   const nodeId = node?.id;
@@ -78,7 +84,12 @@ export function useInlineState() {
   const pseudo = usePseudoTarget() !== undefined;
   // An instance renders its component's element, whose attribute its component writes.
   const instance = node?.kind === 'component';
-  return { ownStyle, nodeId, pickedFor, setPickedFor, branchKey, setBranchKey, writable, pseudo, instance };
+  // Where the attribute is the default (model/inlineDefault.ts), each newly selected element starts on its chip:
+  // what was said about the element before is forgotten, while rendering, so no frame shows it first.
+  if (pick !== undefined && nodeId !== undefined && pick.nodeId !== nodeId && inlineDefault() === 'inline') {
+    setPick(undefined);
+  }
+  return { ownStyle, nodeId, pick, setPick, branchKey, setBranchKey, writable, pseudo, instance };
 }
 
 export type InlineState = ReturnType<typeof useInlineState>;
@@ -101,8 +112,17 @@ export function chipStyleOf(inline: Pick<InlineState, 'ownStyle' | 'instance'>, 
 /** Whether the chip is in the well, and whether it is the edit target. */
 export function inlineTargetOf(inline: InlineState, style: InlineStyle): { readonly shown: boolean; readonly active: boolean } {
   const shown = inlineChipShown(style, { writable: inline.writable, pseudo: inline.pseudo }) || startsInline(style, inline);
-  const active = shown && inline.nodeId !== undefined && inline.pickedFor === inline.nodeId;
+  const active = shown && inline.nodeId !== undefined && attributePicked(inline, inline.nodeId);
   return { shown, active };
+}
+
+// Decided from what is known while rendering, never in an effect: picked after the commit, the default left the
+// rules' own default (useTokenDefault), which runs when the element's classes arrive, to select a class beside it.
+function attributePicked(inline: Pick<InlineState, 'pick'>, nodeId: string): boolean {
+  if (inline.pick?.nodeId === nodeId) {
+    return inline.pick.target === 'attribute';
+  }
+  return inlineDefault() === 'inline';
 }
 
 // With inline as the default (model/inlineDefault.ts), the chip stands in the well even before the element has
@@ -158,13 +178,12 @@ export function useInlineCard(
 ): StyleCardProps {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
-  const { nodeId, setPickedFor, branchKey, setBranchKey } = inline;
+  const { nodeId, setPick, branchKey, setBranchKey } = inline;
   const { deselect, setSaveError, showBase } = panel;
   const style = chipStyleOf(inline, card.snapshot);
   const { shown, active } = inlineTargetOf(inline, style);
   const heldRef = useRef<HeldInlineWrite | undefined>(undefined);
   useForgetHeldWrite(heldRef, nodeId);
-  useInlineByDefault({ nodeId, shown, deselect, setPickedFor });
   const refuse = (message: string): void => setSaveError(message);
 
   // A plain string: the whole attribute's next text.
@@ -232,20 +251,24 @@ export function useInlineCard(
     if (inlineDefault() !== 'inline') {
       showBase();
     }
-    setPickedFor(nodeId);
+    setPick({ nodeId, target: 'attribute' });
     // The attribute is shown and edited in the CSS code section, so it opens with the pick.
     if (!card.cssCodeOpen) {
       card.onToggleCssCode();
     }
   };
-  const leave = (): void => setPickedFor(undefined);
+  const leave = (): void => {
+    if (nodeId !== undefined) {
+      setPick({ nodeId, target: 'rule' });
+    }
+  };
   const clear = (): void => {
     const host = getHost();
     if (nodeId === undefined || host.setInlineStyle === undefined) {
       return;
     }
     heldRef.current = { nodeId, base: attributeText(findNode(host.nodes, nodeId), 'string'), next: undefined };
-    setPickedFor(undefined);
+    leave();
     host.setInlineStyle(nodeId, undefined);
   };
   const chip: InlineChip | undefined = shown
@@ -468,28 +491,4 @@ function useSelectedHostNode(): HostNode | undefined {
 function readSelectedNode(): HostNode | undefined {
   const host = getHost();
   return host.selectedId === undefined ? undefined : findNode(host.nodes, host.selectedId);
-}
-
-// Each newly selected element starts on its chip while inline is the default (model/inlineDefault.ts); picking a
-// selector afterwards leaves it as usual. Once per element: the chip can appear a render after the selection (the
-// host's attribute arrives later), so the pick waits for it, and a pick the person makes afterwards stays.
-function useInlineByDefault(input: {
-  readonly nodeId: string | undefined;
-  readonly shown: boolean;
-  readonly deselect: () => void;
-  readonly setPickedFor: (nodeId: string | undefined) => void;
-}): void {
-  const latest = useRef(input);
-  latest.current = input;
-  const applied = useRef<string | undefined>(undefined);
-  const { nodeId, shown } = input;
-  useEffect(() => {
-    if (nodeId === undefined || !shown || applied.current === nodeId || inlineDefault() !== 'inline') {
-      return;
-    }
-    applied.current = nodeId;
-    const { deselect, setPickedFor } = latest.current;
-    deselect();
-    setPickedFor(nodeId);
-  }, [nodeId, shown]);
 }

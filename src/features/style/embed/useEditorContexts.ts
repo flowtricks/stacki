@@ -828,7 +828,7 @@ export function useContextChange(
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector, setTypedContexts } = selectorPick;
   const { inlineActive, styleContexts, reachPending } = styleContextsHook;
-  const { setPickedFor } = inlineState;
+  const { nodeId: inlineNodeId, setPick } = inlineState;
   const [followMode, setFollowMode] = useFollowMode(getHost().projectPath);
   const canvasWidthPx = useCanvasWidthPx();
   // In a desktop-first component the breakpoint that holds at the canvas width is the target even before
@@ -947,13 +947,14 @@ export function useContextChange(
   const onContextChange = useCallback(
     (next: ContextKey) => {
       if (inlineActive && next !== '') {
-        setPickedFor(undefined);
+        assert(inlineNodeId !== undefined, 'onContextChange: the attribute is the target only of a selected node');
+        setPick({ nodeId: inlineNodeId, target: 'rule' });
         pickContext(next, 'rule');
         return;
       }
       pickContext(next, inlineActive ? 'attribute' : 'rule');
     },
-    [inlineActive, setPickedFor, pickContext],
+    [inlineActive, inlineNodeId, setPick, pickContext],
   );
 
   // The person picking the "Inline styles" chip: the dropdown goes to Base exactly as if Base were picked in it,

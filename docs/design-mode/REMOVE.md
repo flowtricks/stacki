@@ -191,9 +191,10 @@ byte-identical afterwards.
    - `shared/ipc/ipcResults.ts`: the `DesignSessionResults` import, the comment line above `IpcResults`, and
      `, DesignSessionResults` in its `extends` list.
    - `shared/ipc/preloadApi.ts`: `readonly designSession: 'design:session';`.
-   - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
-     `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
-     `useInlineByDefault` function at the end of the file; in `select`, the `if (inlineDefault() !== 'inline')` around
+   - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, the block in `useInlineState` that
+     forgets another node's pick (`if (pick !== undefined && … inlineDefault() === 'inline')`), `|| startsInline(style, inline)`
+     in `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, and the last
+     line of `attributePicked`, which becomes `return false;`; in `select`, the `if (inlineDefault() !== 'inline')` around
      `showBase();`, which stays.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
      `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in

@@ -204,7 +204,7 @@ function useEditorElement(editorFoundation: ReturnType<typeof useEditorFoundatio
   const tokenDefault = useTokenDefault(scanState, selectionState, elementTokens);
   const cachedNative = useCachedNative(nativeState);
   useNativeRead(editorRefs, nativeState, tokenDefault, cachedNative);
-  const activeSelectorHook = useActiveSelector(scanState, selectionState, nativeState, elementTokens);
+  const activeSelectorHook = useActiveSelector(scanState, selectionState, nativeState, elementTokens, editorFoundation.inlineState);
   const selectorPick = useSelectorPick(editorRefs, selectionState, elementTokens);
   const typedSelector = useTypedSelector(editorRefs, selectionState, applyEditHook, selectorPick);
   const focusPropHook = useFocusProp(editorRefs, selectorPick);
@@ -407,7 +407,7 @@ function useEditorSources(
   editorContexts: ReturnType<typeof useEditorContexts>,
   editorResolution: ReturnType<typeof useEditorResolution>,
 ) {
-  const { nativeState, selectionState } = editorFoundation;
+  const { nativeState } = editorFoundation;
   const { openEmbed } = editorRuleEdits;
   const { activeSelectorHook, elementTokens, focusPropHook, selectorPick, typedSelector } = editorElement;
   const { nativeTarget, styleContextsHook } = editorContexts;
@@ -415,7 +415,7 @@ function useEditorSources(
 
   const sourceOptionsHook = useSourceOptions(nativeState, elementTokens, styleContextsHook, nativeTarget, resolvedHook);
   const embedNavHook = useEmbedNav(nativeState, openEmbed, sourceOptionsHook);
-  const selectionCard = useSelectionCard(selectionState, elementTokens, activeSelectorHook, selectorPick, typedSelector, focusPropHook, selectorChipsHook);
+  const selectionCard = useSelectionCard(elementTokens, activeSelectorHook, selectorPick, typedSelector, focusPropHook, selectorChipsHook);
   return { embedNavHook, selectionCard, sourceOptionsHook };
 }
 
