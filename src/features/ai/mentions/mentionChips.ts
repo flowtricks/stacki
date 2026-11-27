@@ -3,18 +3,19 @@
 // dragged from the Pages or Assets panel is. No React and no editor here, so the
 // rules are tested as plain functions (test/renderer/ai/mentions.test.js).
 import { assert } from '../../../../shared/core/assert';
-import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import {
   isProjectRelativePath,
   type BuiltinChipId,
-  elementKey,
+  chipBoundProblem,
+  isHostChip,
   isReferenceChip,
-  REFERENCE_CHIPS_MAX,
   type ComponentMemberChip,
   type ComposerSegment,
   type ComposerSegments,
   type MentionCandidate,
   type MentionChip,
+  type CodeChip,
+  type PageChip,
 } from '../../../../shared/properties/ai/mentions';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import type { ChipLook } from '../../../ui/chipEditor/chipEditor';
@@ -22,8 +23,10 @@ import {
   AssetManagerIcon,
   ComponentIcon,
   ComponentPropertiesIcon,
+  CodeIcon,
   FileIcon,
   InstructionsIcon,
+  LayoutIcon,
   PaintBrushIcon,
   SkillIcon,
   TagIcon,
@@ -85,7 +88,7 @@ export function candidateChip(candidate: MentionCandidate): MentionChip {
 // ---------------------------------------------------------------------------
 
 /** A chip's look: its kind, except that a CSS chip is a class (blue, the paint brush) or a variable (purple, the swatches). */
-export const CHIP_STYLES = ['file', 'skill', 'builtin', 'component', 'member', 'element', 'class', 'variable', 'asset'] as const;
+export const CHIP_STYLES = ['file', 'skill', 'builtin', 'component', 'member', 'element', 'class', 'variable', 'asset', 'code', 'page', 'layout'] as const;
 export type ChipStyle = (typeof CHIP_STYLES)[number];
 
 /** The colour each look takes: the chip tokens the rest of the app uses for the same thing. */
@@ -99,6 +102,9 @@ export const CHIP_STYLE_COLOURS: Readonly<Record<ChipStyle, 'purple' | 'green' |
   class: 'blue',
   variable: 'purple',
   asset: 'purple',
+  code: 'purple',
+  page: 'purple',
+  layout: 'purple',
 };
 
 export const CHIP_STYLE_ICONS: Readonly<Record<ChipStyle, typeof FileIcon>> = {
@@ -111,10 +117,48 @@ export const CHIP_STYLE_ICONS: Readonly<Record<ChipStyle, typeof FileIcon>> = {
   class: PaintBrushIcon,
   variable: VariableIcon,
   asset: AssetManagerIcon,
+  code: CodeIcon,
+  page: FileIcon,
+  layout: LayoutIcon,
 };
 
 export function chipStyleOf(chip: MentionChip): ChipStyle {
-  return chip.kind === 'css' ? chip.target : chip.kind;
+  if (chip.kind === 'css') {
+    return chip.target;
+  }
+  if (chip.kind === 'page') {
+    // A place chip reads as what its file is: a component is green with the cube, as everywhere else.
+    return chip.role === 'file' ? 'file' : chip.role;
+  }
+  return chip.kind;
+}
+
+/** "L116–124" or "L12": the lines of a code chip, as the Code panel's badge writes them. */
+export function codeLinesLabel(chip: Pick<CodeChip, 'startLine' | 'endLine'>): string {
+  return chip.startLine === chip.endLine ? `L${chip.startLine}` : `L${chip.startLine}–${chip.endLine}`;
+}
+
+/** A code chip's label: the element selected, or the file's name, and the lines. */
+export function codeChipLabel(chip: CodeChip): string {
+  return `${chip.element ?? baseName(chip.path)} · ${codeLinesLabel(chip)}`;
+}
+
+/** A place chip's label: a page by its name; anything else says what it is too, so it is never read as a page. */
+export function pageChipLabel(chip: PageChip, translate: Translator): string {
+  switch (chip.role) {
+    case 'page':
+      return chip.name;
+    case 'layout':
+      return translate('ai.chip.place.layoutLabel', { name: chip.name });
+    case 'component':
+      return translate('ai.chip.place.componentLabel', { name: chip.name });
+    case 'file':
+      return chip.name;
+    default: {
+      const exhaustive: never = chip.role;
+      return exhaustive;
+    }
+  }
 }
 
 /** The label a member chip shows: the name, `name = value` for a value, `name slot` for a slot. */
@@ -160,7 +204,7 @@ export function chipLook(chip: MentionChip, translate: Translator, problem?: str
     case 'component':
       return { label: chip.name, title: problem ?? chip.path, kind: problem === undefined ? 'component' : 'invalid' };
     case 'element':
-      return { label: `<${chip.tag}>`, title: elementKey(chip), kind: 'element' };
+      return { label: `<${chip.tag}>`, title: chip.path, kind: 'element' };
     case 'css':
       return {
         label: chip.target === 'variable' ? chip.name : `.${chip.name}`,
@@ -169,6 +213,10 @@ export function chipLook(chip: MentionChip, translate: Translator, problem?: str
       };
     case 'asset':
       return { label: baseName(chip.path), title: chip.path, kind: 'asset' };
+    case 'code':
+      return { label: codeChipLabel(chip), title: `${chip.path} ${codeLinesLabel(chip)}`, kind: 'code' };
+    case 'page':
+      return { label: pageChipLabel(chip, translate), title: chip.path, kind: chipStyleOf(chip) };
     case 'member':
       return { label: memberLabel(chip, translate), title: problem ?? memberTitle(chip, translate), kind: problem === undefined ? 'member' : 'invalid' };
     default: {
@@ -281,6 +329,18 @@ export function chipsEqual(left: MentionChip, right: MentionChip): boolean {
   if (left.kind === 'element' && right.kind === 'element') {
     return left.path === right.path && left.locator === right.locator && left.tag === right.tag;
   }
+  if (left.kind === 'code' && right.kind === 'code') {
+    return (
+      left.path === right.path &&
+      left.startLine === right.startLine &&
+      left.endLine === right.endLine &&
+      left.element === right.element &&
+      left.code === right.code
+    );
+  }
+  if (left.kind === 'page' && right.kind === 'page') {
+    return left.path === right.path && left.role === right.role && left.name === right.name && left.route === right.route && left.viewedOn === right.viewedOn;
+  }
   if (left.kind === 'member' && right.kind === 'member') {
     return left.component === right.component && left.role === right.role && left.name === right.name && left.value === right.value;
   }
@@ -315,7 +375,7 @@ export function chipCountOf(segments: ComposerSegments): number {
 
 /** The chips `AI_LIMITS.mentionsMax` bounds: those the host expands (files, skills, built-ins), not the reference chips. */
 export function hostChipCountOf(segments: ComposerSegments): number {
-  return segments.filter((segment) => segment.kind === 'chip' && !isReferenceChip(segment.chip)).length;
+  return segments.filter((segment) => segment.kind === 'chip' && isHostChip(segment.chip)).length;
 }
 
 /** The component, element and member chips, bounded by `REFERENCE_CHIPS_MAX`. */
@@ -325,7 +385,8 @@ export function referenceChipCountOf(segments: ComposerSegments): number {
 
 /** Whether one more `chip` still fits its bound. */
 export function chipFits(segments: ComposerSegments, chip: MentionChip): boolean {
-  return isReferenceChip(chip) ? referenceChipCountOf(segments) < REFERENCE_CHIPS_MAX : hostChipCountOf(segments) < AI_LIMITS.mentionsMax;
+  const chips = segments.flatMap((segment) => (segment.kind === 'chip' ? [segment.chip] : []));
+  return chipBoundProblem([...chips, chip]) === undefined;
 }
 
 export function hasBuiltinChip(segments: ComposerSegments, id: BuiltinChipId): boolean {

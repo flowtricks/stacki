@@ -13,8 +13,10 @@ import Popup from '../../../ui/Popup';
 import { POPUP_MOTION_MS } from '../../../ui/popupLifecycle';
 import { Switch } from '../../../ui/Switch';
 import { TipButton } from '../sessions/TipButton';
+import { ChipWords } from '../mentions/ChipWords';
 import { commentLine, hasContentToLose, workingCopy } from './pinModel';
-import { DetachedPill, PinProgressPill, UnsavedPill } from './PinProgressPill';
+import { PinBadge } from './PinBadge';
+import { DetachedPill, UnsavedPill } from './PinProgressPill';
 import { cancelRun, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
 import type { CommentPin } from '../../../../shared/properties/ai/commentPins';
 import type { Translator } from '../../../lib/i18n/localeContext';
@@ -85,7 +87,8 @@ function PinRow({
 }) {
   const progress = progressOf(pin);
   // A pin never saved shows what its box holds; a saved one what it says.
-  const words = pin.savedAt === undefined ? workingCopy(pin).comment : pin.comment;
+  const shown = pin.savedAt === undefined ? workingCopy(pin) : pin;
+  const words = shown.comment;
   const width = pin.place.breakpointPx === undefined ? translate('ai.pins.fluid') : translate('ai.pins.width', { width: pin.place.breakpointPx });
   const remove = async (): Promise<void> => {
     if (hasContentToLose(pin)) {
@@ -99,7 +102,7 @@ function PinRow({
         return;
       }
     }
-    deletePin(pin.id);
+    deletePin(pin.id, translate);
     // The row that takes this one's place (or the one before, for the last) keeps the keyboard in the list: after the
     // confirm dialog's exit, which hands focus back to the button that is gone.
     window.setTimeout(() => {
@@ -113,14 +116,20 @@ function PinRow({
         <span className={`ai-pin-number is-${progress.kind}`}>{pin.number}</span>
         <span className="ai-pin-row-text">
           <span className={words.trim() === '' ? 'ai-pin-row-comment is-empty' : 'ai-pin-row-comment'}>
-            {words.trim() === '' ? translate('ai.pins.noComment') : commentLine(words, ROW_COMMENT_CHARS_MAX)}
+            {words.trim() === '' ? (
+              translate('ai.pins.noComment')
+            ) : shown.segments === undefined ? (
+              commentLine(words, ROW_COMMENT_CHARS_MAX)
+            ) : (
+              <ChipWords segments={shown.segments} />
+            )}
           </span>
           <span className="ai-pin-row-place">{translate('ai.pins.rowPlace', { page: pin.place.pageLabel, element: pin.place.elementLabel, width })}</span>
         </span>
         {image !== undefined && <img className="ai-pin-thumb" src={image} alt="" />}
       </button>
       {detached && <DetachedPill />}
-      {pin.savedAt === undefined ? <UnsavedPill /> : <PinProgressPill progress={progress} />}
+      {pin.savedAt === undefined ? <UnsavedPill /> : <PinBadge pin={pin} progress={progress} />}
       {pin.delivery.kind === 'draft' && pin.savedAt !== undefined && (
         <Switch
           label={translate('ai.pins.include', { number: pin.number })}

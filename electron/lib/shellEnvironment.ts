@@ -1,8 +1,10 @@
-// The environment a child process the person would recognise starts with: what
-// their Terminal.app would see, with Electron's fingerprints taken off. The
-// terminal dock (terminal/terminal.ts) spawns its login shell from it, and the
-// AI panel's agents (handlers/ai/agentHost.ts) spawn from it too, so `claude`
-// and `codex` find the same tools and the same sign-in either way.
+// The starting environment for a child process the person would recognise: this
+// app's own environment with Electron's fingerprints taken off and the common
+// tool folders added to PATH. It reads no shell startup file. The terminal dock
+// (terminal/terminal.ts) spawns its login shell from it, and that shell then
+// reads the startup files itself. The AI panel (handlers/ai/) starts from it
+// too, and its agents also get an allowlist of sign-in settings read from the
+// login shell (lib/loginShellSettings.ts): only the agents, never from here.
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -10,7 +12,7 @@ import { mergeToolPaths, pathEnvironmentValue, setPathEnvironment, staticToolPat
 
 const isWin = process.platform === 'win32';
 
-// Build an env that mirrors what the user's Terminal.app would see.
+// Build the env a login shell can start from.
 //
 // A GUI-launched Electron app inherits launchd's minimal PATH, so CLIs
 // installed via Homebrew / npm / Bun / Volta / pnpm / fnm / asdf / deno / yarn

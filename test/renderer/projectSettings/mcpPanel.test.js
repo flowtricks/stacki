@@ -44,6 +44,7 @@ const built = esbuild.build({
       "export { summarizeMcpServer } from './shared/properties/mcpConfig';",
       "export { scanCodexToml, codexServerEntries, changeCodexToml } from './shared/properties/mcpToml';",
       "export { subscribeErrorToasts } from './src/ui/errorNotices';",
+      "export { resetMcpSignInStore } from './src/ui/mcpSignIn/mcpSignInStore';",
       "export { monogramOf } from './src/ui/ProviderLogo';",
       "export { serverStatus, codexChipOf, configOfDraft, draftOf, copyText } from './src/features/projectSettings/mcpModel';",
     ].join('\n'),
@@ -645,5 +646,74 @@ test('the JSON view of a missing file starts from a ready-to-save starter', asyn
   assert.equal(button('Save').disabled, false, 'Save is on for the starter');
   await click(button('Save'));
   assert.equal(mcpText, '{\n  "mcpServers": {}\n}\n');
+  await unmount();
+});
+
+/** A main process that can sign in: what each server needs, and every request made. */
+function installSignIn(states) {
+  const asked = [];
+  const listeners = {};
+  window.avb.onAiMcpAuth = (callback) => {
+    listeners.push = callback;
+    return () => undefined;
+  };
+  window.avb.aiMcpAuth = async ({ request }) => {
+    asked.push(request);
+    if (request.kind === 'list') {
+      return { servers: Object.entries(states).map(([name, state]) => ({ agent: 'claude', name, state })), notice: undefined };
+    }
+    const next = { signIn: 'signing-in', reopen: 'signing-in', cancel: 'needs-sign-in', signOut: 'needs-sign-in' }[request.kind];
+    const state = next ?? states[request.name] ?? 'needs-sign-in';
+    const notice = { cancel: 'cancelled', signOut: 'signed-out' }[request.kind];
+    return { servers: [{ agent: 'claude', name: request.name, state }], notice };
+  };
+  return { asked, listeners };
+}
+
+test('a server that needs sign-in says so with Sign in; waiting can be cancelled; the outcome is a toast with Try again', async () => {
+  panel.resetMcpSignInStore();
+  reset({ mcp: FILE });
+  const main = installSignIn({ Sanity: 'needs-sign-in', local: 'none' });
+  await mount();
+  const row = () => cardOf('Sanity').querySelector('.mcp-signin');
+  assert.match(row().textContent, /Claude.*Needs sign-in/);
+  assert.equal(cardOf('local').querySelector('.mcp-signin') ?? undefined, undefined, 'a local command shows no sign-in state');
+  await click(button('Sign in'));
+  assert.deepEqual(main.asked.at(-1), { kind: 'signIn', agent: 'claude', name: 'Sanity' });
+  assert.match(row().textContent, /Waiting for your browser/);
+  assert.match(row().querySelector('.mcp-signin-text').getAttribute('title'), /after 5 minutes/);
+  await click(button('Open page again'));
+  assert.equal(main.asked.at(-1).kind, 'reopen');
+  await click(button('Cancel'));
+  assert.equal(main.asked.at(-1).kind, 'cancel');
+  assert.match(row().textContent, /Needs sign-in/);
+  assert.ok(toastLog.messages().some((message) => message.includes('Sign-in to Sanity was cancelled.')));
+  // The result main sends later: connected, without reopening the tab.
+  await act(async () => main.listeners.push({ projectPath: '/project', entry: { agent: 'claude', name: 'Sanity', state: 'connected' }, notice: 'signed-in' }));
+  await settleAll();
+  assert.match(row().textContent, /Connected/);
+  assert.ok(toastLog.messages().some((message) => message.includes('Claude is signed in to Sanity.')));
+  assert.ok(row().querySelector('button'), 'sign out and sign in again are in its menu');
+  await unmount();
+});
+
+test('a server just added is asked about and offered a sign-in; a host without sign-in draws nothing', async () => {
+  panel.resetMcpSignInStore();
+  reset({ mcp: '{\n  "mcpServers": {}\n}\n' });
+  const main = installSignIn({});
+  await mount();
+  await click(document.querySelector('.dd-trigger'));
+  await click([...document.querySelectorAll('.dd-option')].find((candidate) => candidate.textContent.includes('Figma')));
+  await click(button('Add'));
+  assert.ok(
+    main.asked.some((request) => request.kind === 'check' && request.agent === 'claude' && request.name === 'Figma'),
+    JSON.stringify(main.asked),
+  );
+  assert.ok(toastLog.messages().some((message) => message.includes('Figma needs you to sign in before Claude can use it.')));
+  await unmount();
+  panel.resetMcpSignInStore();
+  reset({ mcp: FILE });
+  await mount();
+  assert.equal(document.querySelector('.mcp-signin') ?? undefined, undefined);
   await unmount();
 });

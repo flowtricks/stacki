@@ -3,6 +3,7 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/workspace';
 
 export const messages = {
+  'workspace.code.addToChat': 'Добавить в чат',
   'workspace.code.close': 'Закрыть (правки сохраняются сразу)',
   'workspace.code.title': 'Код',
   'workspace.files.cancel': 'Отмена',

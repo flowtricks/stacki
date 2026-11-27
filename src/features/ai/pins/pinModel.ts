@@ -1,5 +1,6 @@
 // The pure rules of comment pins (docs/contracts.md, "Comment pins"): making, changing and numbering pins on a
-// board, the bounds on their images, how each pin stands once sent (read from the chat's transcript alone), what
+// board, the bounds on their images, how each pin stands once sent (read from the chat's transcript alone), which
+// models a pin can run on, what
 // a "Send all" carries, where a pin is drawn and what its crop takes in. Nothing here reads the DOM, the clock or a
 // store: the callers pass what they know, so every rule is tested on values.
 import { assert } from '../../../../shared/core/assert';
@@ -7,12 +8,19 @@ import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import {
   PIN_LIMITS,
   pinImageNote,
+  isSubagentModel,
   pinNumberOfTitle,
+  pinQuestionsOf,
   type PinBrief,
   type PinBriefEntry,
+  type PinQuestion,
   type PinSendMode,
+  type PinWords,
   type SentPin,
 } from '../../../../shared/properties/ai/commentPinBrief';
+import { isHostChip, plainTextOf, type ComposerSegments } from '../../../../shared/properties/ai/mentions';
+import { pinSendMode } from '../../../../shared/properties/ai/agentPresentation';
+import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import {
   boardImageIds,
   type CommentPin,
@@ -25,10 +33,10 @@ import {
   type PinPlace,
   type PinPoint,
 } from '../../../../shared/properties/ai/commentPins';
-import type { TurnId } from '../../../../shared/properties/ai/chatModel';
+import type { ChatOption, PermissionRequestId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { PromptAttachment } from '../../../../shared/ipc/aiChat';
-import type { ChatView } from '../chatReducer';
-import { deriveSubagentWork, type SubagentStatus, type SubagentWork } from '../subagents';
+import type { ChatView, TranscriptItem } from '../chatReducer';
+import { deriveSubagentWork, sessionModelName, type SubagentStatus, type SubagentWork } from '../subagents';
 
 // ---------------------------------------------------------------------------
 // The board
@@ -94,8 +102,37 @@ export function removePin(board: PinBoard, id: PinId): PinBoard {
 }
 
 /** What the pin's box shows: its unsaved changes when it has some, else what was saved. */
-export function workingCopy(pin: Pick<CommentPin, 'comment' | 'images' | 'edit'>): PinEdit {
-  return pin.edit ?? { comment: pin.comment, images: pin.images };
+export function workingCopy(pin: Pick<CommentPin, 'comment' | 'segments' | 'images' | 'edit'>): PinEdit {
+  return pin.edit ?? { ...wordsOf(pin), images: pin.images };
+}
+
+/** The words and chips of a pin or its box, and nothing else of it. */
+export function wordsOf({ comment, segments }: PinWords): PinWords {
+  return segments === undefined ? { comment } : { comment, segments };
+}
+
+/** A box's words as the chat's composer holds them: its chips, or the text alone. */
+export function segmentsOfWords({ comment, segments }: PinWords): ComposerSegments {
+  return segments ?? (comment === '' ? [] : [{ kind: 'text', text: comment }]);
+}
+
+/**
+ * What the box's editor holds as a pin keeps it, within `commentCharsMax` characters of plain text: past the bound
+ * the end is dropped (text is cut; a chip goes whole, as half a reference would name something else).
+ */
+export function pinWordsOf(segments: ComposerSegments): PinWords {
+  let kept = segments;
+  // Each round shortens the last segment or drops it, so there are at most two rounds a segment.
+  for (let round = 0; round <= segments.length * 2 && plainTextOf(kept).length > PIN_LIMITS.commentCharsMax; round += 1) {
+    const last = kept[kept.length - 1];
+    assert(last !== undefined, 'pinWordsOf: words over the bound have a segment');
+    const over = plainTextOf(kept).length - PIN_LIMITS.commentCharsMax;
+    const cut = last.kind === 'text' && last.text.length > over ? [{ kind: 'text' as const, text: last.text.slice(0, last.text.length - over) }] : [];
+    kept = [...kept.slice(0, -1), ...cut];
+  }
+  const comment = plainTextOf(kept);
+  assert(comment.length <= PIN_LIMITS.commentCharsMax, 'pinWordsOf: within the bound');
+  return kept.some((segment) => segment.kind === 'chip') ? { comment, segments: kept } : { comment };
 }
 
 /**
@@ -124,7 +161,9 @@ export function hasUnsavedChanges(pin: Pick<CommentPin, 'comment' | 'images' | '
 export function savePinEdit(pin: CommentPin, at: number): CommentPin {
   const edit = workingCopy(pin);
   assert(hasPersonContent(edit), 'savePinEdit: a pin is saved with words or an added image');
-  const saved = { ...pin, comment: edit.comment, images: edit.images, savedAt: Math.max(at, pin.createdAt), edit: undefined };
+  const before = { ...pin };
+  delete before.segments; // The box's words replace the saved ones whole: chips it no longer has go with them.
+  const saved = { ...before, ...wordsOf(edit), images: edit.images, savedAt: Math.max(at, pin.createdAt), edit: undefined };
   assert(saved.edit === undefined, 'savePinEdit: nothing is left unsaved');
   return saved;
 }
@@ -184,7 +223,7 @@ export function addPinImages(
 ): ImageOutcome {
   assert(boardChars >= 0, 'addPinImages: the board holds a nonnegative weight');
   const working = workingCopy(pin);
-  const withImages = (images: readonly PinImageRef[]): CommentPin => ({ ...pin, edit: { comment: working.comment, images } });
+  const withImages = (images: readonly PinImageRef[]): CommentPin => ({ ...pin, edit: { ...wordsOf(working), images } });
   let kept = [...working.images];
   let chars = boardChars;
   const added: PinImageRef[] = [];
@@ -222,16 +261,25 @@ export function unusedImages(board: PinBoard, held: Iterable<PinImageId>): reado
 // How a sent pin stands
 // ---------------------------------------------------------------------------
 
-/** Why a pin needs the person: a question waits (a permission), its work failed, it was stopped, or its run was held. */
-export type AttentionReason = 'permission' | 'failed' | 'stopped' | 'paused';
+/** Why a pin did not get done: its work failed, it was stopped, or the run ended before it was started. */
+export type UnfinishedReason = 'failed' | 'stopped' | 'not-started';
 
 export type PinProgress =
   | { readonly kind: 'draft' }
-  /** Waiting for its wave (subagents) or its turn (one pin per message). */
+  /** Not started: waiting for a place in its wave (subagents) or for its turn (one pin per message). */
   | { readonly kind: 'queued' }
-  | { readonly kind: 'working' }
+  /** `end` `reply`: the agent runs in the background, so its end shows only when the whole reply ends. */
+  | { readonly kind: 'working'; readonly end: 'own' | 'reply' }
   | { readonly kind: 'done' }
-  | { readonly kind: 'attention'; readonly reason: AttentionReason }
+  /** Needs the person, and there is something to answer: a permission card in the chat, or the agent's question. */
+  | { readonly kind: 'attention'; readonly reason: 'permission'; readonly request: PermissionRequestId }
+  | { readonly kind: 'attention'; readonly reason: 'question'; readonly question: PinQuestion }
+  /** Ended without being done. Nothing waits on the person: the pin can be reopened and sent again. */
+  | { readonly kind: 'unfinished'; readonly reason: UnfinishedReason }
+  /** Waiting in a one-pin-per-message run that is held; the pin list continues or ends it. */
+  | { readonly kind: 'held' }
+  /** Its agent was started and nothing says how it went (Codex's own subagents). */
+  | { readonly kind: 'unreported' }
   /** Sent, but its chat's transcript is not open in this window, so how it stands is not known here. */
   | { readonly kind: 'sent' };
 
@@ -251,11 +299,13 @@ function workOf(view: ChatView): SubagentWork {
 }
 
 /**
- * How a pin stands. A draft is a draft. A sent pin is read from its chat's transcript (`view`, undefined when not
- * open here): in a `subagents` send, from the subagent whose title starts "Pin <number>", or from the turn while
- * none does (queued while other pins' subagents are running, working before any is); in a `single` send, from its
- * own turn. `paused` says a `single` run was held after a turn that did not end well, so a pin still waiting for
- * its turn needs the person.
+ * How a pin stands, read from its chat's transcript (`view`, undefined when not open here). `paused` says a
+ * one-pin-per-message run was held after a reply that did not end well.
+ *
+ * In order: an open question about the pin; a permission card its work waits on; its subagent (the newest titled
+ * "Pin <number>", in the send's reply or any later one, since a person can have the agent resume or restart a pin);
+ * else the reply it is in: the send's, or the one that answered its question. "Needs you" is only ever one of the
+ * first two, so there is always something to answer.
  */
 export function pinProgress(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView | undefined, paused: 'paused' | 'running'): PinProgress {
   const delivery = pin.delivery;
@@ -264,83 +314,237 @@ export function pinProgress(pin: Pick<CommentPin, 'number' | 'delivery'>, view: 
   }
   const turn = delivery.turn;
   if (turn === undefined) {
-    return paused === 'paused' ? { kind: 'attention', reason: 'paused' } : { kind: 'queued' };
+    return paused === 'paused' ? { kind: 'held' } : { kind: 'queued' };
   }
-  if (view === undefined || !view.items.some((item) => item.kind === 'user' && item.turn === turn)) {
+  const span = view === undefined ? undefined : pinSpan(view, turn, pin.number);
+  if (view === undefined || span === undefined) {
     return { kind: 'sent' };
   }
-  const ended = turnEnd(view, turn);
-  if (delivery.mode === 'subagents') {
-    const status = pinSubagentStatus(workOf(view), turn, pin.number);
-    if (status !== undefined) {
-      return progressOfSubagent(status);
-    }
-    if (ended === undefined) {
-      const others = [...workOf(view).units.values()].some((unit) => unit.agent.turn === turn && pinNumberOfTitle(unit.agent.title) !== undefined);
-      return others ? { kind: 'queued' } : { kind: 'working' };
-    }
-  } else if (ended === undefined) {
-    return waitingInTurn(view, turn) ? { kind: 'attention', reason: 'permission' } : { kind: 'working' };
+  const asked = pinQuestion(view, span, pin.number);
+  if (asked.kind === 'open') {
+    return { kind: 'attention', reason: 'question', question: asked.question };
   }
-  assert(ended !== undefined, 'pinProgress: a turn still running was answered above');
-  return progressOfEnd(ended);
+  const answer = asked.kind === 'answered' ? asked : undefined;
+  const unit = pinUnit(view, span, pin.number);
+  // After an answer, a subagent that has done nothing since says nothing about it: the answering reply does.
+  const current = unit !== undefined && (answer === undefined || unit.lastIndex > answer.index) ? unit : undefined;
+  const replyTurn = answer?.turn ?? turn;
+  const request = waitingRequest(view, current === undefined ? { turn: replyTurn, mode: delivery.mode } : { call: current.call });
+  if (request !== undefined) {
+    return { kind: 'attention', reason: 'permission', request };
+  }
+  if (current !== undefined) {
+    return progressOfSubagent(current.status);
+  }
+  const ended = turnEnd(view, replyTurn);
+  // Other pins of this send have subagents and this one has none: it was never started.
+  const unstarted = delivery.mode === 'subagents' && answer === undefined && hasPinUnits(view, span);
+  if (ended === undefined) {
+    return unstarted ? { kind: 'queued' } : { kind: 'working', end: 'own' };
+  }
+  return unstarted ? { kind: 'unfinished', reason: 'not-started' } : progressOfEnd(ended);
 }
 
-/**
- * Whether a sent pin's work is confirmed finished well, so the pin can be deleted: it reads done, and, for a subagent
- * pin, its turn has not ended any other way (a subagent sent to the background reads done once its turn is over,
- * whatever became of it; a turn that ended well vouches for it). Nothing else is finished: a draft, a pin not yet
- * sent, a chat not open here, a pin at work, waiting, failed or stopped.
- */
+/** Whether a sent pin's work is confirmed finished well, so the pin can be deleted: it reads done, and nothing else does. */
 export function pinFinished(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView | undefined): boolean {
   const delivery = pin.delivery;
   if (delivery.kind !== 'sent' || delivery.turn === undefined || view === undefined) {
     return false;
   }
-  if (pinProgress(pin, view, 'running').kind !== 'done') {
-    return false;
-  }
-  const ended = turnEnd(view, delivery.turn);
-  assert(delivery.mode === 'subagents' || ended === 'end_turn', 'pinFinished: a pin of its own turn is done only when that turn ended well');
-  return ended === undefined || ended === 'end_turn';
+  return pinProgress(pin, view, 'running').kind === 'done';
 }
 
-/** The newest subagent of `turn` titled for pin `number`, as it stands. */
-export function pinSubagentStatus(work: SubagentWork, turn: TurnId, number: number): SubagentStatus | undefined {
-  let found: SubagentStatus | undefined;
-  for (const unit of work.units.values()) {
-    if (unit.agent.kind === 'agent' && unit.agent.turn === turn && pinNumberOfTitle(unit.agent.title) === number) {
-      found = unit.agent.status;
-    }
-  }
-  return found;
-}
-
-/** The call of the newest subagent of `turn` titled for pin `number`, to open its transcript. */
+/** The call of the subagent working on pin `number` of the send in `turn`, to open its transcript. */
 export function pinSubagentCall(view: ChatView, turn: TurnId, number: number): string | undefined {
-  let call: string | undefined;
-  for (const unit of workOf(view).units.values()) {
-    if (unit.agent.kind === 'agent' && unit.agent.turn === turn && pinNumberOfTitle(unit.agent.title) === number) {
-      call = unit.agent.call;
+  const span = pinSpan(view, turn, number);
+  return span === undefined ? undefined : pinUnit(view, span, number)?.call;
+}
+
+/** The words that open the person's reply about a pin: they say which question the reply answers. */
+export function pinReplyLead(pin: Pick<SentPin, 'comment' | 'elementLabel'>): string {
+  const about = commentLine(pin.comment.trim() === '' ? pin.elementLabel : pin.comment, REPLY_LEAD_CHARS_MAX);
+  assert(about !== '', 'pinReplyLead: a pin has words or an element name');
+  return `“${about}”: `;
+}
+
+/** Characters of a pin's words a reply to its question quotes. */
+const REPLY_LEAD_CHARS_MAX = 60;
+
+// The part of a chat that is about one pin of one send: from that message to the next one that sends a pin with the
+// same number (numbers start again once the board empties, and a reopened pin keeps its own).
+interface PinSpan {
+  readonly from: number;
+  readonly to: number;
+}
+
+function sentPinsIn(item: TranscriptItem): readonly SentPin[] {
+  if (item.kind !== 'user') {
+    return [];
+  }
+  const part = item.parts?.find((candidate) => candidate.kind === 'pins');
+  return part?.kind === 'pins' ? part.pins : [];
+}
+
+function pinSpan(view: ChatView, turn: TurnId, number: number): PinSpan | undefined {
+  // A steering message shares its turn's id: the send is the turn's message that carries the pins, when one does.
+  const withPin = view.items.findIndex((item) => item.kind === 'user' && item.turn === turn && sentPinsIn(item).some((pin) => pin.number === number));
+  const from = withPin === -1 ? view.items.findIndex((item) => item.kind === 'user' && item.turn === turn) : withPin;
+  if (from === -1) {
+    return undefined;
+  }
+  const next = view.items.findIndex((item, index) => index > from && sentPinsIn(item).some((pin) => pin.number === number));
+  const span = { from, to: next === -1 ? view.items.length : next };
+  assert(span.from < span.to, 'pinSpan: a span holds its message');
+  return span;
+}
+
+type AskedState =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'open'; readonly question: PinQuestion }
+  | { readonly kind: 'answered'; readonly index: number; readonly turn: TurnId };
+
+interface Asked {
+  readonly index: number;
+  readonly turn: TurnId;
+  readonly question: PinQuestion;
+}
+
+// The questions the agent asked about pin `number`, in its own words and in its subagents' reports, in order.
+function questionsAsked(view: ChatView, span: PinSpan, number: number): readonly Asked[] {
+  const asked: Asked[] = [];
+  const work = workOf(view);
+  for (let index = span.from; index < span.to; index += 1) {
+    const item = view.items[index];
+    if (item?.kind !== 'text' && item?.kind !== 'tool') {
+      continue;
+    }
+    // The agent's own words, or the report a subagent handed back.
+    const said = item.kind === 'tool' ? work.units.get(item.call)?.agent.result : item.role === 'agent' && item.parent === undefined ? item.text : undefined;
+    for (const question of pinQuestionsOf(said ?? '')) {
+      if (question.number === number) {
+        asked.push({ index, turn: item.turn, question });
+      }
     }
   }
-  return call;
+  return asked;
+}
+
+// The first message of the person after `from` that answers pin `number`: one that opens with another pin's reply
+// words answers that pin only; any other message answers every question before it. A send of pins answers nothing.
+function answerAfter(view: ChatView, from: number, number: number): { readonly index: number; readonly turn: TurnId } | undefined {
+  const sent = view.items.flatMap(sentPinsIn);
+  for (let index = from + 1; index < view.items.length; index += 1) {
+    const item = view.items[index];
+    if (item?.kind !== 'user' || sentPinsIn(item).length > 0) {
+      continue;
+    }
+    const named = sent.filter((pin) => item.text.startsWith(pinReplyLead(pin)));
+    if (named.length === 0 || named.some((pin) => pin.number === number)) {
+      return { index, turn: item.turn };
+    }
+  }
+  return undefined;
+}
+
+function pinQuestion(view: ChatView, span: PinSpan, number: number): AskedState {
+  const asked = questionsAsked(view, span, number);
+  const latest = asked[asked.length - 1];
+  if (latest === undefined) {
+    return { kind: 'none' };
+  }
+  const answer = answerAfter(view, latest.index, number);
+  if (answer !== undefined) {
+    return { kind: 'answered', ...answer };
+  }
+  // The same words again in the reply an answer was sent into (the agent's closing summary) repeat an answered question.
+  for (const earlier of asked.slice(0, -1)) {
+    const before = answerAfter(view, earlier.index, number);
+    if (earlier.question.question === latest.question.question && before !== undefined && before.turn === latest.turn) {
+      return { kind: 'answered', ...before };
+    }
+  }
+  return { kind: 'open', question: latest.question };
+}
+
+interface PinUnit {
+  readonly call: string;
+  readonly status: SubagentStatus;
+  /** The place in the transcript of the newest thing it did or was told. */
+  readonly lastIndex: number;
+}
+
+// The newest subagent titled for pin `number` inside the pin's span, as it stands.
+function pinUnit(view: ChatView, span: PinSpan, number: number): PinUnit | undefined {
+  const work = workOf(view);
+  let found: { readonly call: string; readonly status: SubagentStatus; readonly index: number } | undefined;
+  for (let index = span.from; index < span.to; index += 1) {
+    const item = view.items[index];
+    const agent = item?.kind === 'tool' ? work.units.get(item.call)?.agent : undefined;
+    if (agent !== undefined && agent.kind === 'agent' && pinNumberOfTitle(agent.title) === number) {
+      found = { call: agent.call, status: agent.status, index };
+    }
+  }
+  if (found === undefined) {
+    return undefined;
+  }
+  let lastIndex = found.index;
+  for (let index = view.items.length - 1; index > found.index; index -= 1) {
+    const item = view.items[index];
+    if ((item?.kind === 'tool' || item?.kind === 'text') && item.parent === found.call) {
+      lastIndex = index;
+      break;
+    }
+  }
+  return { call: found.call, status: found.status, lastIndex };
+}
+
+function hasPinUnits(view: ChatView, span: PinSpan): boolean {
+  const work = workOf(view);
+  return view.items.slice(span.from, span.to).some((item) => {
+    const agent = item.kind === 'tool' ? work.units.get(item.call)?.agent : undefined;
+    return agent !== undefined && pinNumberOfTitle(agent.title) !== undefined;
+  });
+}
+
+// The oldest permission card still waiting for the pin: its subagent's, or (with no subagent) the reply's own in a
+// one-pin-per-message send. A card waits only while a reply runs.
+function waitingRequest(
+  view: ChatView,
+  of: { readonly call: string } | { readonly turn: TurnId; readonly mode: PinSendMode },
+): PermissionRequestId | undefined {
+  if (view.running === undefined) {
+    return undefined;
+  }
+  const unitOf = workOf(view).unitOf;
+  for (const item of view.items) {
+    if (item.kind !== 'permission' || item.answer !== undefined) {
+      continue;
+    }
+    const mine = 'call' in of ? item.call === of.call || unitOf.get(item.call) === of.call : of.mode === 'single' && item.turn === of.turn;
+    if (mine) {
+      return item.request;
+    }
+  }
+  return undefined;
 }
 
 function progressOfSubagent(status: SubagentStatus): PinProgress {
   switch (status.kind) {
     case 'queued':
-      return { kind: 'queued' };
+      return { kind: 'working', end: 'own' };
     case 'running':
-      return { kind: 'working' };
+      return { kind: 'working', end: status.end };
     case 'waiting':
-      return { kind: 'attention', reason: 'permission' };
+      // Its card was answered or is not this pin's: with nothing to answer, it is at work.
+      return { kind: 'working', end: 'own' };
     case 'done':
       return { kind: 'done' };
     case 'failed':
-      return { kind: 'attention', reason: 'failed' };
+      return { kind: 'unfinished', reason: 'failed' };
     case 'stopped':
-      return { kind: 'attention', reason: 'stopped' };
+      return { kind: 'unfinished', reason: 'stopped' };
+    case 'unreported':
+      return { kind: 'unreported' };
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -352,7 +556,7 @@ function progressOfEnd(stop: TurnEnd): PinProgress {
   if (stop === 'end_turn') {
     return { kind: 'done' };
   }
-  return stop === 'cancelled' ? { kind: 'attention', reason: 'stopped' } : { kind: 'attention', reason: 'failed' };
+  return { kind: 'unfinished', reason: stop === 'cancelled' ? 'stopped' : 'failed' };
 }
 
 type TurnEnd = Extract<ChatView['items'][number], { readonly kind: 'turn-end' }>['stop'];
@@ -366,10 +570,6 @@ export function turnEnd(view: ChatView, turn: TurnId): TurnEnd | undefined {
     }
   }
   return undefined;
-}
-
-function waitingInTurn(view: ChatView, turn: TurnId): boolean {
-  return view.items.some((item) => item.kind === 'permission' && item.turn === turn && item.answer === undefined);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,11 +600,105 @@ export function sendRefusal(pins: readonly Pick<CommentPin, 'images'>[], mode: P
   return images > AI_LIMITS.attachmentsMax ? 'too-many-images' : undefined;
 }
 
+/** A model a pin can be sent with: a value and name of the agent's model option. */
+export interface PinModelChoice {
+  readonly value: string;
+  readonly name: string;
+}
+
+/**
+ * The models a pin of `agent` can run on, from the agent's model option as the panel lists it. A one-message send
+ * runs each pin in a subagent, which takes only Claude's short model names; one message per pin switches the chat's
+ * model for that message, so every model counts. Empty while the agent has not reported its models.
+ */
+export function pinModelChoices(mode: PinSendMode, options: readonly ChatOption[]): readonly PinModelChoice[] {
+  const option = options.find((candidate) => candidate.id === 'model' || candidate.category === 'model');
+  const choices = (option?.choices ?? []).filter((choice) => mode === 'single' || isSubagentModel(choice.value));
+  return choices.map((choice) => ({ value: choice.value, name: choice.name }));
+}
+
+export type ResolvedPinModel =
+  /** No model was chosen: the pin runs on the chat's. */
+  | { readonly kind: 'chat' }
+  | { readonly kind: 'chosen'; readonly model: PinModelChoice }
+  /** The chosen model cannot be used where the pin is going: it runs on the chat's, and the person is told. */
+  | { readonly kind: 'unavailable'; readonly name: string };
+
+/** What a pin's choice means for a send to `agent`. With no list reported yet, the agent's own choice is trusted. */
+export function resolvePinModel(pin: Pick<CommentPin, 'model'>, agent: AgentId, options: readonly ChatOption[]): ResolvedPinModel {
+  const chosen = pin.model;
+  if (chosen === undefined) {
+    return { kind: 'chat' };
+  }
+  if (chosen.agent !== agent) {
+    return { kind: 'unavailable', name: chosen.name };
+  }
+  const mode = pinSendMode(agent);
+  const listed = pinModelChoices(mode, options);
+  const known = options.some((option) => option.id === 'model' || option.category === 'model');
+  const usable = known ? listed.some((choice) => choice.value === chosen.value) : mode === 'single' || isSubagentModel(chosen.value);
+  return usable ? { kind: 'chosen', model: { value: chosen.value, name: chosen.name } } : { kind: 'unavailable', name: chosen.name };
+}
+
+/** The row value that leaves a pin following the chat's model: no model id is empty. */
+export const PIN_FOLLOWS_CHAT = '';
+
+export interface PinModelRows {
+  /** One row per model: the value is the model's id, or `PIN_FOLLOWS_CHAT` on the chat's own model. */
+  readonly rows: readonly { readonly value: string; readonly label: string }[];
+  /** The row of the model the pin runs on. */
+  readonly selected: string;
+}
+
+/**
+ * The rows of a pin's model list, labelled with model names only. The chat's model is not listed a second time: its
+ * own row is the one that follows the chat, so picking it makes the pin follow again. A pin that chose that same
+ * model keeps its choice (the row then carries the model's id), so what is stored keeps its meaning. When the
+ * chat's model is not one of the choices, or has no known name (`unnamed` then stands for it), it gets a row of its
+ * own, first.
+ */
+export function pinModelRows({
+  choices,
+  options,
+  resolved,
+  unnamed,
+}: {
+  readonly choices: readonly PinModelChoice[];
+  readonly options: readonly ChatOption[];
+  readonly resolved: ResolvedPinModel;
+  readonly unnamed: string;
+}): PinModelRows {
+  const option = options.find((candidate) => candidate.id === 'model' || candidate.category === 'model');
+  const name = sessionModelName(options);
+  // By id first. A chat on "Default" names the model it stands for, which is then found by that name.
+  const own =
+    choices.find((choice) => choice.value === option?.currentValue) ??
+    choices.find((choice) => name !== undefined && choice.name.toLowerCase() === name.toLowerCase());
+  const chosen = resolved.kind === 'chosen' ? resolved.model.value : undefined;
+  const rows = choices.map((choice) => {
+    if (choice !== own) {
+      return { value: choice.value, label: choice.name };
+    }
+    // The "Default" entry's own name is no model's name.
+    const label = choice.value === 'default' && name !== undefined ? name : choice.name;
+    return { value: chosen === choice.value ? choice.value : PIN_FOLLOWS_CHAT, label };
+  });
+  const all = own === undefined ? [{ value: PIN_FOLLOWS_CHAT, label: name ?? unnamed }, ...rows] : rows;
+  const selected = chosen ?? PIN_FOLLOWS_CHAT;
+  assert(all.filter((row) => row.value === PIN_FOLLOWS_CHAT).length <= 1, 'pinModelRows: at most one row follows the chat');
+  assert(choices.length === 0 || all.some((row) => row.value === selected), 'pinModelRows: the effective model is listed');
+  return { rows: all, selected };
+}
+
 export interface PinMessage {
   /** The plain fallback the transcript keeps as the message's text: what Copy, export and the chat's title read. */
   readonly text: string;
   readonly attachments: readonly PromptAttachment[];
   readonly brief: PinBrief;
+  /** Each pin's chips and words, for the check a send runs on mentions. */
+  readonly drafts: readonly ComposerSegments[];
+  /** The files, skills and instructions the pins mention, each after a line naming its pin; empty when there are none. */
+  readonly mentions: ComposerSegments;
 }
 
 /**
@@ -418,6 +712,7 @@ export function pinMessage(
   mode: PinSendMode,
   imageData: (id: PinImageId) => string | undefined,
   summary: (pins: readonly CommentPin[]) => string,
+  modelOf: (pin: CommentPin) => PinModelChoice | undefined = () => undefined,
 ): PinMessage {
   assert(pins.length >= 1, 'pinMessage: a message has a pin');
   assert(mode === 'subagents' || pins.length === 1, 'pinMessage: a single send carries one pin');
@@ -440,16 +735,30 @@ export function pinMessage(
         });
       }
     }
-    entries.push(briefEntry(pin, indexes));
+    const model = modelOf(pin);
+    entries.push({ ...briefEntry(pin, indexes), ...(model === undefined ? {} : { model: model.value, modelName: model.name }) });
   }
   assert(entries.length === pins.length, 'pinMessage: one entry per pin');
-  return { text: summary(pins), attachments, brief: { mode, pins: entries } };
+  const mentions = pinExpandedMentions(pins, AI_LIMITS.mentionsMax);
+  return {
+    text: summary(pins),
+    attachments,
+    brief: { mode, pins: entries },
+    // What the chat checks against the project before any of it is sent.
+    drafts: pins.flatMap((pin) => (pin.segments === undefined ? [] : [pin.segments])),
+    mentions: mentions.flatMap((mention, at) => {
+      const number = pins[mention.pinIndex]?.number;
+      assert(number !== undefined, 'pinMessage: a mention belongs to a pin');
+      const lead = mentions[at - 1]?.pinIndex === mention.pinIndex ? ' ' : `${at === 0 ? '' : '\n'}Pin ${number} mentions: `;
+      return [{ kind: 'text' as const, text: lead }, mention.segment];
+    }),
+  };
 }
 
 function briefEntry(pin: CommentPin, images: readonly number[]): PinBriefEntry {
   return {
     number: pin.number,
-    comment: pin.comment,
+    ...wordsOf(pin),
     pageLabel: pin.place.pageLabel,
     page: pin.place.page,
     elementLabel: pin.place.elementLabel,
@@ -461,6 +770,34 @@ function briefEntry(pin: CommentPin, images: readonly number[]): PinBriefEntry {
     breakpointPx: pin.place.breakpointPx,
     images,
   };
+}
+
+/**
+ * The chips of `pins` that the host expands into context of its own (a file, a skill, built-in instructions), each
+ * once, at most `max` (a message's bound on mentions). Every other chip is already in its pin's plain text as the
+ * reference the chat's composer sends; so is one past the bound, whose path or name the agent can still follow.
+ */
+export function pinExpandedMentions(
+  pins: readonly PinWords[],
+  max: number,
+): readonly { readonly pinIndex: number; readonly segment: ComposerSegments[number] }[] {
+  const seen = new Set<string>();
+  const found: { readonly pinIndex: number; readonly segment: ComposerSegments[number] }[] = [];
+  pins.forEach((pin, pinIndex) => {
+    for (const segment of pin.segments ?? []) {
+      if (segment.kind !== 'chip' || !isHostChip(segment.chip)) {
+        continue;
+      }
+      const chip = segment.chip;
+      const key = chip.kind === 'builtin' ? `builtin:${chip.id}` : `${chip.kind}:${'path' in chip ? chip.path : ''}`;
+      if (!seen.has(key) && found.length < max) {
+        seen.add(key);
+        found.push({ pinIndex, segment });
+      }
+    }
+  });
+  assert(found.length <= max, 'pinExpandedMentions: bounded');
+  return found;
 }
 
 /** The first line of a comment, cut for a list row or a message's plain text. */
@@ -565,16 +902,20 @@ export function cropRect(input: {
   }
   const across = inside(wide, clip.x, clip.width);
   const down = inside(tall, clip.y, clip.height);
-  const x = Math.max(clip.x, Math.floor(across.start));
-  const y = Math.max(clip.y, Math.floor(down.start));
-  const right = Math.min(clip.x + clip.width, Math.ceil(across.start + across.size));
-  const bottom = Math.min(clip.y + clip.height, Math.ceil(down.start + down.size));
+  // The screenshot takes whole pixels, and the canvas's box often is not on them (a fixed width centred in the pane
+  // starts on half a pixel). So the crop is cut to the whole pixels inside the canvas: cut to the box itself, it kept
+  // the fraction, the request was refused, and the pin silently had no picture.
+  const x = Math.max(Math.ceil(clip.x), Math.floor(across.start));
+  const y = Math.max(Math.ceil(clip.y), Math.floor(down.start));
+  const right = Math.min(Math.floor(clip.x + clip.width), Math.ceil(across.start + across.size));
+  const bottom = Math.min(Math.floor(clip.y + clip.height), Math.ceil(down.start + down.size));
   if (right - x < 1) {
     return undefined;
   }
   if (bottom - y < 1) {
     return undefined;
   }
+  assert([x, y, right, bottom].every(Number.isSafeInteger), 'cropRect: a crop is whole pixels');
   return { x, y, width: right - x, height: bottom - y };
 }
 

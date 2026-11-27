@@ -3,6 +3,7 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/workspace';
 
 export const messages = {
+  'workspace.code.addToChat': 'Tambahkan ke chat',
   'workspace.code.close': 'Tutup (suntingan disimpan langsung)',
   'workspace.code.title': 'Kode',
   'workspace.files.cancel': 'Batal',

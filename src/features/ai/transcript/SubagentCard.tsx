@@ -22,7 +22,7 @@ import { stepsHeadline } from './agentSteps';
 import { isWorking, resultSummary, type SubagentUnit } from '../subagents';
 import { groupSteps } from './agentSteps';
 import { PayloadDetails } from './PayloadDetails';
-import { agentModelLabel, displayName, followUpWord, statusLabel, statusLine, SubagentDot, SubagentTime } from './SubagentStrip';
+import { agentModelLabel, agentTooltip, displayName, followUpWord, statusLabel, statusLine, statusTip, SubagentDot, SubagentTime } from './SubagentStrip';
 import { StepList } from './StepGroups';
 import { looksLikeJson } from './toolWords';
 import { useOpenState } from './transcriptUi';
@@ -78,7 +78,7 @@ export const SubagentCard = memo(function SubagentCard({ unit, chatId, projectPa
     <div ref={element} className={`ai-subagent ai-subagent-${agent.status.kind}`} data-subagent={agent.call}>
       <button
         className="ai-subagent-head"
-        title={[name, agent.role, model].filter((part) => part !== undefined && part !== '').join(' · ')}
+        title={agentTooltip([name, agent.role, model, statusTip(agent.status, translate)])}
         aria-expanded={open}
         aria-controls={open ? bodyId : undefined}
         onClick={() => change({ open: !open })}

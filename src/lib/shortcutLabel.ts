@@ -42,3 +42,20 @@ export function ariaKeyShortcuts(display: string): string {
     .filter((word) => word.length > 0);
   return [...parts, ...tail].join('+');
 }
+
+// "Add to chat": ⌘L on a Mac, Ctrl+L elsewhere. Nothing else in the app takes it (the application menu has no L,
+// and the code editor's line select is Ctrl+L on a Mac and Alt+L elsewhere, both left alone here).
+
+/** The parts of a key event the shortcut is read from. */
+export interface AddToChatKeyEvent {
+  readonly key: string;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+export function isAddToChatKey(event: AddToChatKeyEvent, platform: NodeJS.Platform): boolean {
+  const primary = platform === 'darwin' ? event.metaKey : event.ctrlKey;
+  return primary && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'l';
+}

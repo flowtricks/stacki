@@ -43,13 +43,17 @@ export function AccountMenu({
         onSelect: () => undefined,
       });
     }
-    entries.push({
-      kind: 'item',
-      id: 'sign-out',
-      label: translate('ai.account.signOut'),
-      icon: <LockIcon size={14} />,
-      onSelect: () => void runSetup(agent, { kind: 'signOut' }),
-    });
+    // Claude's key, token or cloud sign-in comes from the computer's settings: signing out would only remove the
+    // saved account sign-in, which is not the one in use. Codex stores each of its own, so it can sign out of all.
+    if (agent === 'codex' || account.source === 'account') {
+      entries.push({
+        kind: 'item',
+        id: 'sign-out',
+        label: translate('ai.account.signOut'),
+        icon: <LockIcon size={14} />,
+        onSelect: () => void runSetup(agent, { kind: 'signOut' }),
+      });
+    }
   }
   const title = account === undefined ? agentLabel(agent) : `${agentLabel(agent)} · ${accountLabel(agent, account, translate)}`;
   return (

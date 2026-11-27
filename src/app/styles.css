@@ -3001,6 +3001,23 @@ html[data-platform='win32'] .titlebar {
   font-family: var(--mono);
   font-size: 10px;
 }
+/* "Add to chat", beside the lines it adds: a small quiet button that keeps its size as the path gives way. */
+.code-panel-add {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-inline-start: 4px;
+  padding: 0;
+}
+/* The point the editor's right-click menu opens from. */
+.code-panel-menu-anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+}
 .code-panel-editor,
 .code-panel-editor .cm-host,
 .code-panel-editor .cm-editor {

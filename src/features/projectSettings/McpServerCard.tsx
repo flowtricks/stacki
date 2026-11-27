@@ -6,7 +6,7 @@
 // not a secret and is always shown.
 import { ErrorToast } from '../../ui/ErrorToast';
 import InfoHint from '../../ui/InfoHint';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { McpCodexState, McpServerItem } from '../../../shared/properties/mcp';
 import type { McpTransport } from '../../../shared/properties/mcpConfig';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -51,6 +51,7 @@ export default function McpServerCard({
   onRemove,
   onToggleCodex,
   onOpenJson,
+  signIns,
 }: {
   readonly item: McpServerItem;
   readonly envNames: ReadonlySet<string> | undefined;
@@ -67,6 +68,8 @@ export default function McpServerCard({
   readonly onRemove: () => void;
   readonly onToggleCodex: () => void;
   readonly onOpenJson: () => void;
+  /** This server's sign-in rows, one per agent that has one (McpSignInControl.tsx). */
+  readonly signIns: ReactNode;
 }) {
   const translate = useTranslate();
   const status = serverStatus(item, envNames);
@@ -108,6 +111,7 @@ export default function McpServerCard({
           <CodexToggle chip={chip} name={item.name} busy={busy} onToggle={onToggleCodex} />
         </div>
       )}
+      {signIns}
       {edit !== undefined && <ServerForm edit={edit} busy={busy} onChange={onEditChange} onSave={onEditSave} onCancel={onEditCancel} />}
     </div>
   );

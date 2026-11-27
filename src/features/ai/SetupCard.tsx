@@ -10,8 +10,9 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ClaudeLogo, CodexLogo } from '../../ui/agentLogos';
 import { runSetup } from './aiStore';
+import { signInSourceText } from './signInSource';
 
-export function SetupCard({ setup }: { readonly setup: Exclude<SetupState, { readonly step: 'ready' | 'signed-out' | 'signing-in' }> }) {
+export function SetupCard({ setup }: { readonly setup: Exclude<SetupState, { readonly step: 'ready' | 'signed-out' | 'unchecked' | 'signing-in' }> }) {
   const { agent } = setup;
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
@@ -74,6 +75,9 @@ function failedTitle(during: 'install' | 'sign-in' | 'sign-out', label: string, 
 /** "Timothy Ricks · Max"; without a name, "Claude Max"; never the email. */
 export function accountLabel(agent: AgentId, account: SetupAccount, translate: Translator): string {
   const product = agent === 'claude' ? 'Claude' : 'ChatGPT';
+  if (account.source !== 'account') {
+    return signInSourceText(account.source, agentLabel(agent), translate).label;
+  }
   if (account.name !== undefined) {
     return account.plan === undefined ? account.name : `${account.name} · ${account.plan}`;
   }

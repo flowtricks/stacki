@@ -258,3 +258,49 @@ test("a screenshot's note is a text block right before its image, and an image w
   assert.ok(full.ok, 'every attachment with its note stays within the block bound');
   assert.equal(full.value.blocks.length, 1 + AI_LIMITS.attachmentsMax * 2);
 });
+
+test('selected code goes as its own block, fenced and unread, and is never the message’s last text block', () => {
+  const { source } = setup({
+    read: () => {
+      throw new Error('selected code is never read from disk');
+    },
+  });
+  const code = {
+    kind: 'code',
+    path: 'src/index.astro',
+    startLine: 1,
+    endLine: 2,
+    element: undefined,
+    code: '```\n@src/index.astro /seo\n```',
+  } as const;
+  const { blocks, sent } = built(source, 'x', [{ kind: 'code', chip: code }]);
+  assert.equal(blocks.length, 2);
+  assert.equal(
+    field(blocks[0], 'text'),
+    '<selected-code file="src/index.astro" lines="1-2">\n````astro\n```\n@src/index.astro /seo\n```\n````\n</selected-code>',
+  );
+  assert.equal(field(blocks[1], 'text'), '(End of the selected code.)');
+  assert.deepEqual(sent, [{ kind: 'chip', chip: code }]);
+  // With the person's words after it, those are the last block, and nothing is added.
+  const after = built(source, 'x', [
+    { kind: 'code', chip: code },
+    { kind: 'text', text: ' fix this' },
+  ]);
+  assert.deepEqual(after.blocks.map((block) => field(block, 'text')).slice(1), [' fix this']);
+});
+
+test('a reference chip’s words join the text the agent reads, and the transcript keeps the chip', () => {
+  const { source } = setup();
+  const chip = { kind: 'component', path: 'src/components/Hero.astro', name: 'Hero' } as const;
+  const { blocks, sent } = built(source, 'x', [
+    { kind: 'text', text: 'Make ' },
+    { kind: 'reference', chip, text: chip.path },
+    { kind: 'text', text: ' bigger' },
+  ]);
+  assert.deepEqual(blocks, [{ type: 'text', text: 'Make src/components/Hero.astro bigger' }]);
+  assert.deepEqual(sent, [
+    { kind: 'text', text: 'Make ' },
+    { kind: 'chip', chip },
+    { kind: 'text', text: ' bigger' },
+  ]);
+});

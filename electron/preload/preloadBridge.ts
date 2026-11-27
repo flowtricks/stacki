@@ -459,6 +459,12 @@ function aiBridge() {
     aiRemember: invoke('ai:remember'),
     aiReview: invoke('ai:review'),
     aiSetup: invoke('ai:setup'),
+    aiMcpAuth: invoke('ai:mcpAuth'),
+    onAiMcpAuth: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown): void => callback(data);
+      ipcRenderer.on('ai:mcpAuthState', listener);
+      return () => ipcRenderer.removeListener('ai:mcpAuthState', listener);
+    },
     onAiSetup: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('ai:setupState', listener);

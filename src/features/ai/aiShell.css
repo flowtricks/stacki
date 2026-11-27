@@ -240,6 +240,31 @@
   gap: 7px;
   padding-block-start: 2px;
 }
+/* The billing warning (BillingWarning.tsx): one filled row, the label and the sign-in, wrapping when narrow. */
+.ai-billing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--orange), var(--bg-panel) 84%);
+  color: var(--text);
+  font-size: 12px;
+}
+.ai-billing-label {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+  line-height: 16px;
+}
+.ai-billing-label > svg {
+  flex: none;
+  color: var(--orange);
+}
 /* The sign-in card (SignInCard.tsx): one filled surface for every sign-in state. */
 .ai-signin {
   display: flex;

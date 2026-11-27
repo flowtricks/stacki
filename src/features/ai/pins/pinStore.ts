@@ -31,12 +31,16 @@ import {
   type PinImageRef,
   type PinImageType,
   type PinPlace,
+  type PinModel,
 } from '../../../../shared/properties/ai/commentPins';
-import type { ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
+import type { ChatId, ChatOption, TurnId } from '../../../../shared/properties/ai/chatModel';
+import type { AgentId } from '../../../../shared/properties/ai/agentIds';
+import { usableSettings } from '../../../../shared/properties/ai/rememberedSettings';
 import type { Translator } from '../../../lib/i18n/localeContext';
 import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { aiPinsRead, aiPinsWrite, aiScreenshot } from '../aiBridge';
-import { aiState, loadChatView, newChat, openChat, preferredAgent, sendPinMessage, subscribeAiState } from '../aiStore';
+import type { ComposerSegments } from '../../../../shared/properties/ai/mentions';
+import { aiState, loadChatView, newChat, openChat, preferredAgent, sendPinMessage, setChatOption, subscribeAiState } from '../aiStore';
 import {
   addPin,
   addPinImages,
@@ -44,6 +48,7 @@ import {
   closeOutcome,
   commentLine,
   discardPinEdit,
+  hasContentToLose,
   hasPersonContent,
   hasUnsavedChanges,
   movePinAnchor,
@@ -52,14 +57,19 @@ import {
   workingCopy,
   pinFinished,
   pinMessage,
+  pinWordsOf,
+  wordsOf,
+  type PinMessage,
   pinProgress,
   pinsToSend,
+  resolvePinModel,
   removePin,
   reopenPin,
   sendRefusal,
   turnEnd,
   unusedImages,
   type ImageOutcome,
+  type PinModelChoice,
   type PinProgress,
   type SendRefusal,
 } from './pinModel';
@@ -72,6 +82,11 @@ export interface SequentialRun {
   readonly chat: ChatId;
   readonly pins: readonly PinId[];
   readonly held: 'paused' | 'running';
+  /**
+   * The chat's own model, put back after pins that chose another one; undefined when no pin of the run chose a
+   * model (the chat's setting is never touched then). `applied` is the one the run last set.
+   */
+  readonly models?: { readonly option: string; readonly base: string; readonly applied: string };
 }
 
 export interface PinState {
@@ -260,7 +275,8 @@ export function openPin(id: PinId, translate?: Translator): void {
 
 /**
  * Closes the open box. `discard` (its close button, Escape): a pin never saved goes, a saved pin loses only its
- * unsaved changes, and when words or images the person made go with it an Undo toast brings them back. `keep`
+ * unsaved changes. When words or images the person made go with it, they come back: a removed pin by the app's Undo
+ * (⌘Z), a saved pin's unsaved changes by the toast's Undo. `keep`
  * (a press elsewhere, another pin, leaving the mode or the page): content is saved, an empty box is let go.
  */
 export function closePinBox(how: 'keep' | 'discard', translate?: Translator): void {
@@ -275,6 +291,7 @@ export function closePinBox(how: 'keep' | 'discard', translate?: Translator): vo
   const outcome = closeOutcome(pin, how);
   const lost = (outcome === 'remove' || outcome === 'discard') && pin.edit !== undefined && hasPersonContent(pin.edit) && hasUnsavedChanges(pin);
   const at = Date.now();
+  const removal = lost && outcome === 'remove' && translate !== undefined ? pinSnapshot(pin) : undefined;
   update((current) => {
     switch (outcome) {
       case 'unchanged':
@@ -291,8 +308,10 @@ export function closePinBox(how: 'keep' | 'discard', translate?: Translator): vo
       }
     }
   });
-  if (lost && translate !== undefined) {
-    offerUndo(pin, translate(outcome === 'remove' ? 'ai.pins.removedToast' : 'ai.pins.discardedToast', { number: pin.number }), translate);
+  if (removal !== undefined && translate !== undefined) {
+    recordRemoval(removal, translate);
+  } else if (lost && translate !== undefined) {
+    offerUndo(pin, translate('ai.pins.discardedToast', { number: pin.number }), translate);
   }
 }
 
@@ -307,37 +326,101 @@ export function savePinBox(): void {
   update((current) => ({ ...current, open: undefined, board: changePin(current.board, pin.id, at, (old) => savePinEdit(old, at)) }));
 }
 
-// A toast that puts a pin back as it was before it was closed, moved or removed, with the bytes of its images.
-function offerUndo(before: CommentPin, message: string, translate: Translator): void {
-  const held = new Map<PinImageId, string>();
-  for (const image of [...before.images, ...(before.edit?.images ?? [])]) {
-    const data = state.images.get(image.id);
-    if (data !== undefined) {
-      held.set(image.id, data);
-    }
-  }
-  reportActionToast(message, 'info', [{ label: translate('ai.pins.undo'), run: () => restorePin(before, held, translate) }]);
+/** A pin as it was, with the bytes of its images: what an Undo needs to put it back. */
+interface PinSnapshot {
+  readonly pin: CommentPin;
+  readonly images: ReadonlyMap<PinImageId, string>;
 }
 
-function restorePin(before: CommentPin, held: ReadonlyMap<PinImageId, string>, translate: Translator): void {
+function pinSnapshot(pin: CommentPin): PinSnapshot {
+  const images = new Map<PinImageId, string>();
+  for (const image of [...pin.images, ...(pin.edit?.images ?? [])]) {
+    const data = state.images.get(image.id);
+    if (data !== undefined) {
+      images.set(image.id, data);
+    }
+  }
+  return { pin, images };
+}
+
+// A toast that puts a pin back as it was before it was moved, or before its unsaved changes were discarded.
+function offerUndo(before: CommentPin, message: string, translate: Translator): void {
+  const snapshot = pinSnapshot(before);
+  reportActionToast(message, 'info', [
+    {
+      label: translate('ai.pins.undo'),
+      run: () => {
+        if (restorePin(snapshot) === 'full') {
+          reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
+        }
+      },
+    },
+  ]);
+}
+
+/** A removed pin as a step of the app's Undo and Redo, so ⌘Z takes it back in order with every other step. */
+export interface PinHistoryStep {
+  readonly undo: () => Promise<void>;
+  readonly redo: () => Promise<void>;
+}
+
+/** What the shell installs to record a step on the app's history (DesktopPins.tsx), which bounds how many it keeps. */
+export type PinHistory = (step: PinHistoryStep) => void;
+
+let history: PinHistory | undefined;
+
+export function setPinHistory(next: PinHistory | undefined): void {
+  history = next;
+}
+
+// A removal the person made. A removal Stacki makes (a pin whose work finished) is not theirs to undo and is not recorded.
+function recordRemoval(removed: PinSnapshot, translate: Translator): void {
+  const projectPath = state.projectPath;
+  let snapshot = removed;
+  history?.({
+    // A step left over from another project changes nothing here: its board is not the one open.
+    undo: async () => {
+      if (state.projectPath === projectPath && restorePin(snapshot) === 'full') {
+        throw new Error(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
+      }
+    },
+    redo: async () => {
+      const present = state.projectPath === projectPath ? state.board.pins.find((pin) => pin.id === snapshot.pin.id) : undefined;
+      if (present !== undefined) {
+        snapshot = pinSnapshot(present); // As it is now, so the next Undo brings back what this Redo takes.
+        takePin(present.id);
+      }
+    },
+  });
+}
+
+// Puts a pin back as the snapshot has it: in place of what is on the board under its id, or added again.
+function restorePin(snapshot: PinSnapshot): 'restored' | 'full' {
+  const before = snapshot.pin;
   const present = state.board.pins.some((pin) => pin.id === before.id);
   const others = state.board.pins.filter((pin) => pin.id !== before.id);
   if (!present && others.length >= PIN_LIMITS.pinsMax) {
-    reportErrorToast(translate('ai.pins.full', { count: PIN_LIMITS.pinsMax }));
-    return;
+    return 'full';
   }
   // Its number again, unless a newer pin took it meanwhile.
   const number = others.some((pin) => pin.number === before.number) ? nextPinNumber({ version: 1, pins: others }) : before.number;
   update((current) => {
     const images = new Map(current.images);
-    for (const [id, data] of held) {
+    for (const [id, data] of snapshot.images) {
       images.set(id, data);
       stored.delete(id); // The save that dropped it may have removed its file: it is written again.
     }
-    const restored = { ...before, number };
+    const restored = { ...stillWaiting(before, current.run), number };
     const pins = present ? current.board.pins.map((pin) => (pin.id === before.id ? restored : pin)) : [...current.board.pins, restored];
     return { ...current, images, board: { ...current.board, pins } };
   });
+  return 'restored';
+}
+
+// A pin removed while it waited for its turn in a one-per-message run that has since ended is a draft again.
+function stillWaiting(pin: CommentPin, run: SequentialRun | undefined): CommentPin {
+  const waiting = pin.delivery.kind === 'sent' && pin.delivery.turn === undefined;
+  return waiting && run?.pins.includes(pin.id) !== true ? { ...pin, delivery: { kind: 'draft' } } : pin;
 }
 
 export function setPinListOpen(open: 'open' | 'closed'): void {
@@ -411,12 +494,17 @@ export function followPinElement(id: PinId, path: string): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (old) => ({ ...old, anchor: { ...old.anchor, path } })) }));
 }
 
-/** The box's words as typed or dictated: unsaved until Save. */
+/** The box's words as plain text: unsaved until Save. */
 export function setPinComment(id: PinId, comment: string): void {
-  const bounded = comment.slice(0, PIN_LIMITS.commentCharsMax);
+  setPinSegments(id, comment === '' ? [] : [{ kind: 'text', text: comment }]);
+}
+
+/** The box's words and chips as typed or dictated: unsaved until Save. */
+export function setPinSegments(id: PinId, segments: ComposerSegments): void {
+  const words = pinWordsOf(segments);
   update((current) => ({
     ...current,
-    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, edit: { comment: bounded, images: workingCopy(pin).images } })),
+    board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, edit: { ...words, images: workingCopy(pin).images } })),
   }));
 }
 
@@ -424,8 +512,20 @@ export function setPinIncluded(id: PinId, choice: 'include' | 'exclude'): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (pin) => ({ ...pin, included: choice === 'include' })) }));
 }
 
-/** Deletes pin `id`. The list stays open while a saved pin remains, and closes with the last. */
-export function deletePin(id: PinId): void {
+/** Deletes pin `id`, as a step the app's Undo takes back. The list stays open while a saved pin remains, and closes with the last. */
+export function deletePin(id: PinId, translate: Translator): void {
+  const pin = state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined) {
+    return;
+  }
+  const removal = pinSnapshot(pin);
+  takePin(id);
+  if (pin.savedAt !== undefined || hasContentToLose(pin)) {
+    recordRemoval(removal, translate);
+  }
+}
+
+function takePin(id: PinId): void {
   update((current) => {
     const board = removePin(current.board, id);
     return {
@@ -441,6 +541,62 @@ export function deletePin(id: PinId): void {
 /** A sent pin back to a draft, to change and send again. */
 export function reopenSentPin(id: PinId): void {
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), reopenPin), open: id }));
+}
+
+/** The model pin `id` will run on; undefined follows the chat's. Chosen at once: it is a setting of the pin, not words to save. */
+export function setPinModel(id: PinId, model: PinModel | undefined): void {
+  update((current) => ({
+    ...current,
+    board: changePin(current.board, id, Date.now(), (pin) => {
+      assert(pin.delivery.kind === 'draft', 'setPinModel: a sent pin keeps the model it was sent with');
+      const rest = withoutModel(pin);
+      return model === undefined ? rest : { ...rest, model };
+    }),
+  }));
+}
+
+// The pin with no model of its own: the key goes, as a pin that never had one is stored.
+function withoutModel(pin: CommentPin): CommentPin {
+  const rest = { ...pin };
+  delete rest.model;
+  return rest;
+}
+
+/** The agent "Send all" would go to: the open chat's, else the one a new chat starts with. */
+export function pinAgent(ai: ReturnType<typeof aiState>): AgentId {
+  return ai.chats.find((candidate) => candidate.id === ai.open)?.agent ?? preferredAgent();
+}
+
+/**
+ * The settings the panel shows for `agent` now: the open chat's own once it has them, else the agent's last report
+ * with what the person last chose, as the composer shows a chat not started yet.
+ */
+export function pinAgentOptions(ai: ReturnType<typeof aiState>, agent: AgentId, chat: ChatId | undefined = ai.open): readonly ChatOption[] {
+  const open = chat === undefined ? undefined : ai.chats.find((candidate) => candidate.id === chat);
+  const live = open?.agent === agent ? ai.views.get(open.id)?.options : undefined;
+  if (live !== undefined && live.length > 0) {
+    return live;
+  }
+  const reported = ai.agentOptions.get(agent) ?? [];
+  const remembered = new Map(usableSettings(reported, ai.remembered[agent]).map((setting) => [setting.option, setting.value]));
+  return reported.map((option) => ({ ...option, currentValue: remembered.get(option.id) ?? option.currentValue }));
+}
+
+// The model a pin is sent with, saying so once per unavailable model when its choice cannot be used.
+function modelsFor(pins: readonly CommentPin[], agent: AgentId, chat: ChatId, translate: Translator): (pin: CommentPin) => PinModelChoice | undefined {
+  const options = pinAgentOptions(aiState(), agent, chat);
+  const told = new Set<string>();
+  const chosen = new Map<PinId, PinModelChoice>();
+  for (const pin of pins) {
+    const resolved = resolvePinModel(pin, agent, options);
+    if (resolved.kind === 'chosen') {
+      chosen.set(pin.id, resolved.model);
+    } else if (resolved.kind === 'unavailable' && !told.has(resolved.name)) {
+      told.add(resolved.name);
+      reportErrorToast(translate('ai.pins.model.unavailable', { model: resolved.name }));
+    }
+  }
+  return (pin) => chosen.get(pin.id);
 }
 
 /** An image ready for a pin: its bytes and how it is named. */
@@ -505,7 +661,7 @@ export function removePinImage(id: PinId, image: PinImageId): void {
     ...current,
     board: changePin(current.board, id, Date.now(), (pin) => {
       const working = workingCopy(pin);
-      return { ...pin, edit: { comment: working.comment, images: working.images.filter((entry) => entry.id !== image) } };
+      return { ...pin, edit: { ...wordsOf(working), images: working.images.filter((entry) => entry.id !== image) } };
     }),
   }));
 }
@@ -591,12 +747,13 @@ export function sentPinOf(chat: ChatId, turn: TurnId, number: number): CommentPi
 // Send all
 // ---------------------------------------------------------------------------
 
-/** Where "Send all" stands for the chat it would go to: ready (and how), or why not. */
+/** Where "Send all" stands for the chat it would go to: nothing to send (there is no Send), ready (and how), or why not. */
 export type SendReadiness =
+  | { readonly kind: 'empty'; readonly count: 0 }
   | { readonly kind: 'ready'; readonly mode: PinSendMode; readonly count: number }
   | { readonly kind: 'blocked'; readonly reason: SendBlock; readonly count: number };
 
-export type SendBlock = SendRefusal | 'busy' | 'running' | 'not-ready';
+export type SendBlock = Exclude<SendRefusal, 'none'> | 'busy' | 'running' | 'not-ready';
 
 /** Whether "Send all" can go now: something to send, within one message's bounds, the chat idle and its agent ready. */
 export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): SendReadiness {
@@ -606,6 +763,9 @@ export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): S
   const mode = pinSendMode(agent);
   const count = chosen.length;
   const refusal = sendRefusal(chosen, mode);
+  if (refusal === 'none') {
+    return { kind: 'empty', count: 0 };
+  }
   if (refusal !== undefined) {
     return { kind: 'blocked', reason: refusal, count };
   }
@@ -637,9 +797,11 @@ export async function sendAllPins(translate: Translator): Promise<boolean> {
   }
   const pins = pinsToSend(state.board);
   const summary = (sent: readonly CommentPin[]): string => pinSummaryText(sent, translate);
+  const agent = aiState().chats.find((candidate) => candidate.id === chat)?.agent ?? preferredAgent();
   if (readiness.mode === 'subagents') {
-    const message = pinMessage(pins, 'subagents', (id) => state.images.get(id), summary);
-    const turn = await sendPinMessage(chat, { text: message.text, attachments: message.attachments, pins: message.brief });
+    const modelOf = modelsFor(pins, agent, chat, translate);
+    const message = pinMessage(pins, 'subagents', (id) => state.images.get(id), summary, modelOf);
+    const turn = await sendPinMessage(chat, pinPrompt(message));
     if (turn === undefined) {
       return false;
     }
@@ -648,7 +810,8 @@ export async function sendAllPins(translate: Translator): Promise<boolean> {
     return true;
   }
   markSent(pins, { chat, turn: undefined, mode: 'single' });
-  update((current) => ({ ...current, run: { chat, pins: pins.map((pin) => pin.id), held: 'running' } }));
+  const models = runModels(pins, agent, chat);
+  update((current) => ({ ...current, run: { chat, pins: pins.map((pin) => pin.id), held: 'running', ...(models === undefined ? {} : { models }) } }));
   void openChat(chat);
   return sendNextInRun(translate);
 }
@@ -669,6 +832,7 @@ export function cancelRun(): void {
   if (run === undefined) {
     return;
   }
+  void restoreRunModel(run);
   const waiting = new Set(run.pins);
   update((current) => ({
     ...current,
@@ -680,6 +844,10 @@ export function cancelRun(): void {
       ),
     },
   }));
+}
+
+function pinPrompt({ brief, ...message }: PinMessage): Parameters<typeof sendPinMessage>[1] {
+  return { ...message, pins: brief };
 }
 
 // The plain text of a message of pins: what Copy, an export and the chat's title read. Each pin's own words, numbered.
@@ -737,18 +905,22 @@ async function sendNextInRunNow(translate: Translator): Promise<boolean> {
     .map((id) => state.board.pins.find((pin) => pin.id === id))
     .find((pin) => pin?.delivery.kind === 'sent' && pin.delivery.turn === undefined);
   if (next === undefined) {
+    await restoreRunModel(run);
     update((current) => ({ ...current, run: undefined }));
     return true;
   }
+  const agent = aiState().chats.find((candidate) => candidate.id === run.chat)?.agent ?? preferredAgent();
+  const model = await applyRunModel(next, agent, translate);
   const message = pinMessage(
     [next],
     'single',
     (id) => state.images.get(id),
     (sent) => pinSummaryText(sent, translate),
+    () => model,
   );
-  const turn = await sendPinMessage(run.chat, { text: message.text, attachments: message.attachments, pins: message.brief });
+  const turn = await sendPinMessage(run.chat, pinPrompt(message));
   if (turn === undefined) {
-    update((current) => ({ ...current, run: current.run === undefined ? undefined : { ...current.run, held: 'paused' } }));
+    holdRun();
     return false;
   }
   update((current) => ({
@@ -756,6 +928,59 @@ async function sendNextInRunNow(translate: Translator): Promise<boolean> {
     board: changePin(current.board, next.id, Date.now(), (pin) => (pin.delivery.kind === 'sent' ? { ...pin, delivery: { ...pin.delivery, turn } } : pin)),
   }));
   return true;
+}
+
+// A run's note of the chat's model, kept only when a pin of it chose one.
+function runModels(pins: readonly CommentPin[], agent: AgentId, chat: ChatId): SequentialRun['models'] {
+  const option = pinAgentOptions(aiState(), agent, chat).find((candidate) => candidate.id === 'model' || candidate.category === 'model');
+  if (option === undefined || !pins.some((pin) => pin.model !== undefined)) {
+    return undefined;
+  }
+  return { option: option.id, base: option.currentValue, applied: option.currentValue };
+}
+
+// Switches the chat to the model `pin` runs on (its own choice, else the chat's) before its message goes. The
+// model the message will really run on when the pin chose one, so the sent card never names another.
+async function applyRunModel(pin: CommentPin, agent: AgentId, translate: Translator): Promise<PinModelChoice | undefined> {
+  const run = state.run;
+  if (run === undefined) {
+    return undefined;
+  }
+  const chosen = modelsFor([pin], agent, run.chat, translate)(pin);
+  const models = run.models;
+  if (models === undefined) {
+    return undefined;
+  }
+  const wanted = chosen?.value ?? models.base;
+  if (wanted !== models.applied) {
+    if (!(await setChatOption(run.chat, models.option, wanted))) {
+      return undefined; // The refusal was shown; the pin runs on the model the chat still has.
+    }
+    update((current) => ({ ...current, run: current.run?.models === undefined ? current.run : { ...current.run, models: { ...models, applied: wanted } } }));
+  }
+  return chosen;
+}
+
+// Puts the chat's own model back once a run ends or is held.
+async function restoreRunModel(run: SequentialRun): Promise<void> {
+  const models = state.run?.models ?? run.models;
+  if (models === undefined || models.applied === models.base) {
+    return;
+  }
+  update((current) => ({
+    ...current,
+    run: current.run?.models === undefined ? current.run : { ...current.run, models: { ...models, applied: models.base } },
+  }));
+  await setChatOption(run.chat, models.option, models.base);
+}
+
+function holdRun(): void {
+  const run = state.run;
+  if (run === undefined) {
+    return;
+  }
+  update((current) => ({ ...current, run: current.run === undefined ? undefined : { ...current.run, held: 'paused' } }));
+  void restoreRunModel(run);
 }
 
 // Every change of the chats: a run moves on, then pins whose work finished well are deleted.
@@ -821,6 +1046,11 @@ function followRun(): void {
   if (run === undefined || run.held === 'paused') {
     return;
   }
+  // A reply waiting to go (an answer to a pin's question) goes first; the run moves on after it.
+  const queued = aiState().queue.get(run.chat)?.length ?? 0;
+  if (queued > 0 && !aiState().queuePaused.has(run.chat)) {
+    return;
+  }
   const view = aiState().views.get(run.chat);
   const sentTurns = run.pins.flatMap((id) => {
     const pin = state.board.pins.find((candidate) => candidate.id === id);
@@ -835,7 +1065,7 @@ function followRun(): void {
     return;
   }
   if (ended !== 'end_turn') {
-    update((current) => ({ ...current, run: current.run === undefined ? undefined : { ...current.run, held: 'paused' } }));
+    holdRun();
     return;
   }
   const translate = runTranslate;

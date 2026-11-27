@@ -74,7 +74,10 @@ button.ai-pin-marker.is-unsaved {
 .ai-pin-marker.is-attention {
   background: var(--orange);
 }
-.ai-pin-marker.is-sent {
+.ai-pin-marker.is-sent,
+.ai-pin-marker.is-unfinished,
+.ai-pin-marker.is-held,
+.ai-pin-marker.is-unreported {
   background: var(--bg-active);
   color: var(--text);
 }
@@ -85,7 +88,10 @@ button.ai-pin-marker.is-attention:hover:not(:disabled) {
   background: color-mix(in srgb, var(--orange), #000 18%);
 }
 button.ai-pin-marker.is-queued:hover:not(:disabled),
-button.ai-pin-marker.is-sent:hover:not(:disabled) {
+button.ai-pin-marker.is-sent:hover:not(:disabled),
+button.ai-pin-marker.is-unfinished:hover:not(:disabled),
+button.ai-pin-marker.is-held:hover:not(:disabled),
+button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   background: var(--bg-pressed);
   color: var(--text);
 }
@@ -133,10 +139,18 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   inset-inline: 12px;
   z-index: 20;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   pointer-events: none;
   container-type: inline-size;
   container-name: pin-bar;
+}
+/* The billing warning under the bar: over the canvas, so it takes the pointer and casts the bar's shadow. */
+.ai-pin-bar-slot > .ai-billing {
+  max-width: 100%;
+  pointer-events: auto;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 .ai-pin-bar {
   display: flex;
@@ -144,7 +158,10 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   gap: 2px;
   height: 36px;
   box-sizing: border-box;
-  padding: 4px;
+  /* A faded edge keeps the pill apart from a dark page behind it: the owner's one exception to fills-not-borders, for
+     this pill only. The edge and the padding add up to 4px, so the pill and everything in it keep their places. */
+  border: 1px solid var(--border-strong);
+  padding: 3px;
   border-radius: 10px;
   background: var(--bg-panel);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
@@ -323,7 +340,10 @@ button.ai-pin-marker.is-sent:hover:not(:disabled) {
   background: var(--orange);
 }
 .ai-pin-number.is-queued,
-.ai-pin-number.is-sent {
+.ai-pin-number.is-sent,
+.ai-pin-number.is-unfinished,
+.ai-pin-number.is-held,
+.ai-pin-number.is-unreported {
   background: var(--bg-active);
   color: var(--text);
 }
@@ -546,7 +566,78 @@ button.ai-pins-message-open:hover:not(:disabled) .ai-pins-message-comment {
 /* How the pin stands sits under its words, so a long status never pushes the row past the bubble. */
 .ai-pins-message-foot {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   margin-top: 2px;
+}
+.ai-pins-message-model {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* A pin's question, right under its badge: the words, each choice, and Reply. */
+.ai-pin-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.ai-pin-ask-words {
+  overflow-wrap: anywhere;
+}
+.ai-pin-ask-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ai-pin-ask-choice,
+.ai-pin-ask-reply {
+  max-width: 100%;
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 7px;
+  font: inherit;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.ai-pin-ask-choice {
+  background: var(--bg-active);
+  color: var(--text);
+}
+button.ai-pin-ask-choice:hover:not(:disabled) {
+  background: var(--bg-pressed);
+}
+.ai-pin-ask-choice.is-reply {
+  background: transparent;
+  color: var(--text-dim);
+}
+button.ai-pin-ask-choice:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The pin's model: quiet, beside the box's tools, as wide as the model's name. Only a name longer than the row's free
+   room is cut short. */
+.ai-pin-tools .ai-pin-model {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  gap: 4px;
+  padding-inline: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.ai-pin-tools .ai-pin-model:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 .ai-pins-message-pin,
 .ai-pins-message-list {
@@ -575,6 +666,15 @@ button.ai-pins-message-open:hover:not(:disabled) {
   background: transparent;
 }
 
+.ai-pin-progress.is-queued,
+.ai-pin-progress.is-held,
+.ai-pin-progress.is-unreported {
+  background: var(--bg-input);
+}
+.ai-pin-progress.is-unfinished {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  color: var(--red);
+}
 .ai-pin-progress.is-unsaved {
   background: var(--accent-soft);
   color: var(--accent);

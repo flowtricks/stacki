@@ -51,7 +51,8 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
 import { addSelectionToDraft } from '../mentions/selectionMention';
-import { VoiceLine } from './VoiceLine';
+import { composerCaretMemory, registerComposerTarget } from '../composerTargets';
+import { DictationLine } from './VoiceLine';
 import { MicButton } from './MicButton';
 import { useComposerVoice } from './useComposerVoice';
 import { QueuedPrompts } from './QueuedPrompts';
@@ -92,6 +93,9 @@ export function ChatComposer({
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const input = useRef<ComposerHandle>(null);
+  // "Add to chat" puts its chips in at this box's caret while it is open, and finds the caret again after it closed.
+  useEffect(() => registerComposerTarget(chat, (change) => input.current?.editBeforeCaret(change)), [chat]);
+  const caretMemory = useMemo(() => composerCaretMemory(chat), [chat]);
   // The composer takes the keyboard when a chat opens, new or not, so the person can just type.
   useEffect(() => {
     input.current?.focus();
@@ -310,6 +314,7 @@ export function ChatComposer({
               runBuiltin(name);
               return true;
             }}
+            caretMemory={caretMemory}
             segments={draft.segments}
             placeholder={placeholder}
             inputRef={input}
@@ -359,13 +364,7 @@ export function ChatComposer({
         </div>
         {dictating && (
           <div className="ai-compose-footer-voice">
-            <VoiceLine
-              feed={voice.feed}
-              starting={voice.starting || voice.transcribing}
-              latch={voice.state.kind === 'idle' || voice.state.kind === 'stopping' ? 'pending' : voice.state.latch}
-              interim="" // The words being spoken are drawn in the box itself (dictationDraft.ts); the line keeps its hint.
-              commands={voice.commands}
-            />
+            <DictationLine voice={voice} />
           </div>
         )}
       </div>

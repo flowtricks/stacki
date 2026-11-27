@@ -38,14 +38,15 @@ function roundTrip(value: unknown): unknown {
   return parsed;
 }
 
-/** The one text a draft of component mentions becomes, checked to be the only part and equal to the plain text. */
+/** The words the agent reads for a draft of component mentions: text and reference parts joined, equal to the plain text. */
 function sent(segments: ComposerSegments): string {
   const parts = promptPartsOf(segments, noBuiltin);
-  assert.equal(parts.length, 1, 'component mentions add no part of their own: the draft is one text part');
-  const [part] = parts;
-  assert.ok(part !== undefined && part.kind === 'text');
-  assert.equal(plainTextOf(segments), part.text, 'the plain-text fallback says exactly the same');
-  return part.text;
+  const words = parts.map((part) => {
+    assert.ok(part.kind === 'text' || part.kind === 'reference', 'a component mention is words, never an expanded part');
+    return part.text;
+  });
+  assert.equal(plainTextOf(segments), words.join(''), 'the plain-text fallback says exactly the same');
+  return words.join('');
 }
 
 test('the exact serialization: a path, then bare members, and nothing else', () => {

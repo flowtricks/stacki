@@ -22,7 +22,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatId, SentPart, TurnId, TurnStop } from '../../../../shared/properties/ai/chatModel';
 import { ArrowDownIcon } from '../../../ui/Icons';
 import { currentDesktopPlatform } from '../../../lib/shortcutLabel';
-import { answerPermission, draftWithText, newChat, preferredAgent, sendPrompt, setDraft, stopChat } from '../aiStore';
+import { answerPermission, newChat, preferredAgent, sendPrompt, resendMessage, setDraft, stopChat } from '../aiStore';
 import { chatShortcut } from '../chatShortcuts';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from '../chatReducer';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
@@ -43,6 +43,8 @@ import { answerableMessageId, lastUserMessageId } from './messageModel';
 import { PermissionCard, PermissionPin } from './PermissionCard';
 import { relativePath } from './paths';
 import { sentPartsView } from './SentParts';
+import { copyWithChips } from './chipCopy';
+import { segmentsOfSent, sentReadableText, sentTypedText } from '../../../../shared/properties/ai/sentMessage';
 import { SubagentCard } from './SubagentCard';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
@@ -205,10 +207,14 @@ export function Transcript({
   const canRetry = view.running === undefined && lastEnd?.kind === 'turn-end' && lastEnd.stop !== 'end_turn' && view.lastPrompt !== undefined;
   // An error turn carries its Retry inside its row; a sign-in turn's belongs to the sign-in card; the rest keep the plain button.
   const standaloneRetry = canRetry && lastEnd?.kind === 'turn-end' && lastEnd.stop !== 'error' && (lastEnd.stop !== 'sign-in' || !retryHeldByCard);
-  const retryLast = (): void => void sendPrompt(chatId, view.lastPrompt?.text ?? '');
+  const retryLast = (): void => {
+    if (view.lastPrompt !== undefined) {
+      void resendMessage(chatId, view.lastPrompt);
+    }
+  };
   const lastUser = lastUserMessageId(view.items);
   // The agent's last reply may be asked for again, once the turn ended normally (a failed one has its own Retry).
-  const retryReplyText = view.running === undefined && lastEnd?.kind === 'turn-end' && lastEnd.stop === 'end_turn' ? view.lastPrompt?.text : undefined;
+  const retryReplyPrompt = view.running === undefined && lastEnd?.kind === 'turn-end' && lastEnd.stop === 'end_turn' ? view.lastPrompt : undefined;
   const answerable = answerableMessageId(view.items, { running: view.running !== undefined });
   const toolsByCall = useMemo(() => toolItemsByCall(view.items), [view.items]);
   const waiting = useMemo(() => waitingPermissions(view), [view]);
@@ -224,6 +230,7 @@ export function Transcript({
     <div
       className="ai-transcript"
       ref={scroll}
+      onCopy={copyWithChips}
       role="log"
       aria-label={translate('ai.transcript.label')}
       onScroll={(event) => {
@@ -312,7 +319,7 @@ export function Transcript({
               onRetry={canRetry && row.index === lastEndIndex ? retryLast : undefined}
               resendable={view.running === undefined && row.item.id === lastUser}
               answerable={row.item.id === answerable}
-              retryText={row.item.id === answerable ? retryReplyText : undefined}
+              retryPrompt={row.item.id === answerable ? retryReplyPrompt : undefined}
               streaming={view.running !== undefined && row === rows[rows.length - 1] && row.item === lastItem}
             />
           ),
@@ -411,7 +418,7 @@ const Item = memo(function Item({
   onRetry,
   resendable,
   answerable,
-  retryText,
+  retryPrompt,
   streaming,
 }: {
   readonly item: TranscriptItem;
@@ -428,7 +435,7 @@ const Item = memo(function Item({
   /** The agent's last reply, once it is done: its numbered options may be answered with a click. */
   readonly answerable: boolean;
   /** The prompt the agent's last reply answered, given to that reply alone so it can be asked for again. */
-  readonly retryText: string | undefined;
+  readonly retryPrompt: ChatView['lastPrompt'];
   /** The reply is still arriving: it is drawn whole, never cut to a preview. */
   readonly streaming: boolean;
 }) {
@@ -442,7 +449,7 @@ const Item = memo(function Item({
       return item.role === 'thought' ? (
         <ThinkingBlock item={item} chatId={chatId} live={streaming} />
       ) : (
-        <AgentRow item={item} chatId={chatId} streaming={streaming} answerable={answerable} retryText={retryText} />
+        <AgentRow item={item} chatId={chatId} streaming={streaming} answerable={answerable} retryPrompt={retryPrompt} />
       );
     case 'tool':
       return <ToolCard item={item} chatId={chatId} projectPath={projectPath} live={false} childCount={0} />;
@@ -524,10 +531,13 @@ function UserRow({ item, chatId, resendable }: { readonly item: UserItem; readon
       attachments={item.attachments}
       at={item.at}
       partsView={sentPartsView(item.parts)}
+      copyText={sentReadableText(item.text, item.parts)}
+      foldText={sentTypedText(segmentsOfSent(item.text, item.parts))}
       expanded={expanded}
       onExpandedChange={(open) => change({ open })}
-      onEdit={resendable ? () => setDraft(chatId, (draft) => draftWithText(draft, item.text)) : undefined}
-      onResend={resendable ? () => void sendPrompt(chatId, item.text) : undefined}
+      // Edit and Resend put back the message as it was typed, chips and the code they captured included.
+      onEdit={resendable ? () => setDraft(chatId, (draft) => ({ ...draft, segments: segmentsOfSent(item.text, item.parts) })) : undefined}
+      onResend={resendable ? () => void resendMessage(chatId, item) : undefined}
     />
   );
 }
@@ -538,13 +548,13 @@ function AgentRow({
   chatId,
   streaming,
   answerable,
-  retryText,
+  retryPrompt,
 }: {
   readonly item: TextItem;
   readonly chatId: ChatId;
   readonly streaming: boolean;
   readonly answerable: boolean;
-  readonly retryText: string | undefined;
+  readonly retryPrompt: ChatView['lastPrompt'];
 }) {
   const [expanded, change] = useOpenState(chatId, `message:${item.id}`, { open: false });
   return (
@@ -555,7 +565,7 @@ function AgentRow({
       expanded={expanded}
       onExpandedChange={(open) => change({ open })}
       onQuickReply={answerable ? (reply) => void sendPrompt(chatId, reply) : undefined}
-      onRetry={retryText === undefined ? undefined : () => void sendPrompt(chatId, retryText)}
+      onRetry={retryPrompt === undefined ? undefined : () => void resendMessage(chatId, retryPrompt)}
     />
   );
 }

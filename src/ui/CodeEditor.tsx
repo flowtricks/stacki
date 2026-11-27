@@ -131,6 +131,8 @@ export interface CodeEditorProps {
   readonly activeRange?: CodeEditorRange | undefined;
   readonly componentRanges?: readonly CodeEditorComponentRange[] | undefined;
   readonly onPositionChange?: ((position: number) => void) | undefined;
+  /** The text selected in the editor, in source offsets with the source it is of, or undefined when none is. */
+  readonly onSelectionChange?: ((selection: CodeEditorSelection | undefined) => void) | undefined;
   readonly onOpenComponent?: ((name: string, id: string) => void) | undefined;
   /**
    * More CodeMirror extensions, read when the editor is made (as `language` is): a caller's own
@@ -150,6 +152,10 @@ export type CodeEditorIndentation = CodeExtent | 'spaces';
 export interface CodeEditorRange {
   readonly from: number;
   readonly to: number;
+}
+
+export interface CodeEditorSelection extends CodeEditorRange {
+  readonly source: string;
 }
 
 export interface CodeEditorComponentRange extends CodeEditorRange {
@@ -382,6 +388,9 @@ function codeEditorCreate(parent: HTMLDivElement, language: string | undefined, 
               latest.current.onChange?.(next.source, codeSourceOffset(next, update.state.selection.main.head));
             }
           }
+          if (update.selectionSet || update.docChanged) {
+            reportSelection(update.state, refs);
+          }
         }),
       ],
     }),
@@ -393,6 +402,16 @@ function codeEditorCreate(parent: HTMLDivElement, language: string | undefined, 
     }),
   });
   return view;
+}
+
+function reportSelection(state: EditorState, refs: CodeEditorRefs): void {
+  const report = refs.latest.current.onSelectionChange;
+  const current = refs.codeViewRef.current;
+  if (report === undefined || current === undefined) {
+    return;
+  }
+  const { from, to } = state.selection.main;
+  report(from === to ? undefined : { from: codeSourceOffset(current, from), to: codeSourceOffset(current, to), source: current.source });
 }
 
 function codeEditorInteractions(refs: CodeEditorRefs) {

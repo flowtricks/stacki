@@ -20,6 +20,7 @@ import { mentionComponentsOf, setMentionComponents } from '../../features/ai/men
 import { setSelectionMention } from '../../features/ai/mentions/selectionMention';
 import { projectRelativePath } from '../../lib/projectPath';
 import { locatorOf, selectionMentionOf } from './aiSelection';
+import { useAddToChat } from './aiAddToChat';
 import { mentionIndexSource } from './aiMentionIndex';
 import { setMentionIndexSource } from '../../features/ai/mentions/projectMentions';
 // Lends the Properties panel's prop field to the composer's component-chip popover.
@@ -178,12 +179,26 @@ export function shouldEscapeExpanded(event: { readonly key: string; readonly def
   return !event.target.matches('input, textarea, [contenteditable], [contenteditable] *');
 }
 
+/** Shows the panel where it lives: already over the canvas, in its window, or in the left panel. */
+function openAiPanel(setLeftTab: ShellView['setLeftTab']): void {
+  if (windowState.expanded) {
+    // Already showing over the canvas.
+    return;
+  }
+  if (windowState.mode === 'floating') {
+    setWindowState((current) => ({ ...current, floatingOpen: true }));
+  } else {
+    setLeftTab('ai');
+  }
+}
+
 /** Mounted with the shell: the hand-off handler, the floating window and the merge editor. */
 export function AiHost({ app }: { readonly app: ShellView }) {
   const available = useAiAvailable();
   const state = useAiWindow();
   const changeMode = useModeChange(app);
   useAiScreenshotSource();
+  useAddToChat(app, { available, openPanel: () => openAiPanel(app.setLeftTab) });
   const projectPath = app.project.path;
   const { setLeftTab } = app;
   const scannedComponents = app.scan.components;
@@ -230,17 +245,7 @@ export function AiHost({ app }: { readonly app: ShellView }) {
         aiAgentTaskHandler({
           projectPath: () => projectPath,
           available: () => available,
-          openPanel: () => {
-            if (windowState.expanded) {
-              // Already showing over the canvas.
-              return;
-            }
-            if (windowState.mode === 'floating') {
-              setWindowState((current) => ({ ...current, floatingOpen: true }));
-            } else {
-              setLeftTab('ai');
-            }
-          },
+          openPanel: () => openAiPanel(setLeftTab),
         }),
       ),
     [available, projectPath, setLeftTab],

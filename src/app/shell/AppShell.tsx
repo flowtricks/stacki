@@ -92,7 +92,8 @@ import { can } from '../../../shared/properties/projectRoles';
 import { ViewAsChip } from '../roles/ViewAsChip';
 import { AppsTab, DesktopAppsHost } from './DesktopApps';
 import { AuditsHost, AuditsTab } from './DesktopAudits';
-import { AiCover, AiHost, AiTab, useAiRailButton } from './DesktopAi';
+import { AiCover, AiHost, AiTab, useAiAvailable, useAiRailButton } from './DesktopAi';
+import { addSelectionOfOpenFile } from './aiAddToChat';
 import { PinsHost } from './DesktopPins';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -977,6 +978,8 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
   // The page's `<style>` blocks draw CSS chips; the markup around them is left as it is.
   const codeChips = useCodeChips('markup');
   const intelligence = useCodeIntel(app.project.path, app.openRel);
+  const aiAvailable = useAiAvailable();
+  const translate = useTranslate();
   if (!page || page.kind === 'route' || !state) {
     return undefined;
   }
@@ -994,6 +997,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
       }}
       extensions={[codeChips.extension ?? [], intelligence]}
       overlay={codeChips.overlay}
+      onAddToChat={aiAvailable ? (selection) => addSelectionOfOpenFile(app, selection, translate) : undefined}
     />
   );
 }

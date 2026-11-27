@@ -16,7 +16,8 @@
 //   <comment-pins> acts as Claude's coordinator for a "Send all" of comment pins: reads the waves the
 //                 instructions give, starts one Agent call per pin titled "Pin <n>: …" (each reading a file
 //                 as its own child, `parentToolUseId`), finishes a wave before starting the next, and says how
-//                 many images and image notes it was given
+//                 many images and image notes it was given. A wave's subagents run at the same time and edit their
+//                 pins' files (runPins). A pin saying "in the background" is one background agent (runBackgroundPin)
 // Other methods: `_session/steering` (accepted while a turn is held, `promptRequired` when idle,
 // an error when the text says "refuse"), `session/fork` (answers `fork-of-<source>` with the
 // source's modes), `session/set_mode`.
@@ -170,14 +171,26 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       runCompaction(id, sessionId, text);
       return;
     }
+    if (text.includes('report billing')) {
+      // Claude's own start-of-turn message, as the adapter passes it on for a session that asked for it; the turn
+      // then stays held until the host cancels it.
+      send({ method: '_claude/sdkMessage', params: { sessionId, message: { type: 'system', subtype: 'init', apiKeySource: 'ANTHROPIC_API_KEY' } } });
+      held = { id, sessionId };
+      return;
+    }
     if (text.includes('hold')) {
       update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Working' } });
       held = { id, sessionId };
       return;
     }
+    if (text.includes('<comment-pins>') && text.includes('in the background')) {
+      await runBackgroundPin(sessionId, id, text.includes('then dies'));
+      return;
+    }
     if (text.includes('<comment-pins>')) {
-      runPins(sessionId, params.prompt);
-      for (const word of ['All', ' pins', ' done.']) {
+      await runPins(sessionId, params.prompt);
+      // A pin comment of "ask which blue" ends the coordinator's answer with that pin's question.
+      for (const word of text.includes('ask which blue') ? ['Question for pin 1: Which blue?'] : ['All', ' pins', ' done.']) {
         update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
       }
       send({ id, result: { stopReason: 'end_turn' } });
@@ -272,22 +285,34 @@ function runCompaction(id, sessionId, text) {
   send({ id, result: { stopReason: 'end_turn' } });
 }
 
-// Claude's coordinator for comment pins, as the instructions ask: one Agent call per pin, wave after wave.
-function runPins(sessionId, prompt) {
+// Claude's coordinator for comment pins, as the instructions ask: one Agent call per pin, a wave's calls all started
+// before any finishes, the next wave after them. Each stand-in subagent works at the same time as the others of its
+// wave and changes its pin's file on disk when that file holds the pin's "slot <n>" line: it reads the file, waits
+// until every subagent of the wave has read it (so their reads really overlap), then edits the way Claude Code's
+// edit tool does: an edit of a file that changed since the agent read it is refused, and the agent reads it again
+// and replaces its own passage only. A refused edit is reported as the pin's child call "stale<n>".
+async function runPins(sessionId, prompt) {
   const text = prompt.find((block) => block.type === 'text')?.text ?? '';
   const images = prompt.filter((block) => block.type === 'image').length;
   const notes = prompt.filter((block) => block.type === 'text' && /^Pin \d+, image \d+:/.test(block.text ?? '')).length;
   update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Got ${images} images and ${notes} notes. ` } });
+  const briefs = new Map(
+    text.split(/\nPin (?=\d+\n)/).slice(1).map((part) => [
+      Number(/^\d+/.exec(part)[0]),
+      { file: /written in (\S+) at child path/.exec(part)?.[1], model: /\n {2}Model: (\S+)/.exec(part)?.[1] },
+    ]),
+  );
   const waves = [...text.matchAll(/Wave \d+: ([^\n]+)/g)].map((match) => [...match[1].matchAll(/pin (\d+)/g)].map((pin) => Number(pin[1])));
   for (const wave of waves) {
     for (const number of wave) {
+      const model = briefs.get(number)?.model;
       update(sessionId, {
         sessionUpdate: 'tool_call',
         toolCallId: `agent${number}`,
         title: `Pin ${number}: Make the change`,
         kind: 'think',
         status: 'in_progress',
-        rawInput: { description: `Pin ${number}: Make the change`, subagent_type: 'general-purpose' },
+        rawInput: { description: `Pin ${number}: Make the change`, subagent_type: 'general-purpose', ...(model === undefined ? {} : { model }) },
         _meta: { claudeCode: { toolName: 'Agent' } },
       });
       update(sessionId, {
@@ -299,8 +324,52 @@ function runPins(sessionId, prompt) {
         _meta: { claudeCode: { toolName: 'Read', parentToolUseId: `agent${number}` } },
       });
     }
-    for (const number of wave) {
-      update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `agent${number}`, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `Pin ${number} changed.` } }] });
-    }
+    let arrived = 0;
+    let release;
+    const allRead = new Promise((resolve) => (release = resolve));
+    await Promise.all(
+      wave.map(async (number) => {
+        const file = briefs.get(number)?.file;
+        const readFile = () => (file !== undefined && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined);
+        let seen = readFile();
+        arrived += 1;
+        if (arrived === wave.length) {
+          release();
+        }
+        await allRead;
+        // Finish out of order, as real subagents do.
+        await new Promise((resolve) => setTimeout(resolve, (wave.length - wave.indexOf(number)) * 5));
+        if (seen?.includes(`slot ${number}\n`)) {
+          if (readFile() !== seen) {
+            update(sessionId, {
+              sessionUpdate: 'tool_call',
+              toolCallId: `stale${number}`,
+              title: 'Edit refused: the file changed since it was read',
+              kind: 'edit',
+              status: 'failed',
+              _meta: { claudeCode: { toolName: 'Edit', parentToolUseId: `agent${number}` } },
+            });
+            seen = readFile();
+          }
+          fs.writeFileSync(file, seen.replace(`slot ${number}\n`, `done ${number}\n`));
+        }
+        update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `agent${number}`, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `Pin ${number} changed.` } }] });
+      }),
+    );
   }
+}
+
+// An agent sent to the background: its call returns the launch note at once while it goes on working. The reply is
+// held open until the prompt says how it ends: "ends well" (the agent finishes first, as Claude's adapter holds the
+// turn for it) or "dies" (the process stops with the agent still working).
+async function runBackgroundPin(sessionId, id, dies) {
+  const launched = 'Async agent launched successfully. (This tool result is internal metadata.)\nagentId: abc123def4567';
+  update(sessionId, { sessionUpdate: 'tool_call', toolCallId: 'agent1', title: 'Pin 1: Make the change', kind: 'think', status: 'in_progress', rawInput: { description: 'Pin 1: Make the change' }, _meta: { claudeCode: { toolName: 'Agent' } } });
+  update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'agent1', content: [{ type: 'content', content: { type: 'text', text: 'You are making one change to an Astro site.' } }] });
+  update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'agent1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: launched } }] });
+  update(sessionId, { sessionUpdate: 'agent_message_chunk', messageId: 'm1', content: { type: 'text', text: 'Pin 1 is running.' } });
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  update(sessionId, { sessionUpdate: 'tool_call', toolCallId: 'late1', title: 'Read src/pages/index.astro', kind: 'read', status: 'completed', _meta: { claudeCode: { toolName: 'Read', parentToolUseId: 'agent1' } } });
+  update(sessionId, { sessionUpdate: 'agent_message_chunk', messageId: 'm2', content: { type: 'text', text: 'Still going.' } });
+  send(dies ? { id, error: { code: -32603, message: 'Internal error' } } : { id, result: { stopReason: 'end_turn' } });
 }

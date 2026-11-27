@@ -185,6 +185,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:setOption': { ...aiChat, option: 'model', value: 'large' },
   'ai:remember': { projectPath: '/site', agent: 'claude', action: { kind: 'reset' } },
   'ai:setup': { projectPath: '/site', agent: 'claude', action: { kind: 'detect' } },
+  'ai:mcpAuth': { projectPath: '/site', request: { kind: 'list', freshness: 'cached' } },
   'ai:review': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro', action: { kind: 'keep' } },
   'style:selectorUsage': { projectPath: '/site' },
   'style:removeSelectors': {

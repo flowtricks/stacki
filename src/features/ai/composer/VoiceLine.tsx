@@ -6,8 +6,22 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import type { VoiceLatch } from '../../../../shared/properties/voice/voiceSession';
 import type { LevelFeed } from '../voice/levelFeed';
 import { Waveform } from '../voice/Waveform';
+import type { ComposerVoice } from './useComposerVoice';
 
-export function VoiceLine({
+/** The line for a message box's dictation (useDictation.ts), drawn while its session runs. */
+export function DictationLine({ voice }: { readonly voice: ComposerVoice['voice'] }) {
+  return (
+    <VoiceLine
+      feed={voice.feed}
+      starting={voice.starting || voice.transcribing}
+      latch={voice.state.kind === 'idle' || voice.state.kind === 'stopping' ? 'pending' : voice.state.latch}
+      interim="" // The words being spoken are drawn in the box itself (dictationDraft.ts); the line keeps its hint.
+      commands={voice.commands}
+    />
+  );
+}
+
+function VoiceLine({
   feed,
   starting,
   latch,

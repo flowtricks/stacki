@@ -2319,7 +2319,10 @@ roles with `panel:ai` and `code:edit`.
 **Main process** (`electron/handlers/ai/`, in the `handlers` area so it may use `lib`, `documents` and
 `git`). `agentRegistry.ts` pins each adapter (`@agentclientprotocol/claude-agent-acp`,
 `@agentclientprotocol/codex-acp`; docs/dependencies.md) and finds the person's CLI on the shell PATH
-(`lib/shellEnvironment.ts`, shared with the terminal). `agentInstaller.ts` installs on request into
+(`lib/shellEnvironment.ts`, the app's environment with the common tool folders added, which the
+terminal's login shell also starts from). The agents alone also get the sign-in settings set only in
+shell startup files (`lib/loginShellSettings.ts`, "Sign-in settings from the shell" below).
+`agentInstaller.ts` installs on request into
 `userData/agents/<agent>-<version>/`: staged, `npm ci --omit=optional --ignore-scripts` against the
 shipped lockfile (its SHA-256 pinned), the entry's SHA-256 checked, then renamed into place; the
 digest is checked again at every start. `agentHost.ts` runs one adapter per agent per project as
@@ -2508,8 +2511,8 @@ right after a component chip, or after one of its member chips, lists that compo
 values (a choice's options, a switch's `true`/`false`: its variants), then its slots. A `component` chip carries the
 project-relative file (the scan's `file`, relative to the project root the agent runs in, whatever the components
 folder or the project's depth in its repository; a package component's path is made relative the same way); a
-`member` chip carries that file, `role` (`prop` or `slot`), `name` and, for a prop, an optional `value`. Neither is a
-prompt part: `promptPartsOf` and `plainTextOf` write each as its compact reference inside the text, and nothing else
+`member` chip carries that file, `role` (`prop` or `slot`), `name` and, for a prop, an optional `value`. The agent
+reads each as its compact reference inside the text (`plainTextOf` writes the same), and nothing else
 (no type, description, schema or file contents): `src/components/Hero.astro`, then `prop:variant=large`,
 `prop:title` or `slot:header`; a token that is empty or holds whitespace, `"`, `=` or a control character is a JSON
 string; a member not right after its component (only whitespace or that component's members between) carries the
@@ -2525,6 +2528,24 @@ feature may not import the props feature, so `src/app/shell/aiMemberField.tsx` r
 the component chip, a cleared one (or the default) removes it, and a row's include dot toggles `prop:name`. Each change
 is one isolated history event and leaves the caret where it was; Tab moves between controls and Escape returns focus
 to the composer.
+
+**Add to chat** (`shared/properties/ai/mentions.ts`, `src/features/ai/addToChat.ts`,
+`src/app/shell/aiAddToChat.ts`). A selection (the Code panel's selected text or highlighted element; an element from
+the canvas or Navigator menu; ⌘L / Ctrl+L) becomes two chips at the composer's caret: a `code` chip (path, lines,
+element name and the code as it read when added, unsaved text included) and a `page` chip (the file it is in: `page`,
+`layout`, `component` or `file`, plus `viewedOn`, the page on the canvas when that is another file). Bounds
+(`AI_LIMITS`): `codeChipCharsMax` per selection, `codeChipsMax` and `codeChipsCharsMax` per message; a selection past
+one, or past `promptCharsMax`, is refused with a toast and never cut.
+
+**What a message keeps.** A prompt's parts are `text`, `file`, `skill`, `builtin`, `reference` (a component,
+element, member, CSS, asset or page chip with the words the agent reads) and `code`. The host sends a reference's
+words inside the text, and a code part as its own text block, fenced with more backticks than the code holds, never
+read from disk and never the message's last text block (`@` in selected code is not a mention). The stored `user`
+event keeps every chip (`SentPart` kind `chip`), so the transcript, a reopened chat, Edit, Resend and Retry have
+them; chats stored earlier hold reference chips as words and read as before. `sentMessage.ts` turns a stored message
+back into its draft and into the plain text Copy gives (the button and a selection, `chipCopy.ts`): each chip written
+out where it stood, code under a line with its path and lines. Every chip shows its value in a card on hover or
+keyboard focus (`useChipCard.tsx`).
 
 **Protocol capabilities Stacki declares.** The host declares only open ACP capabilities
 (`session.compaction`, `session.notices`, `_meta.terminal_output_delta`; not `jetbrains`, not
@@ -2572,6 +2593,82 @@ sign-in ends ready, failed (with the CLI's output), cancelled or timed out. Sign
 logout`, `codex logout`. The CLI stores the credentials; Stacki reads only what the status command
 prints, shows the account's name and plan, and the email only inside the account menu (held in
 memory, never stored or logged). Setup is detected again each time a chat opens and after each step.
+
+A status check answers `ready`, `signed-out` (the CLI said so) or `unchecked` (it timed out after
+`statusMsMax`, crashed, or printed something unreadable). Claude's answer is read from normal output
+only; Codex answers on the error stream, so both are read. `unchecked` blocks nothing: a quiet note
+under the composer checks again when pressed, as does focusing the window or opening the chat, and main
+retries on its own after each of `STATUS_RETRY_DELAYS_MS` and then stops. An agent that refuses a
+prompt still shows the sign-in card. A `ready` account carries `source` (`account`, `api-key`, `token`
+or `cloud`), the kind only; anything but `account` is named under the composer, because it may be
+billed differently. `api-key` and `cloud` are Codex's alone.
+
+**Claude on a subscription only** (`lib/claudeSubscriptionOnly.ts`, `agentSetup.ts`). Three layers, each failing closed.
+
+1. *Routes switched off.* Every Claude process the panel starts (status, token check, sign-in, sign-out, install, MCP
+   commands, the adapter, so chats, pin subagents, resumed and forked chats and model listing) has
+   `CLAUDE_BLOCKED_VARIABLES` removed (API key, bearer token, API address, extra headers, Unix socket, named and
+   federation profiles, the Bedrock, Mantle, AWS, Vertex, Google Cloud, Foundry and gateway switches),
+   `ANTHROPIC_CONFIG_DIR` pointed at the null device, and the flag settings `CLAUDE_SUBSCRIPTION_SETTINGS`: an empty
+   `apiKeyHelper`, the same variables empty and the same folder (`--settings`; through the adapter,
+   `_meta.claudeCode.options.settings` on every session request). Why both: a settings file's `env` block replaces the
+   inherited environment, and command-line settings rank above user, project and local files. With Claude Code 2.1.332,
+   made-up credentials and a local fake API, each route planted at each of those levels was neutralised. Commands the
+   agent runs inside a session see the same empty variables.
+2. *Proof of a subscription* (`readClaudeStatus`). Signed in needs `apiProvider` `firstParty` and either `authMethod`
+   `claude.ai` with `subscriptionType` `pro`, `max`, `team` or `enterprise`, or `authMethod` `oauth_token` that the
+   token check names `CLAUDE_CODE_OAUTH_TOKEN` (`claude setup-token`). `auth status` says `oauth_token` for every
+   token, so the check (`CLAUDE_TOKEN_CHECK_ARGS`) writes only the `initialize` control request, which sends nothing to
+   the model, and reads `account.tokenSource` (within `tokenCheckMsMax`; the CLI calls Anthropic first for a token, so
+   offline this is slow and then unchecked). Anything else, including a claude.ai sign-in without a plan and a method
+   not known here, is `signed-out` with `reason: "not-subscription"`: the card says a subscription sign-in is needed.
+   `permit` asks again for every message and new session (messages asking together share one check). While the status
+   cannot be checked the composer still takes typing, but the send is refused (`ai.error.signInUnchecked`).
+3. *What the running session says* (`shared/properties/ai/claudeBilling.ts`). Every session asks the adapter
+   (`_meta.claudeCode.emitRawSDKMessages`) for `system`/`init` and `rate_limit_event`, passed on as
+   `_claude/sdkMessage`. An `apiKeySource` other than `none` cancels the turn and holds Claude `signed-out` with
+   `reason: "billed"` until a sign-in or sign-out in Stacki (or a restart). `/login managed key` is also reported
+   beside a subscription that pays, so it asks the status again and stops only when that finds no proven subscription.
+   `rate_limit_info.isUsingOverage` puts `billing: "extra-usage"` on the `ready` state until a later event says
+   otherwise or `resetsAt` passes. Both billing states show `BillingWarning` or its card ("Billed per use, not your
+   subscription"), in the panel and, because pins start work without it, under the comment pins' bar.
+
+What this cannot see: managed (organisation) settings outrank the command line. A key, token or cloud provider they set
+fails the proof; a custom API address they set is reported nowhere. Extra usage is only known once a reply reports it,
+and an API key a session picks up is only known as its turn starts, so that one request may already be charged. Whether
+a `CLAUDE_CODE_OAUTH_TOKEN` was made by a subscription is taken from its documented meaning. `CLAUDE_CONFIG_DIR` is not
+a billing route; the sign-in in that folder is checked like any other. Codex and the built-in terminal are unchanged.
+
+**Sign-in settings from the shell** (`lib/loginShellSettings.ts`; macOS and Linux). An app opened from
+the Dock never runs shell startup files, so the person's shell is run once per app run, as a login and
+interactive shell (`-ilc`, as the terminal behaves), the first time an agent is checked or started:
+never at boot, asynchronously, within `LOGIN_SHELL_LIMITS`, and its `env -0` is read between two
+random marks. Only the names in `SIGN_IN_SETTINGS` are kept (for Claude, nothing that changes how it is billed), each
+agent gets only its own, and the app's own environment wins. They reach
+the agent's status, sign-in and sign-out commands and its adapter, never installers, the dev server,
+git or the window; values are never logged or stored. A read that fails leaves the app's environment.
+Windows reads nothing: user and system variables already reach the app, and variables set only in a
+PowerShell profile are not read. A custom Codex provider's own `env_key` variable cannot be listed.
+
+**MCP server sign-in** (`ai:mcpAuth`, push `ai:mcpAuthState`; `shared/properties/mcp.ts`,
+`mcpSignIn.ts`). The MCP tab and a note above the AI composer sign servers in through the agent's own
+CLI, in the project folder, with the environment the agent's sessions start in, so the token lands
+where they read it and lasts across chats and restarts; Stacki handles no token. Claude: status from
+the `Status:` line of `claude mcp get <name>`; sign in with `claude mcp login <name> --no-browser` in
+a pseudo-terminal (it gives up without one; nothing is typed); `claude mcp logout <name>`. Those
+refuse a `.mcp.json` server not yet approved in Claude's own screen, so each gets
+`--settings {"enabledMcpjsonServers":["<name>"]}` (with the subscription settings in the same argument): one server, one command, written nowhere; a
+rejected server stays rejected. Codex: `codex mcp list --json` (`auth_status`),
+`codex mcp login <name> [--no-browser]`, `codex mcp logout <name>`. A CLI whose help lists no
+`mcp login` is too old and says so. With `--no-browser` main opens the printed page itself, only an
+https address without a user name; the page never reaches the window or a log, and the CLI receives
+the localhost callback. States: `none` (local commands, servers with their own Authorization header,
+and whatever the CLI says needs none), `needs-sign-in`, `connected`, `signing-in` (at most
+`signInMsMax`), `unknown`, `not-checked` (the project may not run agents yet, so no Claude server is
+contacted until the person presses Check), `unsupported-cli`, `blocked`. After a sign-in or sign-out
+idle adapters are restarted. Only names the project's `.mcp.json` or Codex lists are shown. Roles:
+the rows need the AI panel's access (`panel:ai` and `code:edit`). Design mode refuses the channel.
+Studio has neither the MCP tab nor the panel; a host without the bridge draws nothing.
 
 **Trust and opening.** Opening the panel in a project allows agents there and is remembered, unless
 Settings → AI "Ask before allowing agents in a new project" is on (then the trust card asks first).
@@ -2752,19 +2849,30 @@ on; clicking it again turns the mode off. A mode that is not registered has no b
 (`pins/commentMode.tsx`); another mode registers from its own file and removing that file removes only its button.
 
 **Contract** (`shared/properties/ai/commentPinBrief.ts` under the chat model, `commentPins.ts` above it). A pin is
-`{ id, number, createdAt, updatedAt, comment, images, anchor, place, included, delivery }`: `anchor` is the canvas
+`{ id, number, createdAt, updatedAt, comment, segments?, images, anchor, place, included, delivery }`: `anchor` is the canvas
 path clicked (`<file>|` scoped inside an open component), the copy, the point in the box (0 to 1) and the element's
 tag and words; `place` is the page, its display name, the open component, the element's file, locator and name, an
 instance's component file and the canvas width. `delivery` is `draft` or `sent` (chat, turn, mode `subagents` or
 `single`). `comment` and `images` are what was saved (`savedAt`, absent on a pin never saved); `edit` is what its box
 holds unsaved, kept on the board so a crash loses nothing and never sent. Save (or Enter) needs words or an added image
 (a crop alone is not a comment); the close button and Escape drop a pin never saved and only the unsaved changes of a
-saved one (Undo in a toast); a press elsewhere, another pin, leaving the mode or the page save a box with content and
+saved one (the latter has an Undo toast). Removing a pin (that way, or Delete in the list) shows no toast: it is a
+command on the app's undo history (`pushCommand`, installed by the shell as `setPinHistory`), so Undo and Redo take it
+in order with every other change, restoring its words, chips, images, model and number; a pin Stacki deletes because
+its work finished is not recorded; a press elsewhere, another pin, leaving the mode or the page save a box with content and
 let an empty one go. A draft's marker drags onto another element (anchor, place and crop renewed; words, changes and
 number kept; Undo in a toast); a sent pin does not move. While comment mode takes the canvas, the frame's forwarded edit
 keys (`avb:shortcut`, except Escape and ⌥P) are dropped (`canvasClicksIntercepted`). Bounds `PIN_LIMITS`: 40 pins, 4,000 characters a comment, 4 images a pin, the board's images within
 `attachmentsImageCharsMax`, 16 pins a send, 4 subagents at once. `parsePinBoard` is total (a damaged pin is left out
 alone); `parsePinBoardStrict` (what a writer sends) refuses the whole board.
+
+**Mentions.** The box takes `@` as the chat does. `comment` is always the words' plain text, each chip as the reference
+the chat's composer sends; `segments` (the chat draft's own shape and bounds, `parseDraftSegments`) is kept only while
+there is a chip, on the pin, its `edit`, its brief entry and its sent pin, so older pins read unchanged. Chips that do
+not parse, or whose plain text is not `comment`, are dropped and the words stay (`pinSegmentsField`). On send, the
+files, skills and built-in instructions the pins mention travel as `parts`, each once, at most `mentionsMax`, after a
+line "Pin <n> mentions:"; every other chip is already in the comment. A component mention that no longer matches the
+project refuses the send, as in the chat.
 
 **Storage** (`electron/handlers/ai/pinBoardStore.ts`): `userData/ai/projects/<sha256(realpath)>/pins/board.json`
 (replaced whole after a 400 ms pause in typing) and `pins/images/<id>.bin` (each written once, removed by the save
@@ -2788,23 +2896,64 @@ words, component, width, image indexes). The renderer sends the pins' images as 
 `text` and a `pins` sent part (number, comment, page and element names, thumbnail index) only: never the instructions,
 a path or a locator. A pin naming an image the message lacks is `invalid`; pins never steer (`ai.error.pinsSteer`).
 
-**Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
-Agent call per pin titled `Pin <n>: …` and give the waves `pinWaves` computed (pins naming a file in common never in
-one wave, in number order, at most 4 per wave), so two subagents never edit one file at once; each pin's progress is
-read from its subagent (`pinProgress`: queued, working, needs you on a waiting permission, failed or stopped, done),
-or from the turn when the agent made the change itself. Codex (`single`): its subagents report one call and forward
-none of their work, so Stacki sends one message per pin; the next goes only after the turn before ended `end_turn`,
-a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). Checkpoints: Claude's pins
-share one turn's changes card; Codex's get one card each. Stop is the chat's own Stop, and permission requests reach
-the person as in any turn.
+**Pictures for subagents** (`electron/handlers/ai/pinPictures.ts`). A subagent gets only the words of the Agent
+tool's prompt, never the message's images. So for a `subagents` send the host also writes each pin's pictures to
+`userData/ai/pin-pictures/<project>/<chat>/pin-<n>-image-<k>.<ext>` (owner-only, never in the project), lists each
+pin's own paths in its lines of the instructions, and asks the main agent to pass them on for the subagent to open
+with its Read tool; the images still travel inline too. Every Claude session of the project gets one added permission
+rule, `Read(//<that project's folder>/**)`, in its flag settings, so those reads do not ask. A chat's pictures are
+removed when the turn ends, unless a pin asked a question, and in any case at its next pin send, when the chat is
+deleted and when the agents stop; folders a day old (a crash's) are swept when the host starts. A picture that cannot
+be written refuses the send. A managed policy that ignores added rules would make the read ask on a permission card.
 
-**Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin whose work
-is confirmed finished well leaves the board by itself (marker, open box, list row, and its images with the save): a
-Claude pin when its own subagent completes (mid-run, each on its own) or, done by the coordinator, when the turn ended
-`end_turn`; never past a turn that ended any other way; a Codex pin when its own turn ended `end_turn`. Failed,
-stopped, waiting and running pins stay with their status. A finished pin holding words typed after the send and not
-saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts` `loadChatView`),
-so pins that finished while the app was closed go too. The chat's message keeps its own words and thumbnail.
+**Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
+Agent call per pin titled `Pin <n>: …`, in the waves `pinWaves` computed: pins start together in number order, at most
+`PIN_LIMITS.concurrencyMax` (4) at once, all calls of a wave in one message; the rest read "Waiting". Pins that change
+one file run together. What keeps their edits: the subagents are one Claude Code process, whose edit tools replace an
+exact passage in the file as it is and refuse a file changed since the agent read it; the instructions forbid whole-file
+rewrites, writing files with shell commands and project-wide rewrites. That safety is the CLI's, asked for in words:
+Stacki does not see or gate those writes. The reply's changes card and its undo cover all the pins together. Codex
+(`single`) cannot run pins at the same time: a chat's session takes one turn at a time, and Codex's own subagents send
+the panel nothing but their start, so Stacki sends one message per pin; the next goes after the turn before ended
+`end_turn`, a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). One pin cannot be
+stopped on its own with either agent: Stop is the chat's own and stops the reply and every pin in it.
+
+**A pin's model.** A draft's box has a model dropdown (`PinModelPicker.tsx`) of model names, one row per model
+(`pinModelRows`). An untouched pin follows the chat's model, whose row is the checked one; picking that row makes a pin
+follow the chat again, and a pin that had chosen that same model keeps its choice. A chat model that is not among the
+choices, or has no known name ("Chat model"), gets its own row, first. The choice is the pin's `model` (`{ agent, value, name }`, parsed with the board; absent on older pins).
+A subagent takes only `SUBAGENT_MODELS` (`opus`, `sonnet`, `haiku`, `fable`), so Claude lists only those; its brief and
+sent pin carry `model` and `modelName`, the instructions ask for it as the Agent call's `model`, and the sent card
+names what the call really asked for when it differs. For one message per pin Stacki sets the chat's model option
+before each pin's message and puts the chat's own back when the run ends or is held. A model no longer available runs
+on the chat's, said in a toast. Effort is not per pin: it stays the chat's setting.
+
+**How a sent pin stands** (`pinModel.ts` `pinProgress`). In order: an open question about it; a permission card its
+work waits on; its newest subagent, in the send's reply or any later one (a person can have it resumed or restarted);
+else the reply it is in. "Needs you" is only ever the first two, so there is always something to answer: the badge
+shows the card, or opens the message box on that pin. A question is a written line, `Question for pin <n>: …`, with the
+choices listed under it (`pinQuestionsOf`; the instructions ask for it): neither agent can show a question card here
+(Claude's question tool is off for a client without ACP `elicitation`). Words that ask without that form are not
+detected. The pin shows the question, its choices as buttons and Reply. A reply opens with the pin's quoted words
+(`pinReplyLead`) and answers that pin; a message opening with no pin's words answers every question before it. A pin
+not done reads "Didn't finish", "Stopped" or "Not started"; a pin waiting in a held run reads "On hold".
+
+**When an agent has finished** (`subagents.ts`). A call that returned its result finished. A call that returned the
+background launch note did not: Claude's adapter reports a background agent's end only to JetBrains clients, but for
+Stacki it holds the turn open until every agent that turn started or woke has finished. So while that turn runs the
+agent reads "In the background" (its tooltip says its end is not reported); a turn that ends `end_turn` proves it
+finished; any other end means it did not. A follow-up that wakes an agent moves it to the follow-up's turn. Codex's
+"Start subagent" call proves only the start ("Started"). A chat read back with a turn nothing runs any more is given an
+error end (`closeInterruptedTurns`). Chunks of different ACP `messageId`s are separate messages. The strip, the cards,
+the Running panel and pin badges all read the same `deriveSubagentWork`; each state has its own mark shape, and the
+strip's head counts each apart, saying "finished" only when all are done. Proofs: `test/renderer/ai/pinLifecycle.test.js`.
+
+**Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin that reads
+done leaves the board by itself (marker, open box, list row, and its images with the save). Failed, stopped, not
+started, asking, waiting and running pins stay with their status. A finished pin holding words typed after the send
+and not saved becomes a draft with them instead. The chats sent pins went to are read on load (`aiStore.ts`
+`loadChatView`), so pins that finished while the app was closed go too. The chat's message keeps its own words and
+thumbnail.
 
 **Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's words and names, its
 status (opening its subagent when it has one) and its thumbnail at the row's end; no pin numbers (the chat refers to

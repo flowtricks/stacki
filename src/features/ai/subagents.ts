@@ -48,7 +48,13 @@ const FOLLOW_UP_TOOL = 'SendMessage'; // i18n-ignore: the agent's tool name, mat
 export type SubagentStatus =
   /** Started but has reported nothing of its own yet. */
   | { readonly kind: 'queued'; readonly startedAt: number | undefined }
-  | { readonly kind: 'running'; readonly startedAt: number | undefined }
+  /**
+   * At work as far as the transcript can tell. `end`: `own` when the call returns with its result, so its end is seen;
+   * `reply` for an agent sent to the background, whose end no event reports: only the end of the reply proves it.
+   */
+  | { readonly kind: 'running'; readonly startedAt: number | undefined; readonly end: 'own' | 'reply' }
+  /** Codex says it started a subagent and nothing after that: whether it still works or has finished is not known. */
+  | { readonly kind: 'unreported' }
   /** A permission request of the subagent waits for the person. */
   | { readonly kind: 'waiting'; readonly startedAt: number | undefined }
   | { readonly kind: 'done'; readonly durationMs: number | undefined }
@@ -108,6 +114,8 @@ export interface SubagentWork {
   readonly units: ReadonlyMap<string, SubagentUnit>;
   /** The unit call of every call grouped under one; a call missing here belongs to the coordinator. */
   readonly unitOf: ReadonlyMap<string, string>;
+  /** The turn each unit last reported or was woken in. */
+  readonly activeIn: ReadonlyMap<string, TurnId>;
 }
 
 export interface SubagentList {
@@ -121,11 +129,39 @@ export interface SubagentList {
 export type StripState =
   | { readonly kind: 'hidden' }
   /** At least one subagent is still going: every row is shown. */
-  | { readonly kind: 'live'; readonly list: SubagentList; readonly active: number }
-  /** All have finished and the strip is folded to one quiet line. */
-  | { readonly kind: 'summary'; readonly finished: number; readonly failed: number }
-  /** All have finished and the person opened the line again. */
-  | { readonly kind: 'review'; readonly list: SubagentList; readonly finished: number; readonly failed: number };
+  | { readonly kind: 'live'; readonly list: SubagentList; readonly active: number; readonly tally: SubagentTally }
+  /** None is still going: the strip is folded to one quiet line. */
+  | { readonly kind: 'summary'; readonly tally: SubagentTally }
+  /** None is still going and the person opened the line again. */
+  | { readonly kind: 'review'; readonly list: SubagentList; readonly tally: SubagentTally };
+
+/** How many of the listed agents stand each way; `active` of `StripState` is working, waiting to start and needing the person. */
+export interface SubagentTally {
+  readonly working: number;
+  readonly queued: number;
+  readonly waiting: number;
+  readonly done: number;
+  readonly failed: number;
+  readonly stopped: number;
+  /** Started, with no word since (Codex). */
+  readonly unreported: number;
+}
+
+export function tallyOf(list: SubagentList): SubagentTally {
+  const count = (kind: SubagentStatus['kind']): number => list.agents.filter((agent) => agent.status.kind === kind).length;
+  const tally = {
+    working: count('running'),
+    queued: count('queued'),
+    waiting: count('waiting'),
+    // Agents left out of the list are older ones of the run; only finished ones are ever left out in a bounded run.
+    done: count('done') + list.omitted,
+    failed: count('failed'),
+    stopped: count('stopped'),
+    unreported: count('unreported'),
+  };
+  assert(Object.values(tally).reduce((sum, value) => sum + value, 0) === list.agents.length + list.omitted, 'tallyOf: every agent is counted once');
+  return tally;
+}
 
 /** Claude nests its subagent calls under `Task` (or `Agent`); Codex titles them "Start subagent …" (the reducer's rule). */
 export function isSubagentCall(item: ToolItem): boolean {
@@ -190,8 +226,10 @@ export function sessionModelName(options: readonly ChatOption[]): string | undef
   if (choice === undefined) {
     return undefined;
   }
-  // Claude's "Default" entry names the model it resolves to in its description.
-  return choice.value === 'default' && choice.description !== undefined && choice.description !== '' ? choice.description : choice.name;
+  // Claude's "Default" entry names the model it resolves to in its description, before a tagline
+  // ("Opus 5.5 · Best for everyday, complex tasks", Claude Code 2.1.332).
+  const described = choice.value === 'default' ? choice.description?.split('·')[0]?.trim() : undefined;
+  return described === undefined || described === '' ? choice.name : described;
 }
 
 /**
@@ -243,7 +281,7 @@ export function deriveSubagentWork(view: ChatView, previous?: SubagentWork): Sub
     units.set(call.call, unit);
   }
   assert(units.size === facts.units.length, 'deriveSubagentWork: one unit per unit call');
-  return { units, unitOf: facts.unitOf };
+  return { units, unitOf: facts.unitOf, activeIn: facts.reportedIn };
 }
 
 /**
@@ -255,7 +293,12 @@ export function deriveSubagents(view: ChatView, work?: SubagentWork): SubagentLi
   const current = view.running ?? lastUserTurn(view.items);
   const chosen: Subagent[] = [];
   for (const unit of all.units.values()) {
-    if (unit.agent.turn === current || isWorking(unit.agent.status)) {
+    // A follow-up to an agent the chat holds is a message, not another agent: the agent it woke is listed instead.
+    if (unit.agent.kind === 'follow-up' && unit.agent.target !== undefined) {
+      continue;
+    }
+    const woken = current !== undefined && all.activeIn.get(unit.agent.call) === current;
+    if (unit.agent.turn === current || woken || isWorking(unit.agent.status)) {
       chosen.push(unit.agent);
     }
   }
@@ -273,12 +316,11 @@ export function stripState(list: SubagentList, options: { readonly open: boolean
     return { kind: 'hidden' };
   }
   const active = list.agents.filter((agent) => isWorking(agent.status)).length;
+  const tally = tallyOf(list);
   if (active > 0) {
-    return { kind: 'live', list, active };
+    return { kind: 'live', list, active, tally };
   }
-  const failed = list.agents.filter((agent) => agent.status.kind === 'failed').length;
-  assert(failed <= total, 'stripState: failures are a subset');
-  return options.open ? { kind: 'review', list, finished: total, failed } : { kind: 'summary', finished: total, failed };
+  return options.open ? { kind: 'review', list, tally } : { kind: 'summary', tally };
 }
 
 /**
@@ -369,6 +411,10 @@ export function findSubagent(list: SubagentList, call: string): Subagent | undef
 type TextItem = Extract<TranscriptItem, { readonly kind: 'text' }>;
 
 interface Facts {
+  /** For each agent a follow-up reached: the turn of the newest one. It woke the agent, so its work goes on there. */
+  readonly resumed: ReadonlyMap<string, TurnId>;
+  /** The turn of the newest thing each unit reported: its own call, or its newest call or words. */
+  readonly reportedIn: ReadonlyMap<string, TurnId>;
   /** Every top-level unit call, in the order they started. */
   readonly units: readonly ToolItem[];
   /** The calls grouped under each unit, in order. */
@@ -423,7 +469,17 @@ function readFacts(items: readonly TranscriptItem[]): Facts {
   const lastChild = new Map<string, ToolItem | TextItem>();
   const lastStamp = new Map<string, number>();
   const openChild = new Set<string>();
+  const reportedIn = new Map<string, TurnId>();
+  const resumed = new Map<string, TurnId>();
   for (const item of items) {
+    // A follow-up that did not fail wakes the agent it names, in the follow-up's turn.
+    if (item.kind === 'tool' && item.parent === undefined && item.toolName === FOLLOW_UP_TOOL && item.status !== 'failed') {
+      const target = recipientOf(item, units);
+      if (target !== undefined) {
+        resumed.set(target.call, item.turn);
+        reportedIn.set(target.call, item.turn);
+      }
+    }
     if ((item.kind !== 'tool' && item.kind !== 'text') || item.parent === undefined) {
       continue;
     }
@@ -432,6 +488,7 @@ function readFacts(items: readonly TranscriptItem[]): Facts {
     if (unit === undefined) {
       continue; // A parent the transcript does not hold: the call stays the coordinator's.
     }
+    reportedIn.set(unit, item.turn);
     const stamp = item.kind === 'tool' ? (item.endedAt ?? item.at) : (item.until ?? item.at);
     if (stamp !== undefined) {
       lastStamp.set(unit, Math.max(stamp, lastStamp.get(unit) ?? stamp));
@@ -448,7 +505,7 @@ function readFacts(items: readonly TranscriptItem[]): Facts {
   }
   assert(units.length <= items.length, 'readFacts: units are items');
   assert(unitOf.size <= items.length, 'readFacts: grouped calls are items');
-  return { units, children, unitOf, lastChild, lastStamp, openChild, parentOf, waiting, stops };
+  return { units, children, unitOf, lastChild, lastStamp, openChild, parentOf, waiting, stops, reportedIn, resumed };
 }
 
 /** The unit call at the top of `call`'s chain of parents (at most `PARENT_DEPTH_MAX` deep), or undefined. */
@@ -475,7 +532,9 @@ function durationOf(call: ToolItem, facts: Facts): number | undefined {
   if (call.at === undefined) {
     return undefined;
   }
-  const ends = [call.endedAt, facts.lastStamp.get(call.call)].filter((stamp): stamp is number => stamp !== undefined);
+  // A background launch's own end is when it was sent off, not when its work ended: only its work says that.
+  const returned = sentToBackground(call) ? undefined : call.endedAt;
+  const ends = [returned, facts.lastStamp.get(call.call)].filter((stamp): stamp is number => stamp !== undefined);
   if (ends.length === 0) {
     return undefined;
   }
@@ -483,14 +542,54 @@ function durationOf(call: ToolItem, facts: Facts): number | undefined {
   return end < call.at ? undefined : end - call.at;
 }
 
+/** The note Claude's Agent call returns when it sends the agent to the background: the agent is only starting then. */
+const BACKGROUND_LAUNCH = /^Async agent launched successfully/u; // i18n-ignore: the agent's own words, matched, never shown.
+
+/** Whether the call returned because the agent went to the background (it asked for that, or the call says so). */
+function sentToBackground(call: ToolItem): boolean {
+  if (!isSubagentCall(call)) {
+    return false;
+  }
+  // The finishing update's own text: the output before it holds the prompt, which the note follows with no line break.
+  return call.background || BACKGROUND_LAUNCH.test(resultOf(call) ?? '');
+}
+
+/**
+ * How an agent sent to the background stands. Nothing reports its end by itself: Claude's adapter tells that only to
+ * JetBrains clients. What it does do for Stacki is hold a turn open until every agent that turn started or woke has
+ * finished, so the turn it last worked in is the proof: still running, the agent may be working or finished; ended
+ * well, it finished; ended any other way, it did not.
+ */
+function backgroundStatus(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus {
+  const turn = facts.reportedIn.get(call.call) ?? call.turn;
+  const stop = facts.stops.get(turn);
+  // Work it buffered can arrive in a later turn still stamped with the earlier one: reporting since that turn began is working.
+  const since = view.running === undefined ? undefined : view.turnStartedAt;
+  const heard = facts.lastStamp.get(call.call);
+  if (stop === undefined || (since !== undefined && heard !== undefined && heard >= since)) {
+    return liveStatus(call, view, facts, 'reply');
+  }
+  if (stop === 'end_turn') {
+    return { kind: 'done', durationMs: durationOf(call, facts) };
+  }
+  return stop === 'cancelled' ? { kind: 'stopped', durationMs: durationOf(call, facts) } : { kind: 'failed', durationMs: durationOf(call, facts) };
+}
+
 function statusOf(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus {
   const stop = facts.stops.get(call.turn);
   const stopped = stop === 'cancelled';
   switch (call.status) {
     case 'completed':
-      // A subagent started in the background returns its call at once and works on under it.
-      if (call.background && (facts.openChild.has(call.call) || view.running !== undefined) && stillReporting(call, view, facts)) {
-        return liveStatus(call, view, facts);
+      if (sentToBackground(call)) {
+        return backgroundStatus(call, view, facts);
+      }
+      // A follow-up that woke an agent again does so after the call returned: the agent's work goes on there.
+      if (isSubagentCall(call) && facts.resumed.has(call.call)) {
+        return backgroundStatus(call, view, facts);
+      }
+      // Codex's call is the start of its subagent; none of that agent's work, and no end, is ever sent.
+      if (call.title.startsWith(CODEX_SUBAGENT_PREFIX) && !facts.lastChild.has(call.call)) {
+        return { kind: 'unreported' };
       }
       return { kind: 'done', durationMs: durationOf(call, facts) };
     case 'failed':
@@ -507,7 +606,7 @@ function statusOf(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus 
       if (!stillReporting(call, view, facts)) {
         return { kind: 'done', durationMs: durationOf(call, facts) };
       }
-      return liveStatus(call, view, facts);
+      return liveStatus(call, view, facts, 'own');
     }
     default: {
       const exhaustive: never = call.status;
@@ -544,14 +643,14 @@ function stillReporting(call: ToolItem, view: ChatView, facts: Facts): boolean {
   return Math.max(...stamps) >= since;
 }
 
-function liveStatus(call: ToolItem, view: ChatView, facts: Facts): SubagentStatus {
+function liveStatus(call: ToolItem, view: ChatView, facts: Facts, end: 'own' | 'reply'): SubagentStatus {
   if (view.running !== undefined && facts.waiting.some((request) => belongsTo(request.call, call.call, facts.parentOf))) {
     return { kind: 'waiting', startedAt: call.at };
   }
   if (call.status === 'pending' && !facts.lastChild.has(call.call)) {
     return { kind: 'queued', startedAt: call.at };
   }
-  return { kind: 'running', startedAt: call.at };
+  return { kind: 'running', startedAt: call.at, end };
 }
 
 /** Whether `target` is the subagent call itself or one of its own calls (nested at most `PARENT_DEPTH_MAX` deep). */
@@ -675,12 +774,16 @@ export function deliveryOf(call: Pick<ToolItem, 'status'>, reply: string | undef
  * ends an agent's report with the id a follow-up can address it by). Undefined when none matches; the row then says
  * "Follow-up message". Bounded by the number of units.
  */
-function targetOf(call: ToolItem, units: readonly ToolItem[]): string | undefined {
+function recipientOf(call: ToolItem, units: readonly ToolItem[]): ToolItem | undefined {
   const recipient = call.sentTo;
   if (recipient === undefined || recipient === '') {
     return undefined;
   }
-  const match = units.find((unit) => isSubagentCall(unit) && (unit.call === recipient || (recipient.length >= 6 && unit.output.includes(recipient))));
+  return units.find((unit) => isSubagentCall(unit) && (unit.call === recipient || (recipient.length >= 6 && unit.output.includes(recipient))));
+}
+
+function targetOf(call: ToolItem, units: readonly ToolItem[]): string | undefined {
+  const match = recipientOf(call, units);
   if (match === undefined) {
     return undefined;
   }

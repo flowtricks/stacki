@@ -109,7 +109,7 @@ const sent = (number, mode = 'subagents', turn = TURN) => ({ number, delivery: {
 test('one message, a subagent per pin: each pin reads its own subagent, the rest of the run its turn', () => {
   const start = [{ kind: 'turn-start', turn: TURN, at: 1 }, userPins];
   const before = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1), before, 'running'), { kind: 'working' }, 'before any subagent, the coordinator is working');
+  assert.deepEqual(model.pinProgress(sent(1), before, 'running'), { kind: 'working', end: 'own' }, 'before any subagent, the coordinator is working');
   const view = reduceChat(EMPTY_CHAT, [
     ...start,
     agentCall('a1', 'Pin 1: Bigger heading', 'in_progress'),
@@ -119,19 +119,27 @@ test('one message, a subagent per pin: each pin reads its own subagent, the rest
     { kind: 'permission', turn: TURN, request: 'p1', call: 'e4', title: 'Edit Hero.astro', options: [{ id: 'y', name: 'Allow', kind: 'allow_once' }] },
     { ...child('e4', 'a4'), toolKind: 'edit', toolName: 'Edit' },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), view, 'running'), { kind: 'working' });
+  assert.deepEqual(model.pinProgress(sent(1), view, 'running'), { kind: 'working', end: 'own' });
   assert.deepEqual(model.pinProgress(sent(2), view, 'running'), { kind: 'done' });
   assert.deepEqual(model.pinProgress(sent(3), view, 'running'), { kind: 'queued' }, 'a pin of a later wave waits while others run');
-  assert.deepEqual(model.pinProgress(sent(4), view, 'running'), { kind: 'attention', reason: 'permission' }, 'a question inside its subagent needs the person');
+  assert.deepEqual(
+    model.pinProgress(sent(4), view, 'running'),
+    { kind: 'attention', reason: 'permission', request: 'p1' },
+    'a permission inside its subagent needs the person, and names the card that answers it',
+  );
   assert.equal(model.pinSubagentCall(view, TURN, 1), 'a1');
   const ended = reduceChat(view, [
     agentCall('a1', 'Pin 1: Bigger heading', 'failed'),
     { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), ended, 'running'), { kind: 'attention', reason: 'failed' });
-  assert.deepEqual(model.pinProgress(sent(3), ended, 'running'), { kind: 'done' }, 'a pin the coordinator handled itself is done with the turn');
+  assert.deepEqual(model.pinProgress(sent(1), ended, 'running'), { kind: 'unfinished', reason: 'failed' });
+  assert.deepEqual(
+    model.pinProgress(sent(3), ended, 'running'),
+    { kind: 'unfinished', reason: 'not-started' },
+    'other pins had subagents and this one none: it is not claimed done',
+  );
   const stopped = reduceChat(view, [{ kind: 'turn-end', turn: TURN, stop: 'cancelled', message: undefined, at: 9 }]);
-  assert.equal(model.pinProgress(sent(3), stopped, 'running').kind, 'attention');
+  assert.deepEqual(model.pinProgress(sent(3), stopped, 'running'), { kind: 'unfinished', reason: 'not-started' });
   assert.deepEqual(model.pinProgress(sent(1), undefined, 'running'), { kind: 'sent' }, 'a chat not open here says only sent');
   assert.deepEqual(model.pinProgress({ number: 1, delivery: { kind: 'draft' } }, view, 'running'), { kind: 'draft' });
 });
@@ -153,34 +161,40 @@ test('finished: only a pin whose work is confirmed done, and never past a turn t
     agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
     { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 9 },
   ]);
-  assert.equal(model.pinFinished(sent(1), failed), false, 'a turn that ended in an error vouches for none of its pins');
-  assert.equal(model.pinFinished(sent(3), failed), false);
+  assert.equal(model.pinFinished(sent(1), failed), true, 'a subagent whose call returned its own result finished, whatever came after');
+  assert.equal(model.pinFinished(sent(3), failed), false, 'a pin with no subagent is not vouched for');
+  const inBackground = reduceChat(EMPTY_CHAT, [
+    ...start,
+    agentCall('a1', 'Pin 1: Bigger heading', 'completed', { output: 'Async agent launched successfully.\nagentId: a1b2c3d4' }),
+    { kind: 'turn-end', turn: TURN, stop: 'error', message: undefined, at: 9 },
+  ]);
+  assert.equal(model.pinFinished(sent(1), inBackground), false, 'one sent to the background is not finished by its launch');
   const well = reduceChat(EMPTY_CHAT, [
     ...start,
     agentCall('a1', 'Pin 1: Bigger heading', 'completed'),
     { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
   ]);
-  assert.equal(model.pinFinished(sent(3), well), true, 'a pin the coordinator handled itself is finished when the turn ended well');
+  assert.equal(model.pinFinished(sent(3), well), false, 'a pin never started while others were is not finished');
   const single = (stop) => reduceChat(EMPTY_CHAT, [...start, { kind: 'turn-end', turn: TURN, stop, message: undefined, at: 9 }]);
   assert.equal(model.pinFinished(sent(1, 'single'), single('end_turn')), true);
   assert.equal(model.pinFinished(sent(1, 'single'), single('cancelled')), false);
   assert.equal(model.pinFinished(sent(1, 'single'), reduceChat(EMPTY_CHAT, start)), false, 'its own turn still running');
 });
 
-test('one message per pin: queued until its turn, then its turn decides, and a held run needs the person', () => {
+test('one message per pin: queued until its turn, then its turn decides, and a held run is on hold', () => {
   const waiting = { number: 2, delivery: { kind: 'sent', chat: CHAT, turn: undefined, mode: 'single', at: 1 } };
   assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'running'), { kind: 'queued' });
-  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'paused'), { kind: 'attention', reason: 'paused' });
+  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'paused'), { kind: 'held' });
   const start = [
     { kind: 'turn-start', turn: TURN, at: 1 },
     { ...userPins, parts: [{ kind: 'pins', mode: 'single', pins: [] }] },
   ];
   const running = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), running, 'running'), { kind: 'working' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), running, 'running'), { kind: 'working', end: 'own' });
   const done = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 3 }]);
   assert.deepEqual(model.pinProgress(sent(1, 'single'), done, 'running'), { kind: 'done' });
   const failed = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'error', message: 'x', at: 3 }]);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed, 'running'), { kind: 'attention', reason: 'failed' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed, 'running'), { kind: 'unfinished', reason: 'failed' });
 });
 
 test('a send: images in pin order with their notes, briefs naming them, words without paths', () => {
@@ -357,4 +371,70 @@ test('moving: a pin keeps its number, words, images and unsaved changes; a sent 
   assert.equal(moved.place.elementLabel, 'Paragraph');
   assert.deepEqual(moved.edit, editing.edit);
   assert.throws(() => model.movePinAnchor({ ...editing, delivery: { kind: 'sent', chat: CHAT, turn: TURN, mode: 'single', at: 1 } }, target));
+});
+
+// The pin's model list: model names only, one row per model, the chat's own row being the one that follows it.
+const CHAT_ROW = model.PIN_FOLLOWS_CHAT;
+const named = (value, name, description) => ({ value, name, description });
+const modelOption = (currentValue, choices) => [{ id: 'model', name: 'Model', category: 'model', currentValue, choices }];
+const CLAUDE = [
+  named('default', 'Default (recommended)', 'Opus 5.5 · Best for everyday, complex tasks'),
+  named('opus', 'Opus 5.5'),
+  named('fable', 'Fable 5.2'),
+  named('sonnet', 'Sonnet 5.5'),
+  named('haiku', 'Haiku 5.5'),
+];
+function rowsFor(options, pin = {}, { agent = 'claude', mode = 'subagents' } = {}) {
+  const choices = model.pinModelChoices(mode, options);
+  const resolved = model.resolvePinModel(pin, agent, options);
+  const listed = model.pinModelRows({ choices, options, resolved, unnamed: 'Chat model' });
+  return {
+    rows: listed.rows.map((row) => `${row.value || '(chat)'} ${row.label}`),
+    selected: listed.selected || '(chat)',
+    shown: listed.rows.find((row) => row.value === listed.selected)?.label,
+  };
+}
+
+test('the chat’s model is one row: an untouched pin is on it, and picking it follows the chat', () => {
+  assert.deepEqual(rowsFor(modelOption('sonnet', CLAUDE)), {
+    rows: ['opus Opus 5.5', 'fable Fable 5.2', '(chat) Sonnet 5.5', 'haiku Haiku 5.5'],
+    selected: '(chat)',
+    shown: 'Sonnet 5.5',
+  });
+  const other = rowsFor(modelOption('sonnet', CLAUDE), { model: { agent: 'claude', value: 'opus', name: 'Opus 5.5' } });
+  assert.equal(other.selected, 'opus');
+  assert.equal(other.shown, 'Opus 5.5');
+  assert.ok(other.rows.includes(`${CHAT_ROW || '(chat)'} Sonnet 5.5`), 'the way back to following the chat');
+});
+
+test('a pin that chose the chat’s own model keeps that choice, on the one row for it', () => {
+  const same = rowsFor(modelOption('sonnet', CLAUDE), { model: { agent: 'claude', value: 'sonnet', name: 'Sonnet 5.5' } });
+  assert.deepEqual(same.rows, ['opus Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5']);
+  assert.equal(same.selected, 'sonnet', 'stored as chosen: it stays on this model when the chat changes');
+  const moved = rowsFor(modelOption('haiku', CLAUDE), { model: { agent: 'claude', value: 'sonnet', name: 'Sonnet 5.5' } });
+  assert.equal(moved.selected, 'sonnet');
+});
+
+test('a chat on Claude’s Default is found by the model it stands for, without the tagline', () => {
+  assert.deepEqual(rowsFor(modelOption('default', CLAUDE)), {
+    rows: ['(chat) Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5'],
+    selected: '(chat)',
+    shown: 'Opus 5.5',
+  });
+});
+
+test('a chat model that is no choice, or has no known name, gets one row of its own, first', () => {
+  const full = rowsFor(modelOption('claude-opus-4-8', [...CLAUDE, named('claude-opus-4-8', 'Opus 4.8')]));
+  assert.deepEqual(full.rows, ['(chat) Opus 4.8', 'opus Opus 5.5', 'fable Fable 5.2', 'sonnet Sonnet 5.5', 'haiku Haiku 5.5']);
+  const unknown = rowsFor(modelOption('something-new', CLAUDE));
+  assert.equal(unknown.rows[0], '(chat) Chat model');
+  assert.equal(unknown.shown, 'Chat model');
+  assert.equal(unknown.rows.length, 5);
+});
+
+test('Codex lists every model once, and a choice that cannot be used shows the chat’s model', () => {
+  const codex = modelOption('gpt-b', [named('gpt-a', 'GPT A'), named('gpt-b', 'GPT B')]);
+  assert.deepEqual(rowsFor(codex, {}, { agent: 'codex', mode: 'single' }), { rows: ['gpt-a GPT A', '(chat) GPT B'], selected: '(chat)', shown: 'GPT B' });
+  const gone = rowsFor(codex, { model: { agent: 'claude', value: 'opus', name: 'Opus 5.5' } }, { agent: 'codex', mode: 'single' });
+  assert.equal(gone.shown, 'GPT B');
 });

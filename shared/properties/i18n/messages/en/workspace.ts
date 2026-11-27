@@ -3,6 +3,7 @@
 import type { CatalogOf } from '../../../../core/i18n/catalog';
 
 export const messages = {
+  'workspace.code.addToChat': 'Add to chat',
   'workspace.code.close': 'Close (edits are saved live)',
   'workspace.code.title': 'Code',
   'workspace.files.cancel': 'Cancel',

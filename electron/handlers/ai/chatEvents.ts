@@ -65,6 +65,7 @@ export function eventsForUpdate(update: AcpUpdate, turn: TurnId | undefined, con
               text,
               ...(at === undefined ? {} : { at, until: at }),
               ...(update.parent === undefined ? {} : { parent: update.parent }),
+              ...(update.message === undefined ? {} : { message: update.message }),
             },
           ];
     }
@@ -244,6 +245,34 @@ function noticeSeverity(severity: string): 'info' | 'warning' | 'error' {
 }
 
 /**
+ * A transcript read back with every turn nothing is running any more closed. A turn the app was closed or crashed
+ * in has a start and no end: read as it is, its agents would read as working, their clocks ticking, for good. Each
+ * such turn (all but `running`, the one the host still runs) gets an end of its own as an error, right where its
+ * events stop. The stored transcript is not touched.
+ */
+export function closeInterruptedTurns(events: readonly ChatEvent[], running: TurnId | undefined): readonly ChatEvent[] {
+  const ended = new Set(events.flatMap((event) => (event.kind === 'turn-end' ? [event.turn] : [])));
+  const closed: ChatEvent[] = [];
+  let open: { readonly turn: TurnId; readonly at: number } | undefined;
+  const close = (): void => {
+    if (open !== undefined && open.turn !== running) {
+      closed.push({ kind: 'turn-end', turn: open.turn, stop: 'error', message: undefined, at: open.at });
+    }
+    open = undefined;
+  };
+  for (const event of events) {
+    if (event.kind === 'turn-start') {
+      close();
+      open = ended.has(event.turn) ? undefined : { turn: event.turn, at: event.at };
+    }
+    closed.push(event);
+  }
+  close();
+  assert(closed.length >= events.length, 'closeInterruptedTurns: nothing is dropped');
+  return closed;
+}
+
+/**
  * Consecutive text of one turn, role and speaker, joined: what a batch stores and sends
  * instead of one event per streamed token.
  */
@@ -258,6 +287,8 @@ export function coalesceEvents(events: readonly ChatEvent[]): readonly ChatEvent
       last.role === event.role &&
       // Two subagents (or a subagent and the agent) stream side by side: only one speaker's words join.
       last.parent === event.parent &&
+      // Two messages stay two, so they are drawn as separate paragraphs.
+      last.message === event.message &&
       last.text.length + event.text.length <= AI_LIMITS.textCharsMax
     ) {
       // The first chunk's `at` stays; `until` becomes the last chunk's.

@@ -97,6 +97,21 @@ const output = repoPath('node_modules/.stacki-test/code-panel-model.cjs');
     'code the source no longer holds there is not shown',
   );
   assert.equal(modelTools.attributeCodeRange(listed, { start: undefined, end: undefined }, 'class:list', { code: 'x', from: 0, to: 1 }), undefined);
+  // "Add to chat": an element's code reads as it is laid out (its indent kept), a text selection is exactly what
+  // was selected, and a tree that no longer matches the source gives nothing rather than a wrong slice.
+  assert.deepEqual(modelTools.nodeSelectionOf(source, model, card.id), {
+    code: '  <Card>\n    <h2>Hello</h2>\n  </Card>',
+    startLine: 6,
+    endLine: 8,
+    element: 'Card',
+  });
+  assert.equal(modelTools.nodeSelectionOf(source, model, 'frontmatter').element, undefined);
+  assert.equal(modelTools.nodeSelectionOf(`x\n${source}`, model, card.id), undefined, 'a stale tree is refused');
+  assert.equal(modelTools.nodeSelectionOf(source, model, 'missing'), undefined);
+  const from = source.indexOf('Hello');
+  assert.deepEqual(modelTools.textSelectionOf(source, { from, to: from + 3 }), { code: 'Hel', startLine: 7, endLine: 7, element: undefined });
+  assert.equal(modelTools.textSelectionOf(source, { from, to: from }), undefined);
+  assert.equal(modelTools.textSelectionOf(source, { from: 0, to: source.length + 1 }), undefined);
   console.log('code-panel-model: passed [selection, links, nesting, bounds, reveal]');
 })().catch((error) => {
   console.error(error);

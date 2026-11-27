@@ -19,23 +19,81 @@ const TOOLTIP_GAP_PX = 8;
 // The same gap for a tip beside its control (the rail's labels), where the arrow sticks out a little further.
 const TOOLTIP_SIDE_GAP_PX = 10;
 
+/**
+ * One tip's wait and its tie to the control it names. A control removed from the document sends no `mouseleave` and
+ * no `blur`, so a tip whose state lives in a component that stays mounted (a button that goes away once it has done
+ * its work) stayed on screen for good. From the moment a tip is asked for until it is hidden, the document is watched
+ * for the control leaving it. Every tip that waits for a pointer goes through here.
+ */
+export function useTipTimer(): {
+  /** Calls `due` after the wait, and `gone` when `control` leaves the document first or later. Replaces any earlier tip. */
+  readonly wait: (control: Element, due: () => void, gone: () => void) => void;
+  /** The same watch with no wait. */
+  readonly now: (control: Element, due: () => void, gone: () => void) => void;
+  /** Ends the wait and the watch. */
+  readonly cancel: () => void;
+} {
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const watch = useRef<MutationObserver | undefined>(undefined);
+  const cancel = useCallback((): void => {
+    clearTimeout(timer.current);
+    watch.current?.disconnect();
+    watch.current = undefined;
+  }, []);
+  useEffect(() => cancel, [cancel]);
+  const watchControl = useCallback(
+    (control: Element, gone: () => void): void => {
+      cancel();
+      const view = control.ownerDocument.defaultView;
+      assert(view !== null, 'useTipTimer: the control is in a document with a window');
+      // The whole document, because the control can go with any ancestor. It runs only while one tip is pending or open.
+      const observer = new view.MutationObserver(() => {
+        if (!control.isConnected) {
+          cancel();
+          gone();
+        }
+      });
+      observer.observe(control.ownerDocument, { childList: true, subtree: true });
+      watch.current = observer;
+    },
+    [cancel],
+  );
+  const wait = useCallback(
+    (control: Element, due: () => void, gone: () => void): void => {
+      watchControl(control, gone);
+      timer.current = setTimeout(due, TOOLTIP_DELAY_MS);
+    },
+    [watchControl],
+  );
+  const now = useCallback(
+    (control: Element, due: () => void, gone: () => void): void => {
+      watchControl(control, gone);
+      due();
+    },
+    [watchControl],
+  );
+  return { wait, now, cancel };
+}
+
 export function useDelayedTooltip(): {
   readonly value: TooltipAnchor | undefined;
   readonly show: (event: React.MouseEvent<HTMLElement>) => void;
   readonly hide: () => void;
 } {
   const [value, setValue] = useState<TooltipAnchor | undefined>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
-  const show = useCallback((event: React.MouseEvent<HTMLElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setValue(tooltipAnchor(rect)), TOOLTIP_DELAY_MS);
-  }, []);
+  const { wait, cancel } = useTipTimer();
   const hide = useCallback((): void => {
-    clearTimeout(timer.current);
+    cancel();
     setValue(undefined);
-  }, []);
+  }, [cancel]);
+  const show = useCallback(
+    (event: React.MouseEvent<HTMLElement>): void => {
+      const control = event.currentTarget;
+      const rect = control.getBoundingClientRect();
+      wait(control, () => setValue(tooltipAnchor(rect)), hide);
+    },
+    [wait, hide],
+  );
   return { value, show, hide };
 }
 
@@ -66,26 +124,23 @@ export function useDelayedPlacement<T>(place: (element: HTMLElement) => T): {
   readonly hide: () => void;
 } {
   const [value, setValue] = useState<T | undefined>(undefined);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const { wait, now, cancel } = useTipTimer();
+  const hide = useCallback((): void => {
+    cancel();
+    setValue(undefined);
+  }, [cancel]);
   const show = useCallback(
     (element: HTMLElement): void => {
-      clearTimeout(timer.current);
-      timer.current = setTimeout(() => setValue(place(element)), TOOLTIP_DELAY_MS);
+      wait(element, () => setValue(place(element)), hide);
     },
-    [place],
+    [wait, hide, place],
   );
   const showNow = useCallback(
     (element: HTMLElement): void => {
-      clearTimeout(timer.current);
-      setValue(place(element));
+      now(element, () => setValue(place(element)), hide);
     },
-    [place],
+    [now, hide, place],
   );
-  const hide = useCallback((): void => {
-    clearTimeout(timer.current);
-    setValue(undefined);
-  }, []);
   return { value, show, showNow, hide };
 }
 

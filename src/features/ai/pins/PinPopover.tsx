@@ -1,15 +1,17 @@
 // A comment pin's popover: a small message box of its own beside the pin. The words are typed in the chat
-// composer's own input (ComposerInput, as plain text) and dictated through the same microphone (MicButton,
-// useComposerVoice); images are pasted, dropped or picked as in the composer and shown as its chips, and the crop
-// Stacki took of the pinned area is the first of them, removable like any other and taken again on request.
+// composer's own input (ComposerInput, with the same `@` menu, chips and keys) and dictated through the same
+// microphone and recording line (MicButton, DictationLine, useComposerVoice), landing at the caret; images are pasted,
+// dropped or picked as in the composer and shown as its chips, and the crop Stacki took of the pinned area is the
+// first of them, removable like any other and taken again on request.
 //
 // What is typed is the box's working copy, kept on the board (so a crash loses nothing) and never sent: Save (the
 // blue button, or Enter as in the composer; Shift+Enter is a new line) makes it the pin's comment, the one "Send all"
 // takes. Save waits for words or an image the person added (the crop alone is not a comment), for dictation to land
-// and for an image to finish loading. The close button and Escape discard: a pin never saved goes, a saved pin keeps
-// what was saved, and words or images that go with it come back from the toast's Undo. A press elsewhere, another
-// pin, leaving the mode or the page keep the box instead (saved when it has content). Deleting a saved pin is the pin
-// list's. A sent pin is read-only: it shows how it stands, with Reopen to make it a draft again.
+// and for an image to finish loading. The close button and Escape discard: a pin never saved goes (the app's Undo
+// brings it back), a saved pin keeps what was saved, and changes that go with it come back from the toast's Undo. A
+// press elsewhere, another pin, leaving the mode or the page keep the box instead (saved when it has content).
+// Deleting a saved pin is the pin list's. A sent pin is read-only: it shows how it stands, with Reopen to make it a
+// draft again.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import { PIN_LIMITS } from '../../../../shared/properties/ai/commentPinBrief';
@@ -19,15 +21,19 @@ import { centralIcon } from '../../../ui/central/CentralIcon';
 import { crop as centralCrop, image as centralImage, close as centralClose } from '../../../ui/central/centralGeometry';
 import { reportErrorToast } from '../../../ui/errorNotices';
 import Popup from '../../../ui/Popup';
-import { draftFromText, draftText, preferredAgent, useAiState, type ChatDraft, type DraftAttachment } from '../aiStore';
+import { preferredAgent, useAiState, type ChatDraft, type DraftAttachment } from '../aiStore';
+import { ChipWords } from '../mentions/ChipWords';
 import { prepareImage } from '../chatImages';
 import { ComposerInput, type ComposerHandle } from '../composer/ComposerInput';
 import { MicButton } from '../composer/MicButton';
+import { DictationLine } from '../composer/VoiceLine';
+import '../composer/composer.css';
 import { useComposerVoice } from '../composer/useComposerVoice';
 import { AttachmentChips } from '../screenshot/AttachmentChips';
-import { hasPersonContent, workingCopy, type PinProgress } from './pinModel';
-import { addImagesToPin, closePinBox, removePinImage, reopenSentPin, savePinBox, setPinComment, startMovingPin, usePinState } from './pinStore';
-import { PinProgressPill } from './PinProgressPill';
+import { hasPersonContent, segmentsOfWords, workingCopy, type PinProgress } from './pinModel';
+import { addImagesToPin, closePinBox, removePinImage, reopenSentPin, savePinBox, setPinSegments, startMovingPin, usePinState } from './pinStore';
+import { PinBadge } from './PinBadge';
+import { PinModelPicker } from './PinModelPicker';
 import { TipButton } from '../sessions/TipButton';
 
 const CropGlyph = centralIcon(centralCrop);
@@ -66,13 +72,27 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
   const [loading, setLoading] = useState(0);
   const editable = pin.delivery.kind === 'draft';
   const working = workingCopy(pin);
-  // The box's words as a one-run draft, so dictation reads and writes them as it does the composer's.
+  // The box's words and chips as a draft, as the composer holds its own.
   const latest = useRef(pin);
   latest.current = pin;
-  const draft: ChatDraft = draftFromText(working.comment);
+  const draft: ChatDraft = { segments: segmentsOfWords(working), attachments: [] };
+  // The words as the board holds them now, for when the box has no editor.
+  const held = (): ChatDraft => ({ segments: segmentsOfWords(workingCopy(latest.current)), attachments: [] });
+  // Dictation reads and writes up to the caret, so the words land where the person left it. With no editor in the box
+  // (words arriving just after a send) they join the end.
   const dictation = useComposerVoice({
-    read: () => draftFromText(workingCopy(latest.current).comment),
-    write: (change) => setPinComment(latest.current.id, draftText(change(draftFromText(workingCopy(latest.current).comment)))),
+    read: () => {
+      const segments = input.current?.beforeCaret();
+      return segments === undefined ? held() : { segments, attachments: [] };
+    },
+    write: (change) => {
+      const editor = input.current ?? undefined;
+      if (editor === undefined) {
+        setPinSegments(latest.current.id, change(held()).segments);
+      } else {
+        editor.editBeforeCaret((before) => change({ segments: before, attachments: [] }).segments);
+      }
+    },
     // The spoken "send" saves, as Enter does.
     onSend: () => savePinBox(),
     draft,
@@ -81,6 +101,15 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
   const busy = voice.listening || voice.transcribing || loading > 0;
   const canSave = editable && !busy && hasPersonContent(working);
   const focusBox = (): void => focusComposer(input.current ?? undefined);
+  // A box on its way out (it stays mounted for the exit motion), or one whose pin was sent, has no microphone button:
+  // its session ends now. Unmounting ends one too (useDictation).
+  const stopVoice = useRef(voice.stop);
+  stopVoice.current = voice.stop;
+  useEffect(() => {
+    if (closing || !editable) {
+      stopVoice.current();
+    }
+  }, [closing, editable]);
   // Beside the pin, on the side with room, inside the window; measured again whenever the canvas is.
   useLayoutEffect(() => {
     const box = anchor?.getBoundingClientRect();
@@ -93,7 +122,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
       roomRight >= POPOVER_WIDTH_PX + POPOVER_GAP_PX ? box.right + POPOVER_GAP_PX : Math.max(POPOVER_GAP_PX, box.left - POPOVER_GAP_PX - POPOVER_WIDTH_PX);
     const top = Math.min(Math.max(POPOVER_GAP_PX, box.top - POPOVER_GAP_PX), Math.max(POPOVER_GAP_PX, window.innerHeight - height - POPOVER_GAP_PX));
     setPosition((previous) => (previous['left'] === left && previous['top'] === top ? previous : { position: 'fixed', left, top, width: POPOVER_WIDTH_PX }));
-  }, [anchor, layout, working.images.length, working.comment]);
+  }, [anchor, layout, working.images.length, working.comment, voice.listening, voice.transcribing]);
   // The box takes the keyboard when a pin opens, so the person can just type.
   const pinId = pin.id;
   // After the popup has placed its own focus, and out of the canvas frame the click left it in: the frame holds the
@@ -195,7 +224,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
             <span className="ai-pin-popover-element">{pin.place.elementLabel}</span>
             <span className="ai-pin-popover-page">{translate('ai.pins.where', { page: pin.place.pageLabel, width })}</span>
           </span>
-          {pin.delivery.kind === 'sent' && <PinProgressPill progress={progress} />}
+          {pin.delivery.kind === 'sent' && <PinBadge pin={pin} progress={progress} />}
           <TipButton
             label={editable && pin.savedAt === undefined ? translate('ai.pins.discard') : translate('ai.pins.close')}
             onClick={() => closePinBox('discard', translate)}
@@ -225,12 +254,13 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
               commands={[]}
               placeholder={translate('ai.pins.placeholder')}
               inputRef={input}
-              value={working.comment}
-              onChange={(text) => setPinComment(pin.id, text)}
+              segments={draft.segments}
+              onSegmentsChange={(segments) => setPinSegments(pin.id, segments)}
               // Enter saves, as Enter sends in the composer; Shift+Enter is a new line there and here.
               onSend={() => savePinBox()}
-              dictationDraft={voice.listening || voice.transcribing ? { text: voice.interim, decoding: voice.decoding } : undefined}
+              dictationDraft={dictating ? { text: voice.interim, decoding: voice.decoding, place: 'caret' } : undefined}
             />
+            {dictating && <DictationLine voice={voice} />}
             <div className="ai-pin-tools">
               <input
                 ref={picker}
@@ -264,6 +294,7 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
                 </TipButton>
               )}
               <span className="ai-pin-tools-gap" />
+              <PinModelPicker pin={pin} />
               <MicButton dictation={dictation} />
               {/* The composer's primary action sits last in its row; the pin's is Save, blue at rest, hover and press. */}
               <button type="button" className="primary ai-pin-save" disabled={!canSave} onClick={() => savePinBox()}>
@@ -273,7 +304,9 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
           </div>
         ) : (
           <div className="ai-pin-sent">
-            <div className="ai-pin-sent-comment">{pin.comment.trim() === '' ? translate('ai.pins.noComment') : pin.comment}</div>
+            <div className="ai-pin-sent-comment">
+              {pin.comment.trim() === '' ? translate('ai.pins.noComment') : <ChipWords segments={segmentsOfWords(pin)} />}
+            </div>
             <button type="button" className="ai-pin-reopen" onClick={() => reopenSentPin(pin.id)}>
               {translate('ai.pins.reopen')}
             </button>

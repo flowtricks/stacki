@@ -143,6 +143,8 @@ export type AcpUpdate =
       readonly content: AcpContent;
       /** The subagent call the words come from (Claude's `_meta.claudeCode.parentToolUseId`); undefined for the agent itself. */
       readonly parent: string | undefined;
+      /** Which message the chunk belongs to (ACP `messageId`); absent when the adapter does not say. */
+      readonly message?: string;
     }
   | { readonly kind: 'tool-call'; readonly call: AcpToolCall }
   | { readonly kind: 'tool-call-update'; readonly call: AcpToolCall }
@@ -439,9 +441,9 @@ function parseUpdate(update: Record<string, unknown>): AcpUpdate {
   const kind = requiredText(update['sessionUpdate'], AI_LIMITS.idCharsMax, 'update.sessionUpdate');
   switch (kind) {
     case 'agent_message_chunk':
-      return { kind: 'message', role: 'agent', content: parseContent(update['content']), parent: parentOf(update) };
+      return { kind: 'message', role: 'agent', content: parseContent(update['content']), parent: parentOf(update), ...messageOf(update) };
     case 'agent_thought_chunk':
-      return { kind: 'message', role: 'thought', content: parseContent(update['content']), parent: parentOf(update) };
+      return { kind: 'message', role: 'thought', content: parseContent(update['content']), parent: parentOf(update), ...messageOf(update) };
     case 'user_message_chunk':
       return { kind: 'message', role: 'user', content: parseContent(update['content']), parent: parentOf(update) };
     case 'tool_call':
@@ -486,6 +488,12 @@ function parseUpdate(update: Record<string, unknown>): AcpUpdate {
     default:
       return { kind: 'unknown-update', sessionUpdate: kind };
   }
+}
+
+// The id of the message a chunk belongs to: chunks of one id are one message, a new id starts another.
+function messageOf(update: Record<string, unknown>): { readonly message?: string } {
+  const message = optionalText(update['messageId'], AI_LIMITS.idCharsMax);
+  return message === undefined || message === '' ? {} : { message };
 }
 
 /** The subagent call an update belongs to: Claude stamps `_meta.claudeCode.parentToolUseId` on everything a subagent reports. */

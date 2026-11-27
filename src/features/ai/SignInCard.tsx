@@ -7,13 +7,14 @@
 // (electron/handlers/ai/agentSetup.ts).
 import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
-import { SETUP_CODE_CHARS_MAX, type SetupState } from '../../../shared/ipc/aiChat';
+import { SETUP_CODE_CHARS_MAX, type SetupState, type SignedOutReason } from '../../../shared/ipc/aiChat';
 import { AGENTS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { lock as centralLock } from '../../ui/central/centralGeometry';
-import { CheckIcon, CopyIcon, ExternalIcon, TerminalIcon } from '../../ui/Icons';
+import { CheckIcon, CopyIcon, ExternalIcon, TerminalIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { runSetup } from './aiStore';
 
 const LockGlyph = centralIcon(centralLock);
@@ -24,7 +25,8 @@ export const SIGNED_IN_RETRY_MS = 12_000;
 
 /** Where a sign-in stands, from the agent's CLI (`setup`) and the agent's own answer (`expired`). */
 export type SignInStage =
-  | { readonly kind: 'start'; readonly expired: boolean }
+  /** `reason`: Claude has a sign-in the panel does not use, and the card says what it needs instead. */
+  | { readonly kind: 'start'; readonly expired: boolean; readonly reason?: SignedOutReason }
   | { readonly kind: 'waiting'; readonly expired: boolean; readonly url: string | undefined; readonly needsCode: boolean; readonly output: string }
   | {
       readonly kind: 'failed';
@@ -46,7 +48,7 @@ export function signInStage({ setup, expired }: { readonly setup: SetupState | u
     return { kind: 'failed', expired, message: setup.message, messageRef: setup.messageRef, details: setup.details };
   }
   if (setup?.step === 'signed-out') {
-    return { kind: 'start', expired: false };
+    return setup.reason === undefined ? { kind: 'start', expired: false } : { kind: 'start', expired: false, reason: setup.reason };
   }
   return expired ? { kind: 'start', expired: true } : undefined;
 }
@@ -75,22 +77,25 @@ export function SignInCard({
     </button>
   );
   switch (stage.kind) {
-    case 'start':
+    case 'start': {
+      // A turn stopped for its billing is the panel's warning in the card's own form.
+      const billed = stage.reason === 'billed';
       return (
         <Frame
-          icon={<LockGlyph size={16} />}
-          title={translate('ai.signIn.title', { agent: label })}
-          text={stage.expired ? translate('ai.signIn.expired') : translate('ai.signIn.toStart')}
+          icon={billed ? <WarningTriangleIcon size={16} /> : <LockGlyph size={16} />}
+          title={billed ? translate('ai.billing.label') : translate('ai.signIn.title', { agent: label })}
+          text={translate(startText(stage))}
           details={details}
         >
           <div className="ai-signin-actions">
             <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'signIn' })}>
-              {translate('ai.signIn.action')}
+              {stage.reason === undefined ? translate('ai.signIn.action') : translate('ai.billing.signIn')}
             </button>
             {terminal}
           </div>
         </Frame>
       );
+    }
     case 'waiting':
       return (
         <Frame
@@ -132,6 +137,21 @@ export function SignInCard({
       );
     default: {
       const exhaustive: never = stage;
+      return exhaustive;
+    }
+  }
+}
+
+function startText(stage: Extract<SignInStage, { readonly kind: 'start' }>): MessageKey {
+  switch (stage.reason) {
+    case 'billed':
+      return 'ai.billing.stopped';
+    case 'not-subscription':
+      return 'ai.signIn.needsSubscription';
+    case undefined:
+      return stage.expired ? 'ai.signIn.expired' : 'ai.signIn.toStart';
+    default: {
+      const exhaustive: never = stage.reason;
       return exhaustive;
     }
   }

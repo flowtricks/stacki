@@ -30,6 +30,8 @@ export function UserMessage({
   attachments,
   at,
   partsView,
+  copyText,
+  foldText,
   onEdit,
   onResend,
   ...fold
@@ -37,14 +39,20 @@ export function UserMessage({
   readonly text: string;
   readonly attachments: readonly ChatAttachmentName[];
   readonly at: number | undefined;
-  /** The message drawn with its mention chips; the plain `text` is what Copy gives either way. */
+  /** The message drawn with its mention chips. */
   readonly partsView?: ReactNode | undefined;
+  /** What Copy writes when the message had chips: every chip written out where it stood. Absent: `text`. */
+  readonly copyText?: string | undefined;
+  /** The words on screen, which decide whether the message folds: a chip's code is not on screen. Absent: `text`. */
+  readonly foldText?: string | undefined;
   /** Puts the message back in the composer to change and send again. Given only to the last user message. */
   readonly onEdit?: (() => void) | undefined;
   /** Sends the message again. Given only to the last user message. */
   readonly onResend?: (() => void) | undefined;
 }) {
-  const folding = useFold(text, fold);
+  const folding = useFold(foldText ?? text, fold);
+  // A copy of the whole message names what went with it too.
+  const copied = [copyText ?? text, ...attachments.map((attachment) => `[${attachment.name}]`)].filter((line) => line !== '').join('\n');
   return (
     <div className="ai-message ai-message-user ai-msg ai-msg-user">
       <div className="ai-msg-bubble">
@@ -53,7 +61,7 @@ export function UserMessage({
         <ShowMore folding={folding} />
       </div>
       {/* The actions sit below the bubble, never on its edge, so they cannot overlap or clip the text. */}
-      <MessageToolbar text={text} at={at} onEdit={onEdit} onResend={onResend} onRetry={undefined} />
+      <MessageToolbar text={copied} at={at} onEdit={onEdit} onResend={onResend} onRetry={undefined} />
     </div>
   );
 }

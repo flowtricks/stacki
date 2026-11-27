@@ -114,7 +114,7 @@ test('a chunk joins its own speaker’s message across another speaker’s, and 
 test('a subagent runs, waits for the person, then finishes or fails; its time comes from the host’s stamps', () => {
   let view = fold(turnStart(TURN, 1000), user(TURN, 'go', 1000), task(TURN, 'a', { at: 2000, agentType: 'Explore', title: 'Explore the repo' }));
   let [agent] = model.deriveSubagents(view).agents;
-  assert.deepEqual(agent.status, { kind: 'running', startedAt: 2000 });
+  assert.deepEqual(agent.status, { kind: 'running', startedAt: 2000, end: 'own' });
   assert.equal(agent.role, 'Explore');
   assert.equal(agent.title, 'Explore the repo');
   assert.deepEqual(agent.activity, { kind: 'starting' }, 'nothing reported yet');
@@ -178,7 +178,7 @@ test('a subagent left open by an ended turn is not at work while the chat waits,
   assert.equal(model.deriveSubagentWork(later).units.get('a').agent.status.kind, 'done', 'silent through a later turn: not at work');
   // It reports in that turn (its buffered work arrives): at work again, its start its own.
   const reported = reduceChat(later, [tool(TURN, 'k3', { parent: 'a', at: started + 23 * HOUR_MS + 10 })]);
-  assert.deepEqual(model.deriveSubagentWork(reported).units.get('a').agent.status, { kind: 'running', startedAt: started });
+  assert.deepEqual(model.deriveSubagentWork(reported).units.get('a').agent.status, { kind: 'running', startedAt: started, end: 'reply' });
   // An open subagent call (not sent to the background) whose turn ended well: done while the chat waits.
   const open = fold(turnStart(TURN, 1), user(TURN, 'go', 1), task(TURN, 'b', { at: 2 }), tool(TURN, 'kb', { parent: 'b', at: 3 }), turnEnd(TURN, 5));
   assert.deepEqual(model.deriveSubagentWork(open).units.get('b').agent.status, { kind: 'done', durationMs: 1 });
@@ -258,7 +258,7 @@ test('the strip: hidden without subagents, live while one works, a summary once 
     agents: statuses.map((status, index) => ({ call: `s${index}`, turn: TURN, role: undefined, title: 't', status, activity: { kind: 'starting' } })),
     omitted: 0,
   });
-  const running = { kind: 'running', startedAt: 1 };
+  const running = { kind: 'running', startedAt: 1, end: 'own' };
   const waiting = { kind: 'waiting', startedAt: 1 };
   const done = { kind: 'done', durationMs: 5 };
   const failed = { kind: 'failed', durationMs: undefined };
@@ -267,12 +267,13 @@ test('the strip: hidden without subagents, live while one works, a summary once 
   assert.equal(live.kind, 'live');
   assert.equal(live.active, 2, 'waiting still counts as working');
   assert.equal(model.stripState(list([running]), { open: true }).kind, 'live', 'opening has no say while one works');
-  assert.deepEqual(model.stripState(list([done, failed, done]), { open: false }), { kind: 'summary', finished: 3, failed: 1 });
+  const none = { working: 0, queued: 0, waiting: 0, done: 0, failed: 0, stopped: 0, unreported: 0 };
+  assert.deepEqual(model.stripState(list([done, failed, done]), { open: false }), { kind: 'summary', tally: { ...none, done: 2, failed: 1 } });
   const review = model.stripState(list([done, failed, done]), { open: true });
   assert.equal(review.kind, 'review');
-  assert.equal(review.finished, 3);
+  assert.equal(review.tally.done, 2, 'a failed agent is not counted as done');
   const omitted = model.stripState({ ...list([done]), omitted: 4 }, { open: false });
-  assert.deepEqual(omitted, { kind: 'summary', finished: 5, failed: 0 }, 'the summary counts the ones left out too');
+  assert.deepEqual(omitted, { kind: 'summary', tally: { ...none, done: 5 } }, 'the summary counts the ones left out too');
 });
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import { assert } from '../core/assert';
 import { digest, optional, record, text } from '../core/boundary';
 import type { Digest } from '../core/brand';
 import type { Result } from '../core/result';
+import { AGENT_IDS, parseAgentId, type AgentId } from './ai/agentIds';
 import {
   MCP_LIMITS,
   MCP_PROBLEM_CODES,
@@ -260,4 +261,145 @@ function parseNames(input: unknown): readonly string[] {
     throw new Error('MCP: expected bounded names');
   }
   return input.map((item) => text(item));
+}
+
+// ---------------------------------------------------------------------------
+// Signing in to servers: what the window asks of `ai:mcpAuth` and what comes back (and arrives on
+// `ai:mcpAuthState`). The work is the agent's own CLI (electron/handlers/ai/mcpSignIn.ts). What crosses is a
+// server's name, which agent, where it stands and a word about what happened: never an address, a code, a token
+// or anything the CLI printed.
+// ---------------------------------------------------------------------------
+
+/** Where one server stands for one agent, as that agent's own CLI reports it. */
+export const MCP_AUTH_STATES = [
+  /** No sign-in applies: a local command, a server with a token or key, or one the CLI says needs none. Nothing is shown. */
+  'none',
+  'needs-sign-in',
+  /** Claude reached it; Codex is signed in to it. */
+  'connected',
+  /** A sign-in is under way in the browser. */
+  'signing-in',
+  /** It could not be checked just now. */
+  'unknown',
+  /** Not checked yet: the project is not yet allowed to run agents, so nothing is contacted until the person asks. */
+  'not-checked',
+  /** The person's CLI is too old to sign in to servers from outside its own screen. */
+  'unsupported-cli',
+  /** The person turned this server off in the agent's own settings. */
+  'blocked',
+] as const;
+export type McpAuthState = (typeof MCP_AUTH_STATES)[number];
+
+/** What just happened, for a toast. */
+export const MCP_AUTH_NOTICES = [
+  'signed-in',
+  'signed-out',
+  'cancelled',
+  'failed',
+  'timed-out',
+  /** The CLI gave a sign-in page that is not a secure web address: it was not opened. */
+  'unsafe-page',
+  'unsupported-cli',
+  'blocked',
+  'not-needed',
+  'sign-out-failed',
+  /** Too many sign-ins are already waiting. */
+  'busy',
+] as const;
+export type McpAuthNotice = (typeof MCP_AUTH_NOTICES)[number];
+
+export interface McpAuthEntry {
+  readonly agent: AgentId;
+  readonly name: string;
+  readonly state: McpAuthState;
+}
+
+export type McpAuthAction = 'check' | 'signIn' | 'reopen' | 'cancel' | 'signOut';
+const ACTIONS = ['check', 'signIn', 'reopen', 'cancel', 'signOut'] as const satisfies readonly McpAuthAction[];
+
+export type McpAuthRequest =
+  /** Every server a sign-in could apply to. `fresh` asks the CLIs again rather than using what they last said. */
+  { readonly kind: 'list'; readonly freshness: 'cached' | 'fresh' } | { readonly kind: McpAuthAction; readonly agent: AgentId; readonly name: string };
+
+export interface McpAuthReply {
+  readonly servers: readonly McpAuthEntry[];
+  readonly notice: McpAuthNotice | undefined;
+}
+
+export interface McpAuthPush {
+  readonly projectPath: string;
+  readonly entry: McpAuthEntry;
+  readonly notice: McpAuthNotice | undefined;
+}
+
+/** One entry per agent per server, and each side lists at most `serversMax`. */
+export const MCP_AUTH_ENTRIES_MAX = MCP_LIMITS.serversMax * AGENT_IDS.length;
+
+/** A name a CLI can be given as an argument: the file's own naming rule, and never one that reads as an option. */
+export function isSignInServerName(name: string): boolean {
+  assert(MCP_LIMITS.nameCharsMax > 0, 'A server name has a bound');
+  return isMcpServerName(name) && !name.startsWith('-');
+}
+
+function signInServerName(input: unknown): string {
+  const name = text(input);
+  if (!isSignInServerName(name)) {
+    throw new Error('MCP sign-in: expected a server name');
+  }
+  assert(!name.startsWith('-'), 'A server name is never read as an option');
+  assert(name.length <= MCP_LIMITS.nameCharsMax, 'A server name is bounded');
+  return name;
+}
+
+export function parseMcpAuthRequest(input: unknown): McpAuthRequest {
+  const fields = record(input);
+  if (fields['kind'] === 'list') {
+    const freshness = fields['freshness'];
+    if (freshness !== 'cached' && freshness !== 'fresh') {
+      throw new Error('MCP sign-in: expected a freshness');
+    }
+    return { kind: 'list', freshness };
+  }
+  const kind = ACTIONS.find((candidate) => candidate === fields['kind']);
+  if (kind === undefined) {
+    throw new Error('MCP sign-in: unknown request');
+  }
+  return { kind, agent: parseAgentId(fields['agent']), name: signInServerName(fields['name']) };
+}
+
+function parseAuthEntry(input: unknown): McpAuthEntry {
+  const fields = record(input);
+  const state = MCP_AUTH_STATES.find((candidate) => candidate === fields['state']);
+  if (state === undefined) {
+    throw new Error('MCP sign-in: unknown state');
+  }
+  return { agent: parseAgentId(fields['agent']), name: signInServerName(fields['name']), state };
+}
+
+function parseNotice(input: unknown): McpAuthNotice | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  const notice = MCP_AUTH_NOTICES.find((candidate) => candidate === input);
+  if (notice === undefined) {
+    throw new Error('MCP sign-in: unknown notice');
+  }
+  return notice;
+}
+
+export function parseMcpAuthReply(input: unknown): McpAuthReply {
+  const fields = record(input);
+  const servers = fields['servers'];
+  if (!Array.isArray(servers) || servers.length > MCP_AUTH_ENTRIES_MAX) {
+    throw new Error('MCP sign-in: expected a bounded server list');
+  }
+  const parsed = servers.map(parseAuthEntry);
+  assert(parsed.length === servers.length, 'No entry is dropped from a reply');
+  assert(parsed.length <= MCP_AUTH_ENTRIES_MAX, 'A reply stays bounded');
+  return { servers: parsed, notice: parseNotice(fields['notice']) };
+}
+
+export function parseMcpAuthPush(input: unknown): McpAuthPush {
+  const fields = record(input);
+  return { projectPath: text(fields['projectPath']), entry: parseAuthEntry(fields['entry']), notice: parseNotice(fields['notice']) };
 }

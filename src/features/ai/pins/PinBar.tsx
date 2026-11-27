@@ -20,18 +20,29 @@ import { bubbleText as centralBubbleText, close as centralClose } from '../../..
 import FittedTooltip from '../../../ui/FittedTooltip';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
 import { useAiState } from '../aiStore';
+import { BillingWarning, billingWarning } from '../BillingWarning';
 import { setPanelMode } from '../panelModes';
 import { TipButton } from '../sessions/TipButton';
 import { COMMENT_MODE_ID } from './commentMode';
 import { PinList } from './PinList';
-import { progressOf, sendAllPins, sendReadiness, setPinListOpen, startMovingPin, usePinState, type PinState, type SendBlock } from './pinStore';
+import {
+  pinAgent,
+  progressOf,
+  sendAllPins,
+  sendReadiness,
+  setPinListOpen,
+  startMovingPin,
+  usePinState,
+  type PinState,
+  type SendBlock,
+  type SendReadiness,
+} from './pinStore';
 import './pins.css';
 
 const CommentGlyph = centralIcon(centralBubbleText);
 const CloseGlyph = centralIcon(centralClose);
 
 const BLOCKS = {
-  none: 'ai.pins.send.none',
   'too-many-pins': 'ai.pins.send.tooManyPins',
   'too-many-images': 'ai.pins.send.tooManyImages',
   busy: 'ai.pins.send.busy',
@@ -49,21 +60,11 @@ function countLabel(pins: PinState, translate: ReturnType<typeof useTranslate>):
   return needing > 0 ? translate('ai.pins.listAttention', { count: needing }) : translate('ai.pins.listWorking', { count: saved.length });
 }
 
-export function PinBar() {
+// Its own component so its tooltip's state ends with the button: once the pins are sent there is no Send.
+function SendButton({ readiness }: { readonly readiness: Exclude<SendReadiness, { readonly kind: 'empty' }> }) {
   const translate = useTranslate();
-  const pins = usePinState();
-  const ai = useAiState();
-  const listButton = useRef<HTMLButtonElement>(null);
   const sendTip = useDelayedTooltip();
-  const modeTip = useDelayedTooltip();
   const [sending, setSending] = useState(false);
-  if (pins.mode !== 'on') {
-    return undefined;
-  }
-  const readiness = sendReadiness(pins, ai);
-  const moving = pins.moving === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.moving);
-  const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined).length;
-  const empty = saved === 0 && moving === undefined;
   const tip =
     readiness.kind === 'blocked'
       ? translate(BLOCKS[readiness.reason], { count: readiness.count })
@@ -71,6 +72,52 @@ export function PinBar() {
         ? translate('ai.pins.send.oneByOne')
         : translate('ai.pins.send.subagents');
   const sendLabel = translate('ai.pins.sendCount', { count: readiness.count });
+  return (
+    <>
+      <button
+        type="button"
+        className={readiness.kind === 'ready' ? 'primary ai-pin-send' : 'ai-pin-bar-button ai-pin-send-waiting'}
+        aria-disabled={readiness.kind !== 'ready' || sending}
+        aria-label={`${sendLabel}. ${tip}`}
+        onMouseEnter={sendTip.show}
+        onMouseLeave={sendTip.hide}
+        onBlur={sendTip.hide}
+        onClick={() => {
+          if (readiness.kind !== 'ready' || sending) {
+            return;
+          }
+          setSending(true);
+          void sendAllPins(translate).finally(() => setSending(false));
+        }}
+      >
+        {sendLabel}
+      </button>
+      {sendTip.value !== undefined &&
+        createPortal(
+          <FittedTooltip role="tooltip" anchor={sendTip.value}>
+            {tip}
+          </FittedTooltip>,
+          tooltipHost(undefined),
+        )}
+    </>
+  );
+}
+
+export function PinBar() {
+  const translate = useTranslate();
+  const pins = usePinState();
+  const ai = useAiState();
+  const listButton = useRef<HTMLButtonElement>(null);
+  const modeTip = useDelayedTooltip();
+  if (pins.mode !== 'on') {
+    return undefined;
+  }
+  const readiness = sendReadiness(pins, ai);
+  // Asked of Claude whenever it is the agent "Send all" would go to (a warning is only ever Claude's).
+  const warning = billingWarning(ai.setups.get(pinAgent(ai)));
+  const moving = pins.moving === undefined ? undefined : pins.board.pins.find((pin) => pin.id === pins.moving);
+  const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined).length;
+  const empty = saved === 0 && moving === undefined;
   const leave = (
     <TipButton className="ai-pin-bar-icon" label={translate('ai.pins.leave')} onClick={() => setPanelMode(COMMENT_MODE_ID, 'off')}>
       <CloseGlyph size={16} />
@@ -103,34 +150,8 @@ export function PinBar() {
             {countLabel(pins, translate)}
           </button>
         )}
-        {moving === undefined && readiness.count > 0 && (
-          <button
-            type="button"
-            className={readiness.kind === 'ready' ? 'primary ai-pin-send' : 'ai-pin-bar-button ai-pin-send-waiting'}
-            aria-disabled={readiness.kind !== 'ready' || sending}
-            aria-label={`${sendLabel}. ${tip}`}
-            onMouseEnter={sendTip.show}
-            onMouseLeave={sendTip.hide}
-            onBlur={sendTip.hide}
-            onClick={() => {
-              if (readiness.kind !== 'ready' || sending) {
-                return;
-              }
-              setSending(true);
-              void sendAllPins(translate).finally(() => setSending(false));
-            }}
-          >
-            {sendLabel}
-          </button>
-        )}
+        {moving === undefined && readiness.kind !== 'empty' && <SendButton readiness={readiness} />}
         {moving === undefined && leave}
-        {sendTip.value !== undefined &&
-          createPortal(
-            <FittedTooltip role="tooltip" anchor={sendTip.value}>
-              {tip}
-            </FittedTooltip>,
-            tooltipHost(undefined),
-          )}
         {modeTip.value !== undefined &&
           moving === undefined &&
           createPortal(
@@ -141,6 +162,8 @@ export function PinBar() {
           )}
         {pins.listOpen && <PinList anchor={listButton.current ?? undefined} />}
       </div>
+      {/* Pins start work with the panel out of view, so the warning about its billing stands here too. */}
+      {warning !== undefined && <BillingWarning kind={warning} />}
     </div>
   );
 }

@@ -36,10 +36,14 @@ import type {
   SectionId,
   TurnId,
   TurnStop,
+  SentPart,
 } from '../../../shared/properties/ai/chatModel';
+import { segmentsOfSent } from '../../../shared/properties/ai/sentMessage';
 import {
+  chipBoundProblem,
   plainTextOf,
   promptPartsOf,
+  type MentionChip,
   type BuiltinChipId,
   type ComposerSegments,
   type MentionCandidate,
@@ -153,23 +157,23 @@ export function isDraftEmpty(draft: ChatDraft): boolean {
 }
 
 /**
- * The segments cut to what a prompt can carry: at most `composerSegmentsMax` segments, `mentionsMax` chips
- * and `promptCharsMax` characters of text, the rest dropped from the end. An editor keeps within these; the
+ * The segments cut to what a prompt can carry: at most `composerSegmentsMax` segments, each kind of chip within
+ * its bound (chipBoundProblem) and `promptCharsMax` characters of text, the rest dropped from the end. An editor keeps within these; the
  * cut is the store's backstop so no path (a paste, a restored draft) can hand the parser an oversized prompt.
  */
 export function boundSegments(segments: ComposerSegments): ComposerSegments {
   const kept: ComposerSegments[number][] = [];
   let characters = 0;
-  let chips = 0;
+  const chips: MentionChip[] = [];
   for (const segment of segments) {
     if (kept.length >= AI_LIMITS.composerSegmentsMax) {
       break;
     }
     if (segment.kind === 'chip') {
-      if (chips >= AI_LIMITS.mentionsMax) {
+      if (chipBoundProblem([...chips, segment.chip]) !== undefined) {
         continue;
       }
-      chips += 1;
+      chips.push(segment.chip);
       kept.push(segment);
     } else {
       const room = AI_LIMITS.promptCharsMax - characters;
@@ -624,8 +628,14 @@ function contentOf(draft: ChatDraft): PromptContent | undefined {
     fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: invalid.join(', ') }) });
     return undefined;
   }
+  const text = draftText(draft);
+  if (text.length > AI_LIMITS.promptCharsMax) {
+    // Typed words and selected code together: refused whole, never cut.
+    fail({ code: 'invalid', ...described('ai.store.messageTooLong', { max: AI_LIMITS.promptCharsMax }) });
+    return undefined;
+  }
   return {
-    text: draftText(draft),
+    text,
     parts: hasChip ? promptPartsOf(draft.segments, builtinTextOf) : undefined,
     attachments: draft.attachments.map((entry) => entry.attachment),
   };
@@ -656,15 +666,36 @@ function reportSendFailure(error: AiFailure): void {
 
 /**
  * Sends a message of comment pins (pins/pinStore.ts): their instructions travel as `pins`, their images as the
- * attachments, and `text` is the plain words the transcript keeps. The turn it started, or undefined when it was
- * refused (the failure is shown as any send's is).
+ * attachments, and `text` is the plain words the transcript keeps. A pin's `@` chips reach the agent as the chat's
+ * would: a reference is in the pin's words, and the files, skills and instructions it mentions (`mentions`) travel as
+ * parts; a component mention that no longer matches the project refuses the send, as it refuses the chat's. The turn
+ * it started, or undefined when it was refused (the failure is shown as any send's is).
  */
 export async function sendPinMessage(
   chat: ChatId,
-  message: { readonly text: string; readonly attachments: readonly PromptAttachment[]; readonly pins: PinBrief },
+  message: {
+    readonly text: string;
+    readonly attachments: readonly PromptAttachment[];
+    readonly pins: PinBrief;
+    readonly drafts: readonly ComposerSegments[];
+    readonly mentions: ComposerSegments;
+  },
 ): Promise<TurnId | undefined> {
   assert(message.pins.pins.length >= 1, 'sendPinMessage: a message of pins has a pin');
-  const reply = await aiPrompt({ projectPath: requireProject(), chat, text: message.text, attachments: message.attachments, pins: message.pins });
+  const invalid = mentionCheck === undefined ? [] : message.drafts.flatMap((draft) => mentionCheck?.(draft) ?? []);
+  if (invalid.length > 0) {
+    fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: [...new Set(invalid)].join(', ') }) });
+    return undefined;
+  }
+  const parts = message.mentions.length === 0 ? undefined : promptPartsOf([{ kind: 'text', text: `${message.text}\n\n` }, ...message.mentions], builtinTextOf);
+  const reply = await aiPrompt({
+    projectPath: requireProject(),
+    chat,
+    text: message.text,
+    attachments: message.attachments,
+    pins: message.pins,
+    ...(parts === undefined ? {} : { parts }),
+  });
   if (!reply.ok) {
     reportSendFailure(reply.error);
     return undefined;
@@ -677,7 +708,24 @@ export function subscribeAiState(listener: () => void): () => void {
   return subscribe(listener);
 }
 
-/** Sends the chat's draft, or `text` when given (Retry, a hand-off). True when the agent took it. */
+/**
+ * Sends an earlier message again (Resend, Retry), with its chips as they were sent: a code chip sends the code it
+ * captured then. A component mention that no longer matches the project refuses it, as it refuses any send.
+ */
+export async function resendMessage(chat: ChatId, message: { readonly text: string; readonly parts?: readonly SentPart[] | undefined }): Promise<boolean> {
+  const content = contentOf({ segments: segmentsOfSent(message.text, message.parts), attachments: [] });
+  if (content === undefined || content.text.trim() === '') {
+    return false;
+  }
+  const reply = await submitPrompt(chat, content);
+  if (!reply.ok) {
+    reportSendFailure(reply.error);
+    return false;
+  }
+  return true;
+}
+
+/** Sends the chat's draft, or `text` when given (a quick reply, a hand-off). True when the agent took it. */
 export async function sendPrompt(chat: ChatId, text?: string): Promise<boolean> {
   const draft = state.drafts.get(chat) ?? EMPTY_DRAFT;
   const content = text === undefined ? contentOf(draft) : { text, parts: undefined, attachments: [] };
@@ -732,6 +780,35 @@ export async function steerPrompt(chat: ChatId): Promise<boolean> {
     return true;
   }
   setDraft(chat, () => draft);
+  reportSendFailure(reply.error);
+  return false;
+}
+
+/**
+ * Sends a reply the panel wrote for the person (a choice picked for a pin's question), leaving their draft as it
+ * is. Idle: a message of its own. While the agent works: into the running turn (`whileRunning: 'steer'`) or after
+ * it (`'queue'`); a refused steer queues too, so the answer is never lost. True when it was sent or is waiting.
+ */
+export async function sendReply(chat: ChatId, text: string, options: { readonly whileRunning: 'steer' | 'queue' }): Promise<boolean> {
+  assert(text.trim() !== '', 'sendReply: a reply has words');
+  if (state.views.get(chat)?.running === undefined) {
+    return sendPrompt(chat, text);
+  }
+  const draft = draftFromText(text);
+  if (options.whileRunning === 'queue') {
+    return enqueue(chat, draft);
+  }
+  const reply = await submitSteer(chat, { text, parts: undefined, attachments: [] });
+  if (reply.ok || reply.error.code === 'delivered') {
+    return true;
+  }
+  const queueable = reply.error.code === 'unsupported' || reply.error.code === 'agent-failed' || reply.error.code === 'busy';
+  if (queueable && enqueue(chat, draft)) {
+    if (state.views.get(chat)?.running === undefined) {
+      void sendNextQueued(chat); // The turn ended while the steer was in flight.
+    }
+    return true;
+  }
   reportSendFailure(reply.error);
   return false;
 }
@@ -887,17 +964,19 @@ export async function answerPermission(chat: ChatId, request: PermissionRequestI
   }
 }
 
-export async function setChatOption(chat: ChatId, option: string, value: string): Promise<void> {
+/** Changes one of the chat's settings. True when the agent took it; a refusal is shown as a toast. */
+export async function setChatOption(chat: ChatId, option: string, value: string): Promise<boolean> {
   const reply = await aiSetOption({ projectPath: requireProject(), chat, option, value });
   if (!reply.ok) {
     fail(reply.error);
-    return;
+    return false;
   }
   // The main process remembers a change that went through; this copy follows so the next new chat shows it at once.
   const agent = state.chats.find((candidate) => candidate.id === chat)?.agent;
   if (agent !== undefined) {
     update((current) => ({ ...current, remembered: applyRemember(current.remembered, agent, { kind: 'set', option, value }) }));
   }
+  return true;
 }
 
 /** A choice made before the chat has a session (or any pick in a menu): remembered for `agent`'s next new chats, last writer wins. */
@@ -1003,7 +1082,8 @@ function listen(): void {
     // A "ready" push while the agent's sign-in has expired is runSetup's to apply, together with the fresh availability
     // (one update, no flash of the expired card between the two).
     const expired = state.agents.some((entry) => entry.agent === next.agent && entry.state === 'sign-in');
-    if (next.step === 'ready' && expired) {
+    // "Unchecked" after a sign-in that worked is read the same way: main may no longer hold the agent as signed out.
+    if ((next.step === 'ready' || next.step === 'unchecked') && expired) {
       // The sign-in finished on its own, long after the `signIn` request returned: nobody else will apply it.
       // Leaving this push to runSetup left the card waiting forever (the agent's saved sign-in had expired,
       // which is exactly when a person signs in again).
@@ -1221,7 +1301,19 @@ const OPEN_CHAT_KEY_PREFIX = 'stacki.ai.open.';
  * Opening the panel goes straight to a chat, never the list: the one open last
  * in this project, else the newest, else a new empty one with the preferred agent.
  */
-export async function openStartingChat(): Promise<void> {
+export function openStartingChat(): Promise<void> {
+  // The panel and a hand-off (Add to chat) can both ask as the panel opens: one answer, so no second chat is made.
+  if (starting === undefined) {
+    starting = startingChat().finally(() => {
+      starting = undefined;
+    });
+  }
+  return starting;
+}
+
+let starting: Promise<void> | undefined;
+
+async function startingChat(): Promise<void> {
   const projectPath = requireProject();
   if (state.open !== undefined) {
     return;

@@ -1,11 +1,11 @@
 // What a "Send all" of comment pins carries to the agent (`ai:prompt`'s `pins`), what the transcript keeps of it,
-// and the pure rules that decide which pins may run at the same time (docs/contracts.md, "Comment pins"). The
+// how a pin's agent asks the person a question, and the pure rules that decide which pins start together (docs/contracts.md, "Comment pins"). The
 // board the pins are kept on is commentPins.ts; this file is the layer under it and under the chat model, so
 // both can read it without importing each other.
 import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
 import { AI_LIMITS } from './aiLimits';
-import { isProjectRelativePath } from './mentions';
+import { isProjectRelativePath, parseDraftSegments, plainTextOf, type ComposerSegments } from './mentions';
 
 export const PIN_LIMITS = {
   /** Pins on one project's board, sent or not. Why: a page review rarely needs more, and the list stays a glance. */
@@ -36,7 +36,23 @@ export const PIN_LIMITS = {
   numberMax: 9_999,
   /** An image's name in a pin ("Pinned area"). */
   imageNameCharsMax: 200,
+  /** A model's id or name, as the agent's model option gives them. */
+  modelCharsMax: 200,
+  /** A question a pin's agent asks the person, and each of the choices it offers. */
+  questionCharsMax: 600,
+  choicesMax: 6,
+  choiceCharsMax: 160,
+  /** Characters of one message read for questions (the newest ones: a report ends with its question). */
+  questionScanCharsMax: 40_000,
+  /** Questions read from one message: one for each pin a send can hold. */
+  questionsPerTextMax: 16,
 } as const satisfies Record<string, number>;
+
+/**
+ * The models Claude's Agent tool takes by name. Why: a pin of a one-message send runs in a subagent, and its call
+ * names a model by one of these short names only, so no other entry of the panel's model list can be honoured there.
+ */
+export const SUBAGENT_MODELS = ['opus', 'sonnet', 'haiku', 'fable'] as const;
 
 export const PIN_SEND_MODES = ['subagents', 'single'] as const;
 /**
@@ -50,10 +66,34 @@ export type PinSendMode = (typeof PIN_SEND_MODES)[number];
 // The brief a send carries (`ai:prompt` part `pins`) and what the transcript keeps
 // ---------------------------------------------------------------------------
 
-/** One pin as the agent is told about it. `images` are the indexes of its images among the message's attachments. */
-export interface PinBriefEntry {
-  readonly number: number;
+/**
+ * A pin's words with their `@` chips: `comment` is always their plain text (each chip as the reference the chat's
+ * composer sends), and `segments` is kept only while there is a chip to draw. Older pins hold the text alone.
+ */
+export interface PinWords {
   readonly comment: string;
+  readonly segments?: ComposerSegments;
+}
+
+/**
+ * The chips of `comment` as stored or received, spread into what holds the words. Bounded as the chat's drafts are
+ * (parseDraftSegments). Chips that do not parse, or whose plain text is not the comment, are left out and the words
+ * stay as text: a pin is never lost, and the chips never say something the comment does not.
+ */
+export function pinSegmentsField(input: unknown, comment: string): { readonly segments?: ComposerSegments } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseDraftSegments(input);
+  if (!parsed.ok || !parsed.value.some((segment) => segment.kind === 'chip')) {
+    return {};
+  }
+  return plainTextOf(parsed.value) === comment ? { segments: parsed.value } : {};
+}
+
+/** One pin as the agent is told about it. `images` are the indexes of its images among the message's attachments. */
+export interface PinBriefEntry extends PinWords {
+  readonly number: number;
   readonly pageLabel: string;
   readonly page: string;
   readonly elementLabel: string;
@@ -64,6 +104,10 @@ export interface PinBriefEntry {
   readonly componentFile: string | undefined;
   readonly breakpointPx: number | undefined;
   readonly images: readonly number[];
+  /** The model the person chose for this pin (a model option's value); absent runs it on the chat's model. */
+  readonly model?: string;
+  /** That model's name as the panel lists it, for the sent card. */
+  readonly modelName?: string;
 }
 
 export interface PinBrief {
@@ -72,13 +116,15 @@ export interface PinBrief {
 }
 
 /** One pin as its sent message keeps it: enough to draw it, never the paths or the agent's instructions. */
-export interface SentPin {
+export interface SentPin extends PinWords {
   readonly number: number;
-  readonly comment: string;
   readonly pageLabel: string;
   readonly elementLabel: string;
   /** The index of its first image among the message's attachments, for the thumbnail. */
   readonly image: number | undefined;
+  /** The model chosen for this pin, and its name; absent when it ran on the chat's model. */
+  readonly model?: string;
+  readonly modelName?: string;
 }
 
 /** A brief from the wire: bounded, numbers unique, a `single` brief holding exactly one pin, image indexes inside the message's attachments. */
@@ -95,6 +141,9 @@ export function parsePinBrief(input: unknown): PinBrief {
   if (new Set(pins.map((pin) => pin.number)).size !== pins.length) {
     throw new Error('brief.pins: repeated number');
   }
+  if (mode === 'subagents' && !pins.every((pin) => pin.model === undefined || isSubagentModel(pin.model))) {
+    throw new Error('brief.pins: a subagent cannot run that model');
+  }
   const images = pins.flatMap((pin) => pin.images);
   if (new Set(images).size !== images.length) {
     throw new Error('brief.pins: an image belongs to one pin');
@@ -110,9 +159,11 @@ export function parsePinBrief(input: unknown): PinBrief {
 function parseBriefEntry(input: unknown): PinBriefEntry {
   const value = object(input, 'brief.pin');
   const breakpoint = value['breakpointPx'];
+  const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'brief.pin.comment');
   return {
     number: pinNumber(value['number']),
-    comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'brief.pin.comment'),
+    comment,
+    ...pinSegmentsField(value['segments'], comment),
     pageLabel: nonEmpty(value['pageLabel'], PIN_LIMITS.labelCharsMax, 'brief.pin.pageLabel'),
     page: projectFile(value['page'], 'brief.pin.page'),
     elementLabel: nonEmpty(value['elementLabel'], PIN_LIMITS.labelCharsMax, 'brief.pin.elementLabel'),
@@ -125,6 +176,22 @@ function parseBriefEntry(input: unknown): PinBriefEntry {
     images: list(value['images'], PIN_LIMITS.imagesPerPinMax, 'brief.pin.images').map((index) =>
       bounded(count(index, 'brief.pin.image'), AI_LIMITS.attachmentsMax - 1, 'brief.pin.image'),
     ),
+    ...modelFields(value, 'brief.pin'),
+  };
+}
+
+export function isSubagentModel(model: string): boolean {
+  return SUBAGENT_MODELS.some((candidate) => candidate === model);
+}
+
+// The model chosen for a pin: both or neither, bounded; absent keys stay absent, so older messages read unchanged.
+function modelFields(value: Record<string, unknown>, name: string): { readonly model?: string; readonly modelName?: string } {
+  if (value['model'] === undefined) {
+    return {};
+  }
+  return {
+    model: nonEmpty(value['model'], PIN_LIMITS.modelCharsMax, `${name}.model`),
+    modelName: nonEmpty(value['modelName'], PIN_LIMITS.modelCharsMax, `${name}.modelName`),
   };
 }
 
@@ -133,9 +200,11 @@ export function sentPinsOf(brief: PinBrief): readonly SentPin[] {
   const sent = brief.pins.map((pin) => ({
     number: pin.number,
     comment: pin.comment,
+    ...(pin.segments === undefined ? {} : { segments: pin.segments }),
     pageLabel: pin.pageLabel,
     elementLabel: pin.elementLabel,
     image: pin.images[0],
+    ...(pin.model === undefined || pin.modelName === undefined ? {} : { model: pin.model, modelName: pin.modelName }),
   }));
   assert(sent.length === brief.pins.length, 'sentPinsOf: one sent pin per pin');
   return sent;
@@ -145,12 +214,15 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
   const pins = list(input, PIN_LIMITS.pinsPerSendMax, 'sentPins').map((entry) => {
     const value = object(entry, 'sentPin');
     const image = value['image'];
+    const comment = text(value['comment'], PIN_LIMITS.commentCharsMax, 'sentPin.comment');
     return {
       number: pinNumber(value['number']),
-      comment: text(value['comment'], PIN_LIMITS.commentCharsMax, 'sentPin.comment'),
+      comment,
+      ...pinSegmentsField(value['segments'], comment),
       pageLabel: nonEmpty(value['pageLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.pageLabel'),
       elementLabel: nonEmpty(value['elementLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.elementLabel'),
       image: image === undefined ? undefined : bounded(count(image, 'sentPin.image'), AI_LIMITS.attachmentsMax - 1, 'sentPin.image'),
+      ...modelFields(value, 'sentPin'),
     };
   });
   if (pins.length === 0) {
@@ -161,47 +233,26 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
 }
 
 // ---------------------------------------------------------------------------
-// Which pins may run at once
+// Which pins start together
 // ---------------------------------------------------------------------------
 
-/** A pin as the schedule sees it: its number and the files its change is expected to touch. */
-export interface PinWork {
-  readonly number: number;
-  readonly files: readonly string[];
-}
-
 /**
- * The waves a `subagents` send runs in: every pin of a wave at once, each wave after the one before has finished.
- * Two pins that name a file in common never share a wave, and keep their order (the lower number first), so two
- * subagents never edit one file at the same time; no wave holds more than `concurrencyMax` pins. Pins are taken
- * in number order, and each goes to the first wave after every earlier pin that shares one of its files.
+ * The waves a `subagents` send runs in: every pin of a wave starts at once, at most `concurrencyMax` of them, in
+ * number order; the rest wait for the next wave. Pins that change the same file run together too. Why that is
+ * safe: all subagents of a send are one Claude Code process, whose edit tools replace an exact passage in the file
+ * as it is at that moment and refuse a file that changed since the agent read it, so one pin's edit never
+ * overwrites another's. The instructions (pinInstructions.ts) forbid the ways around that: rewriting a whole file
+ * and writing files with shell commands.
  */
-export function pinWaves(work: readonly PinWork[], concurrencyMax: number = PIN_LIMITS.concurrencyMax): readonly (readonly number[])[] {
+export function pinWaves(numbers: readonly number[], concurrencyMax: number = PIN_LIMITS.concurrencyMax): readonly (readonly number[])[] {
   assert(concurrencyMax >= 1, 'pinWaves: at least one pin runs at a time');
-  assert(work.length <= PIN_LIMITS.pinsPerSendMax, 'pinWaves: a send is bounded');
-  const ordered = [...work].sort((left, right) => left.number - right.number);
+  assert(numbers.length <= PIN_LIMITS.pinsPerSendMax, 'pinWaves: a send is bounded');
+  const ordered = [...numbers].sort((left, right) => left - right);
   const waves: number[][] = [];
-  const lastWaveOf = new Map<string, number>();
-  for (const pin of ordered) {
-    let wave = 0;
-    for (const file of pin.files) {
-      const last = lastWaveOf.get(file);
-      if (last !== undefined) {
-        wave = Math.max(wave, last + 1);
-      }
-    }
-    // A full wave pushes the pin later, never earlier: every later wave still follows its files' last wave.
-    while (wave < waves.length && (waves[wave]?.length ?? 0) >= concurrencyMax) {
-      wave += 1;
-    }
-    const target = waves[wave] ?? [];
-    target.push(pin.number);
-    waves[wave] = target;
-    for (const file of pin.files) {
-      lastWaveOf.set(file, wave);
-    }
+  for (let from = 0; from < ordered.length; from += concurrencyMax) {
+    waves.push(ordered.slice(from, from + concurrencyMax));
   }
-  assert(waves.reduce((sum, wave) => sum + wave.length, 0) === work.length, 'pinWaves: every pin runs once');
+  assert(waves.reduce((sum, wave) => sum + wave.length, 0) === numbers.length, 'pinWaves: every pin runs once');
   assert(
     waves.every((wave) => wave.length >= 1),
     'pinWaves: no wave is empty',
@@ -209,11 +260,73 @@ export function pinWaves(work: readonly PinWork[], concurrencyMax: number = PIN_
   return waves;
 }
 
-/** The files a pin's change is expected to touch: where the element is written and, for an instance, its component. */
-export function pinFiles(pin: Pick<PinBriefEntry, 'file' | 'componentFile'>): readonly string[] {
-  const files = pin.componentFile === undefined || pin.componentFile === pin.file ? [pin.file] : [pin.file, pin.componentFile];
-  assert(new Set(files).size === files.length, 'pinFiles: each file is named once');
-  return files;
+// ---------------------------------------------------------------------------
+// A pin's question to the person
+// ---------------------------------------------------------------------------
+
+/** A question a pin's agent asked, with the answers it offered (none: the person writes their own). */
+export interface PinQuestion {
+  readonly number: number;
+  readonly question: string;
+  readonly choices: readonly string[];
+}
+
+/** The words that open a pin's question, as the instructions ask for it. Plain words, so the message reads well as it is. */
+export const PIN_QUESTION_LEAD = 'Question for pin'; // i18n-ignore: the form the agent is asked to write, matched.
+
+const QUESTION_LINE = /^\s*(?:#{1,6}\s+)?(?:\*\*)?question for pin\s*#?(\d{1,4})(?:\*\*)?\s*:(?:\*\*)?\s*(.*)$/iu;
+const CHOICE_LINE = /^\s*(?:[-*•]|\d{1,2}[.)])\s+(.+)$/u;
+
+/**
+ * The questions a message asks about pins, in the order asked. Why a written form and not a question tool: Claude's
+ * own question tool is off for a client that cannot draw ACP forms (Stacki declares no `elicitation`), and Codex
+ * has none here, so a pin's agent can only ask in words. A line "Question for pin 2: …" asks; the list lines right
+ * under it are the choices. Words without that line are not read as a question. Total and bounded: it reads the last
+ * `questionScanCharsMax` characters and returns at most `questionsPerTextMax` questions.
+ */
+export function pinQuestionsOf(message: string): readonly PinQuestion[] {
+  const lines = message.slice(-PIN_LIMITS.questionScanCharsMax).split('\n');
+  const questions: PinQuestion[] = [];
+  for (let index = 0; index < lines.length && questions.length < PIN_LIMITS.questionsPerTextMax; index += 1) {
+    const match = QUESTION_LINE.exec(lines[index] ?? '');
+    if (match === null) {
+      continue;
+    }
+    const number = Number(match[1]);
+    const question = questionWords(match[2] ?? '', PIN_LIMITS.questionCharsMax);
+    if (number >= 1 && question !== '') {
+      questions.push({ number, question, choices: choicesUnder(lines, index + 1) });
+    }
+  }
+  assert(questions.length <= PIN_LIMITS.questionsPerTextMax, 'pinQuestionsOf: bounded');
+  return questions;
+}
+
+// The list right under a question, with at most one blank line before it.
+function choicesUnder(lines: readonly string[], from: number): readonly string[] {
+  const choices: string[] = [];
+  const start = (lines[from] ?? '').trim() === '' ? from + 1 : from;
+  for (let index = start; index < lines.length && choices.length < PIN_LIMITS.choicesMax; index += 1) {
+    const match = CHOICE_LINE.exec(lines[index] ?? '');
+    const choice = match === null ? '' : questionWords(match[1] ?? '', PIN_LIMITS.choiceCharsMax);
+    if (choice === '') {
+      break;
+    }
+    if (!choices.includes(choice)) {
+      choices.push(choice);
+    }
+  }
+  assert(choices.length <= PIN_LIMITS.choicesMax, 'choicesUnder: bounded');
+  return choices;
+}
+
+// Words as a button or a card shows them: Markdown's emphasis and code marks off, spaces folded, cut to the bound.
+function questionWords(words: string, charsMax: number): string {
+  const plain = words
+    .replace(/\*\*|`/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+  return plain.length <= charsMax ? plain : `${plain.slice(0, charsMax - 1)}…`;
 }
 
 /** The note sent right before a pin's image, so the agent knows which pin it shows. */

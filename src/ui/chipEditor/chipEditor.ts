@@ -27,12 +27,16 @@ export interface ChipLook {
   readonly label: string;
   /** Hover text and the accessible name when it says more than the label. */
   readonly title?: string;
+  /** `card`: the owner shows the chip's value in its own card, so the pill takes no native tooltip. */
+  readonly hover?: 'card';
   /** Becomes data-chip-kind on the pill, so a stylesheet can colour or mark each kind. */
   readonly kind?: string;
 }
 
 export interface ChipEditorOptions<Chip> {
   readonly describe: (chip: Chip) => ChipLook;
+  /** What a copy of a selection writes for a chip; absent: its label. */
+  readonly copyText?: (chip: Chip) => string;
   /** Called when a pill is clicked; the editor does not move its caret for the click. */
   readonly onChipClick?: (chip: Chip, element: HTMLElement) => void;
   /** Adds anything to the pill beyond its label (an icon). Called once per drawn pill. */
@@ -94,7 +98,7 @@ class ChipWidget<Chip> extends WidgetType {
     element.className = 'chip-editor-chip';
     element.setAttribute('contenteditable', 'false');
     element.setAttribute('aria-label', this.look.title ?? this.look.label);
-    if (this.look.title !== undefined) {
+    if (this.look.title !== undefined && this.look.hover !== 'card') {
       element.title = this.look.title;
     }
     if (this.look.kind !== undefined) {
@@ -249,7 +253,7 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
     return restored;
   });
 
-  // Copying a selection that holds chips puts their labels on the clipboard, not placeholders.
+  // Copying a selection that holds chips puts their words on the clipboard, not placeholders.
   const copyLabels = EditorView.clipboardOutputFilter.of((text, state) => {
     if (!text.includes(CHIP_CHARACTER)) {
       return text;
@@ -259,7 +263,8 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
     if (pieces.length - 1 !== selected.length) {
       return pieces.join('');
     }
-    return pieces.map((piece, index) => piece + (selected[index] === undefined ? '' : options.describe(selected[index].chip).label)).join('');
+    const written = (chip: Chip): string => options.copyText?.(chip) ?? options.describe(chip).label;
+    return pieces.map((piece, index) => piece + (selected[index] === undefined ? '' : written(selected[index].chip))).join('');
   });
 
   const readSegments = (state: EditorState): readonly Segment<Chip>[] => {

@@ -3,6 +3,7 @@
 // and each pushed event with the parsers below before a component sees it.
 // Pushes: `ai:events` (batched transcript events, acknowledged with the
 // one-way `ai:ack`) and `ai:agentStatus` (an agent's availability changed).
+import { parseMcpAuthRequest, type McpAuthReply } from '../properties/mcp';
 import { assert } from '../core/assert';
 import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { boolean, count, list, object, optional, pathText, record, text } from '../core/boundary';
@@ -364,6 +365,8 @@ export const AI_PAYLOADS = {
   'ai:remember': object({ projectPath, agent: parseAgentId, action: parseRememberAction }),
   'ai:review': object({ projectPath, chat, turn: (input: unknown) => toTurnId(text(input)), path: pathText, action: reviewAction }),
   'ai:setup': object({ projectPath, agent: parseAgentId, action: (input: unknown) => parseSetupAction(input) }),
+  /** Where the project's MCP servers stand for each agent, and signing in to one (shared/properties/mcp.ts). */
+  'ai:mcpAuth': object({ projectPath, request: (input: unknown) => parseMcpAuthRequest(input) }),
 } as const;
 
 /** The one-way acknowledgement: event characters the renderer has applied. Never negative or NaN. */
@@ -529,6 +532,7 @@ export interface AiResults {
   readonly 'ai:remember': Result<RememberedSettings, AiFailure>;
   readonly 'ai:review': ReviewOutcome;
   readonly 'ai:setup': SetupState;
+  readonly 'ai:mcpAuth': McpAuthReply;
 }
 
 // ---------------------------------------------------------------------------
@@ -900,11 +904,21 @@ export function parseSetupAction(input: unknown): SetupAction {
   }
 }
 
+/**
+ * `not-subscription`: the sign-in in effect is not proven to be a Claude subscription. `billed`: a running session
+ * was billed per use and was stopped.
+ */
+export const SIGNED_OUT_REASONS = ['not-subscription', 'billed'] as const;
+export type SignedOutReason = (typeof SIGNED_OUT_REASONS)[number];
+
 /** Where an agent's own CLI stands, in the order a person goes through it. */
 export type SetupState =
   | { readonly agent: AgentId; readonly step: 'missing' }
   | { readonly agent: AgentId; readonly step: 'installing' }
-  | { readonly agent: AgentId; readonly step: 'signed-out' }
+  /** `reason`: why a Claude that has some sign-in still needs the panel's subscription sign-in (`SIGNED_OUT_REASONS`). */
+  | { readonly agent: AgentId; readonly step: 'signed-out'; readonly reason?: SignedOutReason }
+  /** The sign-in could not be checked (the CLI timed out, stopped or printed something unreadable). Nothing is blocked. */
+  | { readonly agent: AgentId; readonly step: 'unchecked' }
   /**
    * `url`: the page the CLI asked for, opened in the browser; `needsCode`: the CLI waits for a pasted code;
    * `output`: what the CLI has printed so far, with links and tokens left out, for the card's Details.
@@ -916,7 +930,8 @@ export type SetupState =
       readonly needsCode: boolean;
       readonly output: string;
     }
-  | { readonly agent: AgentId; readonly step: 'ready'; readonly account: SetupAccount }
+  /** `billing`: a running session said it is charged beyond the subscription, which the panel warns about. */
+  | { readonly agent: AgentId; readonly step: 'ready'; readonly account: SetupAccount; readonly billing?: 'extra-usage' }
   /** A step that did not work: what to say, and the CLI's own output for "Copy details". */
   | {
       readonly agent: AgentId;
@@ -935,11 +950,16 @@ export interface SetupAccount {
   readonly name: string | undefined;
   readonly plan: string | undefined;
   readonly email: string | undefined;
+  /** Which kind of sign-in the agent uses. Only the kind crosses to the renderer: never a key, a token or a value. */
+  readonly source: SignInSource;
 }
+
+export const SIGN_IN_SOURCES = ['account', 'api-key', 'token', 'cloud'] as const;
+export type SignInSource = (typeof SIGN_IN_SOURCES)[number];
 
 export const SETUP_DETAILS_CHARS_MAX = 16_000;
 
-const SETUP_STEPS = ['missing', 'installing', 'signed-out', 'signing-in', 'ready', 'failed'] as const;
+const SETUP_STEPS = ['missing', 'installing', 'signed-out', 'unchecked', 'signing-in', 'ready', 'failed'] as const;
 
 export function parseSetupState(input: unknown): SetupState {
   const value = record(input);
@@ -948,7 +968,11 @@ export function parseSetupState(input: unknown): SetupState {
   switch (step) {
     case 'missing':
     case 'installing':
-    case 'signed-out':
+    case 'signed-out': {
+      const reason = SIGNED_OUT_REASONS.find((candidate) => candidate === value['reason']);
+      return reason === undefined ? { agent, step } : { agent, step, reason };
+    }
+    case 'unchecked':
       return { agent, step };
     case 'signing-in':
       return {
@@ -965,7 +989,12 @@ export function parseSetupState(input: unknown): SetupState {
       if (name !== undefined && name.includes('@')) {
         throw new Error('account.name: a display name, never an email');
       }
-      return { agent, step, account: { name, plan: field(account['plan']), email: field(account['email']) } };
+      const source = SIGN_IN_SOURCES.find((candidate) => candidate === account['source']);
+      if (source === undefined) {
+        throw new Error('account.source: unknown kind of sign-in');
+      }
+      const shown = { name, plan: field(account['plan']), email: field(account['email']), source };
+      return value['billing'] === 'extra-usage' ? { agent, step, account: shown, billing: 'extra-usage' } : { agent, step, account: shown };
     }
     case 'failed': {
       const during = value['during'] === 'install' || value['during'] === 'sign-in' || value['during'] === 'sign-out' ? value['during'] : undefined;
