@@ -586,12 +586,15 @@ export function checksum(source: string) {
   return createHash('sha256').update(source).digest('hex');
 }
 
+const RELEASE_LISTENERS_MAX = 16;
+
 export function createRooms(root: string) {
   const coordinator = new SerialQueue(() => verifyGitWorkspaceLease(root));
   const rooms = new Map<string, Promise<Room>>();
   const readyRooms = new Set<Room>();
   let publishing: PublishState = { kind: 'idle' };
   const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
+  const releaseListeners = new Set<() => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
@@ -604,7 +607,7 @@ export function createRooms(root: string) {
       room.broadcast({ type: 'presence', peers });
     }
   };
-  const sockets = new WebSocketServer({ noServer: true, maxPayload: 2_000_000 });
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: 2_000_000, clientTracking: true });
   const get = (input: string) => {
     const file = sourcePath(input);
     let pending = rooms.get(file);
@@ -642,6 +645,11 @@ export function createRooms(root: string) {
     },
     sockets,
     get,
+    onRelease: (listener: () => void) => {
+      assert(releaseListeners.size < RELEASE_LISTENERS_MAX, 'Release listeners stay bounded');
+      releaseListeners.add(listener);
+    },
+    release: () => releaseRooms(sockets, releaseListeners),
     read: async (file: string) => {
       const pending = rooms.get(file);
       return pending ? (await pending).text.toString() : readSource(root, file);
@@ -670,6 +678,19 @@ function livePresence(rooms: ReadonlySet<Room>, sourceListeners: ReadonlySet<(fi
     },
     snapshot: () => [...rooms].flatMap((room) => [...room.cursors.snapshot()]),
   };
+}
+
+// A dev server closed. Its restart serves these same rooms (server/integration.ts), so only what belongs to that
+// server's connections is let go. The WebSocketServer stays open: a closed one refuses every later
+// connection, and nothing can reopen it.
+function releaseRooms(sockets: WebSocketServer, listeners: ReadonlySet<() => void>) {
+  for (const client of sockets.clients) {
+    // 1012 is "service restart": the browser reconnects.
+    client.close(1012, 'Studio server restarted');
+  }
+  for (const listener of listeners) {
+    listener();
+  }
 }
 
 async function removeRoom(root: string, rooms: Map<string, Promise<Room>>, readyRooms: Set<Room>, file: string) {

@@ -20,9 +20,13 @@ const mutations = new Set([
 ]);
 export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
   const handlers = cmsHandlers();
-  const reads = new CmsReadWorkspace(root);
-  rooms.sockets.once('close', () => {
-    void reads.close().catch((error: unknown) => console.error('CMS cleanup failed', error));
+  // A closed read workspace stays closed, and these routes outlive a dev server restart: each release
+  // removes the staging directory and leaves a fresh workspace, which stages nothing until a read.
+  let reads = new CmsReadWorkspace(root);
+  rooms.onRelease(() => {
+    const released = reads;
+    reads = new CmsReadWorkspace(root);
+    void released.close().catch((error: unknown) => console.error('CMS cleanup failed', error));
   });
   return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) => {
     if (pathname !== '/studio/api/cms') {

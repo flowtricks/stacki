@@ -25,8 +25,7 @@ export async function publishGitWorkspace(
   const run = gitWorkspaceRun(git);
   await verifyPublishHead(run, remote, manifest.branch, expected);
   const workspace = gitWorkspaceContext(root, connection);
-  await fetchPublishBases(run, workspace, manifest, remote, expected);
-  await run(['fetch', '--quiet', '--update-shallow', workspace.directory, branch.head]);
+  await importWorkspaceHead(run, workspace, manifest, remote);
   await verifyPublishAncestry(git, expected, branch.head);
   const tree = published(await overlayPublishSource(git, source, branch.head));
   const original = await run(['rev-parse', branch.head + '^{tree}']);
@@ -48,6 +47,21 @@ export async function publishGitWorkspace(
     throw Object.assign(new ReferencedError('git.studio.publishCheckpoint'), { cause: error });
   }
   return { sha: head, url: `https://github.com/${manifest.repository}/commit/${head}` };
+}
+
+/**
+ * Bring the workspace branch's head into a temporary repository that publishes or submits a review.
+ * `run` carries that repository's own GitHub credentials; `remote` is the repository on GitHub.
+ */
+export async function importWorkspaceHead(
+  run: ReturnType<typeof gitWorkspaceRun>,
+  workspace: PublishSource['git'],
+  manifest: GitWorkspaceManifest,
+  remote: string,
+) {
+  const expected = manifest.remote.find((entry) => entry.name === manifest.branch)?.head ?? '';
+  await fetchPublishBases(run, workspace, manifest, remote, expected);
+  await run(['fetch', '--quiet', '--update-shallow', workspace.directory, gitWorkspaceBranch(manifest).head]);
 }
 
 async function verifyPublishHead(run: ReturnType<typeof gitWorkspaceRun>, remote: string, branch: string, expected: string) {

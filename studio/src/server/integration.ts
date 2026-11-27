@@ -31,6 +31,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
 import { componentPreviewPlugin, previewSupportFiles, renderComponentPreviewPage } from '../../vendor/stacki/electron/previewServer/componentPreview';
 import { createRooms } from '../features/collaboration/rooms';
+import { assert } from '../../vendor/stacki/shared/core/assert';
 import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
 import { featureRoutes } from './featureRoutes';
@@ -51,10 +52,50 @@ interface PreviewOptions extends Options {
   readonly trailingSlash: 'always' | 'never' | 'ignore';
 }
 import type { ViteDevServer, Plugin } from 'vite';
+declare global {
+  var stackiStudioIntegration: ((options: Options) => AstroIntegration) | undefined;
+}
+
+// Astro restarts the dev server by evaluating the config again, and with it a second copy of this whole
+// module. Only the first copy ever runs: its workspace runtimes, Git leases and error classes are module
+// state, and a second copy beside them would not see a running Git command or a storage recovery.
 export default function studio(options: Options): AstroIntegration {
+  globalThis.stackiStudioIntegration ??= studioIntegration;
+  return globalThis.stackiStudioIntegration(options);
+}
+interface StudioRuntime {
+  readonly rooms: ReturnType<typeof createRooms>;
+  readonly features: ReturnType<typeof featureRoutes>;
+}
+
+// A dev server serves one workspace. The margin is for tests, which make many in one process.
+const RUNTIMES_MAX = 64;
+const runtimes = new Map<string, StudioRuntime>();
+
+/**
+ * The shared documents, queues and services of one workspace, made once per process.
+ *
+ * Why: a dev server restarts while Studio is in use, often because a pull rewrote a file it watches.
+ * Vite's restart reuses the plugins, and Astro's runs the integration again while the old server may
+ * still be inside a Git command. Either way the new server must serve the same documents, Git queue,
+ * publish state and edit coordinator: a second set would run Git beside the first over one index.
+ */
+export function studioRuntime(root: string): StudioRuntime {
+  assert(root.length > 0, 'A Studio runtime belongs to a workspace');
+  const existing = runtimes.get(root);
+  if (existing) {
+    return existing;
+  }
+  assert(runtimes.size < RUNTIMES_MAX, 'Studio runtimes stay bounded');
+  const rooms = createRooms(root);
+  const runtime = { rooms, features: featureRoutes(root, rooms) };
+  runtimes.set(root, runtime);
+  return runtime;
+}
+
+function studioIntegration(options: Options): AstroIntegration {
   let prioritizeRequests = () => {};
-  const rooms = createRooms(options.root);
-  const features = featureRoutes(options.root, rooms);
+  const { rooms, features } = studioRuntime(options.root);
   return {
     name: 'astro-studio-cms',
     hooks: {
@@ -127,7 +168,10 @@ function previewPlugin(options: PreviewOptions, features: ReturnType<typeof feat
     },
     configureServer(server: ViteDevServer) {
       configureStudioServer(server, options, features, rooms);
-      server.httpServer?.once('close', () => rooms.sockets.close());
+      server.httpServer?.once('close', () => rooms.release());
+      // `astro:server:start` runs for the first server only. A restarted one must move Studio's routes ahead
+      // of the site's again, once every plugin has added its middleware: when it starts listening.
+      server.httpServer?.once('listening', () => prioritizeStudioRequests(server));
     },
   };
 }

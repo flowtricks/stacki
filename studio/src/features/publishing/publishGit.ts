@@ -74,7 +74,8 @@ export function publishGit(
   });
   return collectPublishCommand(child, {
     root: path.dirname(context.directory),
-    command: args[0] ?? 'command',
+    // A leading `-c name=value` configures the command that follows it.
+    command: (args[0] === '-c' ? args[2] : args[0]) ?? 'command',
     input,
     output: options.output ?? 'trimmed',
     secrets: context.authorization ? [context.authorization] : [],
