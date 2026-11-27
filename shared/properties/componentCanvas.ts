@@ -305,6 +305,10 @@ function withLevelLayouts(components: Readonly<Record<string, ComponentCanvas>>,
     return [file, { ...components[file], layouts: parseLayouts(layouts, file) }];
   });
   const merged = { ...components, ...Object.fromEntries(laidOut) };
+  assert(
+    Object.keys(components).every((file) => Object.hasOwn(merged, file)),
+    'Component canvas: reading the layouts drops no component',
+  );
   if (Object.keys(merged).length > CANVAS_LIMITS.componentsMax) {
     throw new Error(`Component canvas: more than ${CANVAS_LIMITS.componentsMax} components`);
   }
@@ -536,6 +540,10 @@ export function serializeComponentCanvas(file: ComponentCanvasFile): string {
       components[name] = sortedSettings(settings);
     }
   }
+  assert(
+    names.every((name) => Object.hasOwn(components, name) || Object.hasOwn(levelLayouts, name)),
+    'Component canvas: every component is written, with its settings or its layouts',
+  );
   const { later, ...known } = canvasFileOf({ background: file.background, classes: file.classes, later: file.later }, components);
   const layoutsKey = Object.keys(levelLayouts).length === 0 ? {} : { levelLayouts };
   const text = JSON.stringify({ ...known, ...layoutsKey, ...later }, undefined, 2) + '\n';
@@ -1131,8 +1139,8 @@ function withValueOn(
 // The key that holds both keys' pairs, in a key's order (frameKey: by prop name).
 function joinedKey(left: string, right: string): string {
   const prop = (pair: string): string => pair.split('=')[0] ?? '';
-  // No two pairs name one prop: both keys are pairs of one frame, which names each once.
   const pairs = [...new Set([...keyPairs(left), ...keyPairs(right)])].sort((first, second) => (prop(first) < prop(second) ? -1 : 1));
+  assert(new Set(pairs.map(prop)).size === pairs.length, 'Both keys are pairs of one frame, which names each prop once');
   return parseFrameKey(pairs.join('&'));
 }
 
@@ -1141,6 +1149,7 @@ function joinedKey(left: string, right: string): string {
  * another; without one, those a narrower entry gives a value.
  */
 export function sharedOverrides(settings: ComponentCanvas | undefined, frames: readonly string[], scope: string, setting: SharedSetting): readonly string[] {
+  assert(frames.length <= CANVAS_LIMITS.framesMax, 'A canvas has a bounded number of frames');
   const own = settings?.frames?.[scope]?.[setting];
   if (own === undefined) {
     return overridesIn(settings, frames, scope, setting).map((entry) => entry.frame);
