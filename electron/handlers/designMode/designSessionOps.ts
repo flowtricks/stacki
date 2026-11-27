@@ -11,6 +11,8 @@ import {
   defaultFramePlace,
   nextDesignFrameId,
   type DesignFrameId,
+  type DesignFrameSize,
+  type DesignFrameView,
   type DesignPlace,
   type DesignSessionState,
 } from '../../../shared/ipc/designSession';
@@ -24,6 +26,7 @@ export interface Frame {
   readonly id: DesignFrameId;
   readonly name: string;
   readonly at: DesignPlace;
+  readonly widthPx?: number;
   readonly files: FrameFiles;
 }
 
@@ -42,6 +45,12 @@ function firstFrame(name: string): Frame {
   return { id: 'f1', name, at: defaultFramePlace(0), files: NO_FILES };
 }
 
+/** A frame as the window is told of it: its files only counted. */
+function frameViewOf(frame: Frame): DesignFrameView {
+  const width = frame.widthPx === undefined ? {} : { widthPx: frame.widthPx };
+  return { id: frame.id, name: frame.name, at: frame.at, ...width, changedFiles: frame.files.size };
+}
+
 /**
  * The frames kept for the project, read before a session begins: the canvas draws them at once, while the copy is
  * made. Reads Stacki's own data folder only. `frames` is empty when nothing is kept.
@@ -51,7 +60,7 @@ export async function keptFrames(appDataRoot: string, realRoot: string) {
   if (kept.kind === 'none') {
     return { frames: [], snapshots: [] };
   }
-  const frames = kept.draft.frames.map((frame) => ({ id: frame.id, name: frame.name, at: frame.at, changedFiles: frame.files.size }));
+  const frames = kept.draft.frames.map(frameViewOf);
   const snapshots: { readonly frame: DesignFrameId; readonly snapshot: DesignSnapshot }[] = [];
   for (const frame of kept.draft.frames) {
     const snapshot = await readSnapshot({ appDataRoot, realRoot, frame: frame.id });
@@ -131,7 +140,7 @@ export function stateOf(session: Session): DesignSessionState {
     projectName: path.basename(session.realRoot).slice(0, DESIGN_SESSION_LIMITS.projectNameCharsMax),
     liveRoot: session.sandbox.live,
     page: session.page,
-    frames: session.frames.map((frame) => ({ id: frame.id, name: frame.name, at: frame.at, changedFiles: frame.files.size })),
+    frames: session.frames.map(frameViewOf),
     active: session.active,
     stale: session.stale,
   };
@@ -152,7 +161,8 @@ export async function duplicateFrame(
   const source = frameById(session, input.source);
   const id = nextDesignFrameId(session.frames);
   await copySnapshot({ appDataRoot, realRoot: session.realRoot }, source.id, id);
-  return { ...session, frames: [...session.frames, { id, name: input.name, at: input.at, files: new Map(source.files) }] };
+  const width = source.widthPx === undefined ? {} : { widthPx: source.widthPx };
+  return { ...session, frames: [...session.frames, { id, name: input.name, at: input.at, ...width, files: new Map(source.files) }] };
 }
 
 /** Shows frame `id`: the copy is rewritten from the active frame's files to its own. Expects a captured session. */
@@ -215,6 +225,11 @@ export function renameFrame(session: Session, id: DesignFrameId, name: string): 
 
 export function moveFrame(session: Session, id: DesignFrameId, at: DesignPlace): Session {
   return withFrame(session, id, (frame) => ({ ...frame, at }));
+}
+
+/** Gives frames their widths and places, all at once: one frame that is not there refuses them all. */
+export function resizeFrames(session: Session, sizes: readonly DesignFrameSize[]): Session {
+  return sizes.reduce((next, size) => withFrame(next, size.frame, (frame) => ({ ...frame, widthPx: size.widthPx, at: size.at })), session);
 }
 
 /** Removes frame `id`, showing another first when it is the one shown. The last frame stays. */

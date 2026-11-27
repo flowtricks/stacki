@@ -15,6 +15,7 @@ export const designModeTr: DesignCatalog = {
   'frame.delete': 'Sil',
   'frame.changes': '{count} dosya değişti',
   'frame.renameLabel': 'Çerçeve adı',
+  'frame.width': 'Piksel cinsinden çerçeve genişliği',
   'board.title': 'Çerçeveler',
   'frame.loading': 'Bu çerçeve çiziliyor',
   'menu.duplicate': 'Çoğalt',

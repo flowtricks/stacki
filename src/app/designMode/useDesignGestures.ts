@@ -5,7 +5,7 @@
 // under it; Option-drag anywhere on a frame drags a copy out of it; the space between frames pans, and so does any
 // drag with Space held or the middle button. A selected frame is also dragged by its page. Any other drag in a page
 // takes the element there (or the picked one, under the pointer) and moves it freely; the picked element's handles
-// resize it.
+// resize it. A drag of a frame's side sets the frame's width.
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefObject } from 'react';
 import { parseDesignFrameId, type DesignFrameId, type DesignPlace } from '../../../shared/ipc/designSession';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
@@ -18,12 +18,14 @@ import {
   mayDuplicate,
   moveFrame,
   nextFrameId,
+  resizeFrame,
   selectElement,
   selectFrame,
   writeElementStyle,
   type DesignOpsContext,
 } from './designFrameOps';
 import { gripElement, pullElement, releaseElement, type ElementGrip, type ElementHandle, type ElementPull } from './designElementDrag';
+import { resizedFrame, type DesignEdge } from './designFrameWidth';
 import { designView, updateDesignView, type DesignCamera } from './designStore';
 
 /** A press that moves this far is a drag. */
@@ -31,6 +33,7 @@ const DRAG_PX = 4;
 
 export type DesignDrag =
   | { readonly kind: 'move'; readonly frame: DesignFrameId; readonly at: DesignPlace }
+  | { readonly kind: 'width'; readonly frame: DesignFrameId; readonly widthPx: number; readonly at: DesignPlace }
   | { readonly kind: 'element'; readonly frame: DesignFrameId; readonly node: DesignNodeAt; readonly pull: ElementPull }
   /** A copy on its way out of `source`, already keyed by the id it will have. */
   | { readonly kind: 'copy'; readonly source: DesignFrameId; readonly id: DesignFrameId; readonly at: DesignPlace };
@@ -44,7 +47,9 @@ interface Press {
   readonly pointer: number;
   readonly x: number;
   readonly y: number;
-  readonly target: 'board' | { readonly frame: DesignFrameId; readonly part: 'title' | 'body' };
+  readonly target: 'board' | { readonly frame: DesignFrameId; readonly part: PressedTile['part'] };
+  /** The side of a frame pressed, and the width it was drawn at then. */
+  readonly side: { readonly edge: DesignEdge; readonly widthPx: number } | undefined;
   readonly intent: 'pan' | 'pick' | 'copy';
   /** The resize handle pressed, if one was. */
   readonly handle: Exclude<ElementHandle, 'move'> | undefined;
@@ -58,8 +63,19 @@ interface Press {
 
 interface PressedTile {
   readonly frame: DesignFrameId;
-  readonly part: 'title' | 'body';
+  readonly part: 'title' | 'body' | 'edge';
   readonly element: HTMLElement;
+}
+
+function partOf(name: string | undefined): PressedTile['part'] {
+  return name === 'title' || name === 'edge' ? name : 'body';
+}
+
+/** The frame's side under a press, with the frame's width as drawn. */
+function sideOf(pressed: PressedTile | undefined): Press['side'] {
+  const edge = pressed?.part === 'edge' ? pressed.element.dataset['dmEdge'] : undefined;
+  const body = pressed?.element.closest<HTMLElement>('.dm-body') ?? undefined;
+  return (edge === 'w' || edge === 'e') && body !== undefined ? { edge, widthPx: body.offsetWidth } : undefined;
 }
 
 export function tileAt(target: unknown): PressedTile | undefined {
@@ -73,7 +89,7 @@ export function tileAt(target: unknown): PressedTile | undefined {
   }
   return {
     frame: parseDesignFrameId(tile.dataset['dmTile']),
-    part: part.dataset['dmPart'] === 'title' ? 'title' : 'body',
+    part: partOf(part.dataset['dmPart']),
     element: part,
   };
 }
@@ -134,6 +150,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     const held = press.current;
     press.current = undefined;
     plane.current?.removeAttribute('data-dm-dragging');
+    plane.current?.removeAttribute('data-dm-resizing');
     holdCaptures('free');
     unlisten.current?.();
     unlisten.current = undefined;
@@ -161,7 +178,7 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
   }, [cancel]);
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
-    if (event.target instanceof Element && event.target.closest('input') !== null) {
+    if (event.target instanceof Element && event.target.closest('input, .dm-title-width') !== null) {
       return;
     }
     const camera = designView().camera;
@@ -182,12 +199,19 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     const handle = handleName === 'e' || handleName === 's' || handleName === 'se' ? handleName : undefined;
     event.currentTarget.setPointerCapture(event.pointerId);
     setHover(undefined);
+    const side = panning ? undefined : sideOf(tile);
+    // The resize cursor holds wherever the pointer goes until the release, and the page is not pictured meanwhile.
+    if (side !== undefined) {
+      plane.current?.setAttribute('data-dm-resizing', '');
+      holdCaptures('held');
+    }
     press.current = {
       pointer: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       target: tile === undefined ? 'board' : { frame: tile.frame, part: tile.part },
-      intent: panning ? 'pan' : event.altKey ? 'copy' : 'pick',
+      intent: panning ? 'pan' : event.altKey && tile.part !== 'edge' ? 'copy' : 'pick',
+      side,
       camera,
       handle,
       node: tile?.part === 'body' && !panning ? nodeUnder(tile, event.clientX, event.clientY) : undefined,
@@ -207,6 +231,13 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
     }
     const origin = framePlace(held.target.frame);
     if (origin === undefined) {
+      return;
+    }
+    if (held.side !== undefined) {
+      // The pointer's travel is on screen; the frame's width is in the canvas's own pixels. The frame's page
+      // reflows under the drag; it is neither replaced nor pictured again until the release.
+      const sized = resizedFrame({ widthPx: held.side.widthPx, at: origin }, held.side.edge, dx / held.camera.zoom);
+      showDrag({ kind: 'width', frame: held.target.frame, ...sized });
       return;
     }
     const at = clampPlace({ x: origin.x + dx / held.camera.zoom, y: origin.y + dy / held.camera.zoom });
@@ -315,6 +346,8 @@ export function useDesignGestures(context: DesignOpsContext, plane: RefObject<HT
       if (event.button === 0) {
         click(held, event);
       }
+    } else if (done?.kind === 'width') {
+      resizeFrame(context, done.frame, done);
     } else if (done?.kind === 'copy') {
       duplicateFrame(context, done.source, done.at);
     } else if (done?.kind === 'element' && grip !== undefined) {

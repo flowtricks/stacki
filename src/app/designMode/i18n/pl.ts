@@ -15,6 +15,7 @@ export const designModePl: DesignCatalog = {
   'frame.delete': 'Usuń',
   'frame.changes': 'Zmienione pliki: {count}',
   'frame.renameLabel': 'Nazwa ramki',
+  'frame.width': 'Szerokość ramki w pikselach',
   'board.title': 'Ramki',
   'frame.loading': 'Rysowanie tej ramki',
   'menu.duplicate': 'Duplikuj',

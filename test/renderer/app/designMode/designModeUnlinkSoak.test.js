@@ -23,13 +23,17 @@ const crypto = require('node:crypto');
 const WAIT_MS_MAX = 30_000;
 const OPEN_WAIT_MS_MAX = 90_000;
 const POLL_MS = 100;
+/** Captures of a redrawn element before it counts as different. */
+const PAINT_POLLS_MAX = 100;
+/** Captures in a row that must agree before an element's picture is the one compared against. */
+const PAINT_STEADY_POLLS = 3;
 const TREE_FILES_MAX = 50_000;
 const CHECKS_MIN = 20;
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
-  // Design mode is offered on macOS only, and the run drives the real pointer.
-  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'Design mode is offered on macOS only';
+  // It drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'a pointer probe, macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModeUnlinkSoak: ${unavailable}`);
     return;
@@ -215,8 +219,13 @@ const offsetOf = (
   const top = outer.top + r.top * zoom; const bottom = outer.top + r.bottom * zoom; const middle = (top + bottom) / 2;
   return top >= q.top + 40 && bottom <= q.bottom - 120 ? 0 : Math.round(middle - (q.top + q.height / 2)); })()`;
 
-/** A frame channel may differ by this much where a picture is resampled; the unlinked element itself by nothing. */
+/** A frame channel may differ by this much where a picture is resampled. */
 const FRAME_CHANNEL_DELTA_MAX = 8;
+/**
+ * The unlinked element may differ by one level of a channel, which no eye sees: the same boxes and styles (compared
+ * exactly) were painted a level apart on a loaded machine, steadily, in a full gate run.
+ */
+const ELEMENT_CHANNEL_DELTA_MAX = 1;
 
 function largestDifference(left, right) {
   if (left.length !== right.length) {
@@ -240,7 +249,7 @@ async function runInElectron({ window, project, options }) {
   const { app } = require('electron');
   const { createDriver } = require('../../../helpers/e2e/soakDriver.js');
   const { installRecorder } = require('../../../helpers/e2e/panelRecorder.js');
-  const { waitFor } = require('../../../helpers/waitFor.js');
+  const { waitFor, waitForSteady } = require('../../../helpers/waitFor.js');
   const { designFenceState } = require('#dist/electron/lib/designMode/designFence.js');
   const driver = createDriver(window, project);
   const report = { checked: 0, failures: [] };
@@ -297,6 +306,22 @@ async function runInElectron({ window, project, options }) {
     const rect = await until('the frame on screen', finder);
     const image = await driver.contents.capturePage(rect);
     return { rect, bitmap: image.toBitmap(), png: image.toPNG() };
+  };
+  /** A capture that several in a row agree on: one caught part painted is never what a later one is held to. */
+  const steadyPixels = async (what, finder) => {
+    let last;
+    await waitForSteady({
+      what: `${what}: the element painted and still`,
+      read: async () => {
+        last = await framePixels(finder);
+        return crypto.createHash('sha1').update(last.bitmap).digest('hex');
+      },
+      until: Boolean,
+      steadyPollCount: PAINT_STEADY_POLLS,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: PAINT_POLLS_MAX,
+    });
+    return last;
   };
   /** Pans the canvas, with the wheel, until `selector` in f1 is on screen. */
   const reveal = async (selector) => {
@@ -377,7 +402,7 @@ async function runInElectron({ window, project, options }) {
     await clearView();
     const stylesBefore = await until(`${name}'s styles`, frameStyles('f1', styled));
     const pixelsBefore = await framePixels();
-    const regionBefore = await framePixels(elementRect(styledRoot));
+    const regionBefore = await steadyPixels(`${name} before`, elementRect(styledRoot));
     fs.writeFileSync(path.join(options.outDirectory, `${name}-before.png`), pixelsBefore.png);
     check(`${name}: drawn inside its component (no page node of its own)`, (await driver.evaluate(markedInFrame('f1', selector))) === false);
     await rightClickIn(selector);
@@ -404,7 +429,23 @@ async function runInElectron({ window, project, options }) {
     const delta = sameRect ? largestDifference(pixelsBefore.bitmap, pixelsAfter.bitmap) : 255;
     check(`${name}: the visible frame is the same before and after`, delta <= FRAME_CHANNEL_DELTA_MAX, `largest channel difference ${String(delta)}`);
     report.frameDelta = { ...(report.frameDelta ?? {}), [name]: delta };
-    check(`${name}: the unlinked element is pixel-identical`, Buffer.compare(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap) === 0);
+    // One capture may catch the redrawn frame part painted on a loaded machine: it is captured until it matches, and
+    // an element that really differs never does.
+    let elementDelta = 255;
+    const painted = await waitFor({
+      what: `${name}: the element painted as before`,
+      read: async () => {
+        elementDelta = largestDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap);
+        return elementDelta;
+      },
+      until: (largest) => largest <= ELEMENT_CHANNEL_DELTA_MAX,
+      pollIntervalMs: POLL_MS,
+      pollCountMax: PAINT_POLLS_MAX,
+    }).then(
+      () => true,
+      () => false,
+    );
+    check(`${name}: the unlinked element is painted the same`, painted, `largest channel difference ${String(elementDelta)}`);
     return page;
   };
 

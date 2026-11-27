@@ -39,7 +39,7 @@ const INTEGRATION_POINTS: Readonly<Record<string, number>> = {
   'shared/ipc/ipcPayloads.ts': 2,
   'shared/ipc/ipcResults.ts': 3,
   'shared/ipc/preloadApi.ts': 1,
-  'src/features/style/embed/useInlineTarget.ts': 5,
+  'src/features/style/embed/useInlineTarget.ts': 6,
   'src/features/style/model/inlineDefault.ts': 5,
   'src/features/ai/AiPanel.tsx': 2,
   'src/features/ai/aiHold.ts': 1,

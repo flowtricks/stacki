@@ -235,7 +235,15 @@ function useEditorContexts(
   const querySuggestionsHook = useQuerySuggestions(pendingWrites);
   const embedContexts = useEmbedContexts(selectionState, elementTokens, sourceDocumentHook, contextKeys);
   const wrapperReachHook = useWrapperReach(editorRefs, elementTokens, contextKeys);
-  const styleContextsHook = useStyleContexts(selectionState, nativeState, contextKeys, embedContexts, wrapperReachHook);
+  const styleContextsHook = useStyleContexts(
+    selectionState,
+    nativeState,
+    contextKeys,
+    embedContexts,
+    wrapperReachHook,
+    editorFoundation.inlineState,
+    elementTokens,
+  );
   const nativeTarget = useNativeTarget(selectionState, nativeState, pendingWrites);
   const componentSource = useComponentSource(scanState, nativeState, nativeTarget);
   return {
@@ -279,7 +287,7 @@ function useEditorResolution(
     pendingWrites,
     selectorPick,
   );
-  const contextChange = useContextChange(selectionState, nativeState, elementTokens, activeSelectorHook, selectorPick, styleContextsHook);
+  const contextChange = useContextChange(selectionState, nativeState, elementTokens, activeSelectorHook, selectorPick, styleContextsHook, inlineState);
   useDefaultUpgrade(selectionState, nativeState, elementTokens, tokenDefault, selectorPick, styleContextsHook);
   return { contextChange, resolvedHook, selectorChipsHook };
 }
@@ -462,7 +470,11 @@ function useEditorCardView(
     sourceOptionsHook,
   );
   const editorView = useEditorView(editorRefs, busyState, scanState, nativeState, elementTokens, embedNavHook, selectionCard, contextCard, sourceCard);
-  const card = useInlineCard(editorView.view.card, editorFoundation.inlineState, { deselect: typedSelector.deselect, setSaveError: busyState.setSaveError });
+  const card = useInlineCard(editorView.view.card, editorFoundation.inlineState, {
+    deselect: typedSelector.deselect,
+    setSaveError: busyState.setSaveError,
+    showBase: contextChange.showBaseForAttribute,
+  });
   return { editorView: { view: { ...editorView.view, card } } };
 }
 

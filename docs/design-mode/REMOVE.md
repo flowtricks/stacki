@@ -29,6 +29,22 @@ project.
 - **The person's page** is noted before each reload and reopened once the editor has opened its own first page
   (`designReturn.ts`), then left alone. A component opened from a page enters on that page; a route a dependency adds,
   and a component opened on its own, are refused. A frame's picture of another page is never drawn.
+- **A frame is the page as scrolled through** (`designSettle.ts`). The covered live canvas has never been
+  scrolled, so before it is copied it is walked top to bottom: once when it is a new document, is drawn at another
+  size, or holds elements the last walk never saw. Finite CSS and Web animations are finished at once; script
+  animations are waited for until the page stops writing (400 ms quiet, 1.4 s while something the script hid is
+  still hidden; an element written for 3 s without a pause is a loop). A walk takes at most 12 s. A second walk
+  reads what only holds on screen (a scrubbed value, a reversing reveal, a view timeline, a canvas or video's
+  picture) while each element is nearest the middle, and writes it on the copy only, never over a value changed
+  since. Every copy is taken with the page at its top, and the canvas is put back where it was scrolled. The
+  canvas is never walked while the pointer button shows it, nor is the person's own preview before the copy opens
+  (a new session's first frame is a skeleton until the copy's own picture arrives).
+  What a still frame shows instead of motion: a pinned sequence (`.pin-spacer`) appears once, as it starts,
+  without its scroll room; an endless animation or marquee at a still point; a canvas or video as one picture
+  (an `<img>` stands for a canvas, which Chromium collapses where scripts are off, so a rule that names the
+  `canvas` tag does not reach it). A canvas that reads blank leaves what lies under it showing. Not reached:
+  closed shadow roots, other origins' frames and pixels, content inside the page's own scrolling boxes, and an
+  entrance that starts more than 1.4 s after the page has otherwise stopped.
 - **Pictures in frames:** Astro's dev server refuses another origin's no-cors requests (its Sec-Fetch check), which is
   what a frame on the app's origin sends, so a snapshot carries its same-origin pictures, posters and fonts in
   itself (`designSnapshotAssets.ts`), within a budget; past it a picture shows broken in the frame only.
@@ -38,12 +54,21 @@ project.
   and shows the shown frame live), their digit keys, and "Set component defaults"; main refuses project settings
   writes.
 - **After a crash** the copy, its `.env` and its dev server stay until Stacki next starts, which stops the server and
-  deletes the copy (`test/renderer/app/designMode/designModeCrashSoak.test.js`).
+  deletes the copy (see "Stopping what a crash left running").
 - **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
   together.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
   its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
   inline style through the editor's own write (so ⌘Z takes them back), in rem.
+- **Frame widths** (`designFrameWidth.ts`): a drag of either side of a frame, as of an artboard (the other side stays;
+  Escape puts it back), or the number beside the picked frame's name, sets that frame's width, 280 to 7680 px (the
+  editor's canvas limits). During a drag only the frame's own document is resized, so its media queries answer with
+  no new picture. On release the editor's canvas under Design mode takes the width (`useFrameWidthSync.ts`), so the
+  frame is pictured again there and the style panel's breakpoint follows. A width the canvas gets from anything else
+  (a breakpoint or Base picked in the style panel's dropdown) becomes the shown frame's; picking "Inline styles"
+  never gives it one. The first resize gives every frame a
+  width; widths are kept in the session and the draft beside each frame's place. Like a frame's place, a width is not
+  in undo history. Start over forgets them, and leaving comes back to the project on Desktop.
 - **Unlinking a component** (right-click an instance in the shown frame, or its Navigator row: "Unlink component")
   replaces the instance, in the copy's page only, with the plain elements it renders (`designUnlink.ts`). It reads
   the page as the dev server renders it, markers and all (`stacki:design-page-html`, answered by the canvas frame's
@@ -59,16 +84,42 @@ project.
   writes a `<style>` or a framework island into the page, shows a picture at an address only the dev server answers
   (`/_image`, `/@fs/`, `/src/`), draws slot content twice, renders nothing, or is repeated by a page loop.
 - **Not yet:** editing text inside a frame; opening a component from a frame; undo for a
-  removed frame. Frames run no script, so script-driven layout shows as it was snapshotted.
+  removed frame. Frames run no script, so a frame is one still state of the page (below).
 
 ## Where it is offered
 
-macOS only, labelled experimental on its header button. `designModeAvailable` in `shared/ipc/designSession.ts` is the one
-rule: off macOS the window draws no button and registers nothing, and main refuses every `design:session` request,
-makes no copy and installs no write guard. The startup sweep still runs everywhere. Why: on Windows and Linux, stopping
-a dev server a crash left running from a copy is unverified, so a copy, with the project's `.env`, could be left behind.
-Studio and the demo never mount Design mode. To offer it on another platform, verify that cleanup there first, change
-the rule, and let the suites in `test/electron/handlers/designMode/` and `test/renderer/app/designMode/` run there.
+macOS, Windows and Linux, labelled experimental on its header button. `designModeAvailable` in
+`shared/ipc/designSession.ts` is the one rule: on any other system the window draws no button and registers nothing,
+and main refuses every `design:session` request, makes no copy and installs no write guard. The startup sweep runs
+everywhere. Studio and the demo never mount Design mode. A system belongs in the rule only where stopping what a crash
+left running from a copy works there; `test/electron/handlers/designMode/` runs on all three in CI. The app-level soaks
+in `test/renderer/app/designMode/` drive the real pointer, so like every pointer probe they run on macOS only: on
+Windows and Linux the mode's window has not been driven by a test.
+
+Where the systems differ: only macOS clones `node_modules` in one call (elsewhere it is copied, which is slower and
+cannot be cancelled until it ends). On Windows a folder linked inside the project is copied as a junction; a file
+linked inside it needs the right to make symbolic links, without which the mode says the copy failed; and a
+`node_modules` whose top-level entries are junctions with whole paths (pnpm) is refused as linking outside the copy.
+
+## Stopping what a crash left running
+
+`electron/handlers/designMode/designLeftovers.ts` stops what runs from a copy before the copy is deleted.
+
+- **Which processes:** one whose program is a file in the copy; or a JavaScript runtime (Node, Bun, Deno, Electron,
+  Stacki's own program; on Windows also `cmd.exe` running a package shim) whose command line names a path in the copy,
+  or, on Linux, whose working directory is in it; or a runtime one of those started. Never this app or what started it.
+  An editor, a log viewer, a shell or a browser is left alone, even when it names the copy or the server opened it.
+- **How they are read:** Linux `/proc`, macOS `ps`, Windows PowerShell's `Win32_Process` (it gives no working
+  directory, and keeps parent ids after the parent has gone, so a child older than its parent is not followed).
+- **How they are stopped:** one process id at a time, three rounds at most of one signal and 3 seconds each (SIGTERM,
+  then SIGKILL; Windows ends a process either way), each round after a fresh listing.
+- **Deleting:** a delete the system refuses for the moment is retried 5 times over 3 seconds. A copy that still will
+  not go, or that something still runs from, loses its secret files on their own (`.env*`, `.dev.vars`, key files) and
+  stays in `design-sandboxes/`: every later start, and every time the mode begins, tries it again. It holds back no
+  other copy, and neither it nor quitting raises an error. Where the processes cannot be read at all (PowerShell
+  blocked by policy), deleting is still tried.
+
+`test/electron/handlers/designMode/designLeftovers.test.ts` holds this with real leftover processes and real folders.
 
 ## Switching it off without removing it
 
@@ -99,7 +150,7 @@ and main refuses to begin a session.
   secrets and MCP settings, roles, the command line) are hidden through the app's own "View as" preview
   (`src/app/designMode/designRole.ts`). The AI panel stays, for its mode buttons; sending a prompt is refused.
 - **The copy does not outlive the session.** It is deleted, with its `.env`, when the window leaves it, when the app
-  quits, and, for a copy a crash left behind, the next time the app starts.
+  quits, and, for a copy a crash left behind (or one that would not go), the next time the app starts.
 - **Undo history from before is cleared**, on the way in and on the way out: the window reloads, as it does for any
   project switch. A toast says so each time.
 - **Drafts** (each frame's changed files, its place and its snapshot, which is the page as rendered) are kept in
@@ -118,6 +169,7 @@ byte-identical afterwards.
    - `electron/lib/designMode/`
    - `shared/ipc/designSession.ts`
    - `shared/ipc/designSnapshot.ts`
+   - `test/electron/preload/designSnapshotChromium.test.js` and `test/fixtures/design-snapshot/`
    - `electron/preload/designMode/`
    - `src/features/style/model/inlineDefault.ts`
    - `src/features/ai/aiHold.ts`
@@ -141,7 +193,8 @@ byte-identical afterwards.
    - `shared/ipc/preloadApi.ts`: `readonly designSession: 'design:session';`.
    - `src/features/style/embed/useInlineTarget.ts`: the `inlineDefault` import, `|| startsInline(style, inline)` in
      `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, the `useInlineByDefault(…)` call in `useInlineCard`, and the
-     `useInlineByDefault` function at the end of the file.
+     `useInlineByDefault` function at the end of the file; in `select`, the `if (inlineDefault() !== 'inline')` around
+     `showBase();`, which stays.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
      `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in
      `ContextAction`, `'canChange'` in `ComponentMenuHeader`'s props, its `useUnlinkMenu()` call and the row it shows.

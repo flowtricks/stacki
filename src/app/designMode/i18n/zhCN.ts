@@ -15,6 +15,7 @@ export const designModeZhCN: DesignCatalog = {
   'frame.delete': '删除',
   'frame.changes': '已更改 {count} 个文件',
   'frame.renameLabel': '框架名称',
+  'frame.width': '框架宽度（像素）',
   'board.title': '框架',
   'frame.loading': '正在绘制此画框',
   'menu.duplicate': '复制一份',

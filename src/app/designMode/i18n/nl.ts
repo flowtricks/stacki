@@ -15,6 +15,7 @@ export const designModeNl: DesignCatalog = {
   'frame.delete': 'Verwijderen',
   'frame.changes': 'Gewijzigde bestanden: {count}',
   'frame.renameLabel': 'Framenaam',
+  'frame.width': 'Framebreedte in pixels',
   'board.title': 'Frames',
   'frame.loading': 'Dit frame wordt getekend',
   'menu.duplicate': 'Dupliceren',

@@ -111,6 +111,12 @@ function startsInline(style: InlineStyle, inline: Pick<InlineState, 'writable' |
   return style.kind === 'none' && inline.writable && !inline.pseudo && inlineDefault() === 'inline';
 }
 
+/** Whether the attribute is the edit target now. While it is, the panel's query is Base: a style attribute
+ *  cannot sit inside a query (useEditorContexts.ts useStyleContexts holds that). */
+export function inlineActiveOf(inline: InlineState, snapshot: ElementSnapshot | undefined): boolean {
+  return inlineTargetOf(inline, chipStyleOf(inline, snapshot)).active;
+}
+
 /** What resolveStyle folds in: the attribute's declarations, or the edited branch's. */
 export function inlineResolveInput(input: {
   readonly style: InlineStyle;
@@ -143,12 +149,17 @@ export function inlineResolveInput(input: {
 export function useInlineCard(
   card: StyleCardProps,
   inline: InlineState,
-  panel: { readonly deselect: () => void; readonly setSaveError: (message: string | undefined) => void },
+  panel: {
+    readonly deselect: () => void;
+    readonly setSaveError: (message: string | undefined) => void;
+    /** Picks Base as the breakpoint dropdown does, for the person's own pick of the chip. */
+    readonly showBase: () => void;
+  },
 ): StyleCardProps {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
   const { nodeId, setPickedFor, branchKey, setBranchKey } = inline;
-  const { deselect, setSaveError } = panel;
+  const { deselect, setSaveError, showBase } = panel;
   const style = chipStyleOf(inline, card.snapshot);
   const { shown, active } = inlineTargetOf(inline, style);
   const heldRef = useRef<HeldInlineWrite | undefined>(undefined);
@@ -215,6 +226,12 @@ export function useInlineCard(
     }
     // No rule is the target now: the panel shows the attribute's values over the cascade.
     deselect();
+    // In the same update as the pick: a style attribute applies at every width, so the dropdown goes to Base.
+    // Where the attribute is the default, in Design mode, the canvas width is a frame's own and the pick leaves it
+    // and the follow mode alone: the dropdown goes to Base by the target's own rule (useStyleContexts).
+    if (inlineDefault() !== 'inline') {
+      showBase();
+    }
     setPickedFor(nodeId);
     // The attribute is shown and edited in the CSS code section, so it opens with the pick.
     if (!card.cssCodeOpen) {
@@ -243,6 +260,14 @@ export function useInlineCard(
   const withChip: StyleCardProps = {
     ...card,
     inline: chip,
+    // The dropdown holds its last settled picture while a new element is read: that picture's query is never
+    // shown beside a picked attribute.
+    ...(active ? { context: '' } : {}),
+    // A query asked for is a place for a rule, so it leaves the attribute, which no query can hold.
+    onAddQuery: (query, mode) => {
+      leave();
+      card.onAddQuery(query, mode);
+    },
     // Any rule picked, typed or deselected leaves the attribute.
     onSelectActive: (selector) => {
       leave();

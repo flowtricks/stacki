@@ -8,7 +8,8 @@
 // What: one copy, `site/<project name>/`, which the window opens and every panel writes to. Only what the preview
 // renders is copied: dependency, build, cache and history folders are skipped at every depth (DESIGN_SKIPPED_NAMES),
 // so a project that holds a second app with its own node_modules costs nothing for it. The project's own top-level
-// node_modules is cloned in one call (`cp -c`, copy-on-write on macOS: seconds, and no disk until a file changes),
+// node_modules is cloned in one call (`cp -c`, copy-on-write on macOS: seconds, and no disk until a file changes;
+// Windows and Linux copy it file by file, copy-on-write where the file system can),
 // because Astro resolves packages by walking up from the project; a symlinked one would let the dev server write its
 // caches into the project's own. The project itself stands as the original the frames are compared with (read only,
 // never written: the fence refuses it), so nothing is copied twice.
@@ -22,13 +23,16 @@
 // is refused: the copy could not be sealed, because a write through such a link would land outside it.
 //
 // Lifetime: removed when the mode ends, when the app quits, and, for a copy a crash left behind, the next time the
-// app starts (`sweepSandboxes`), along with any dev server still running from it, so the `.env` it holds never
-// outlives the session that needed it.
-import { execFile, spawn } from 'node:child_process';
+// app starts (`sweepSandboxes`), along with any dev server still running from it (designLeftovers.ts), so the `.env`
+// it holds never outlives the session that needed it. Where a copy cannot be deleted yet (a process that will not
+// stop, a file the system holds locked), its secret files are deleted on their own, and the folder stays: it is the
+// record by which every later start and session tries again.
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isPathWithin } from '../../lib/platform';
+import { stopServersIn, type StopOutcome } from './designLeftovers';
 import type { DesignEnterRefusal } from '../../../shared/ipc/designSession';
 
 export const DESIGN_SANDBOX_LIMITS = {
@@ -45,6 +49,13 @@ export const DESIGN_SANDBOX_LIMITS = {
   cloneTimeoutMs: 300_000,
   /** Sandboxes swept at once; more is a leak, not a session. */
   sandboxesMax: 64,
+  /** Retries of a delete the system refuses for the moment (a locked file), waiting longer each time: 3 s in all. */
+  removeRetriesMax: 5,
+  removeRetryMs: 200,
+  /** Entries looked at while deleting a copy's secret files on their own. */
+  scrubEntriesMax: 80_000,
+  /** How far a file's time may lag the clock: Linux stamps files from a clock a few milliseconds behind. */
+  clockSlackMs: 1_000,
 } as const satisfies Record<string, number>;
 
 /** Folders that are dependencies, builds, caches or history, at any depth: never copied, never compared. */
@@ -72,7 +83,7 @@ export interface DesignSandbox {
   /** The original the frames are compared with: the project itself, only ever read. */
   readonly base: string;
   readonly live: string;
-  /** When the copy finished: a live file changed after this may differ from the original. */
+  /** When the copy finished, less clockSlackMs: a live file changed after this may differ from the original. */
   readonly copiedAtMs: number;
 }
 
@@ -145,10 +156,10 @@ export async function createSandbox(input: {
   const live = path.join(root, 'site', path.basename(realRoot));
   const outcome = await fillSandbox({ realRoot, live, entries: plan.entries, cancel });
   if (outcome !== 'done') {
-    await removeSandboxAsync(root);
+    await discardSandbox(root, { kind: 'stopped', signalled: 0 });
     return { ok: false, reason: outcome };
   }
-  return { ok: true, sandbox: { root, base: realRoot, live, copiedAtMs: Date.now() } };
+  return { ok: true, sandbox: { root, base: realRoot, live, copiedAtMs: Date.now() - DESIGN_SANDBOX_LIMITS.clockSlackMs } };
 }
 
 async function fillSandbox(input: {
@@ -174,7 +185,9 @@ async function fillSandbox(input: {
   }
 }
 
-type CopyEntry = { readonly rel: string; readonly kind: 'directory' | 'file' } | { readonly rel: string; readonly kind: 'link'; readonly target: string };
+type CopyEntry =
+  | { readonly rel: string; readonly kind: 'directory' | 'file' }
+  | { readonly rel: string; readonly kind: 'link'; readonly target: string; readonly leadsTo: 'folder' | 'file' };
 type CopyPlan =
   | { readonly ok: true; readonly entries: readonly CopyEntry[] }
   | { readonly ok: false; readonly reason: DesignEnterRefusal; readonly folder?: string | undefined };
@@ -282,12 +295,21 @@ async function planEntry(realRoot: string, rel: string, dirent: fs.Dirent): Prom
       return 'outside';
     }
     // Kept as a link, relative, so in the copy it names the copy's own file.
-    return { rel, kind: 'link', target: path.relative(path.dirname(source), resolved) };
+    const leadsTo = (await isFolder(resolved)) ? 'folder' : 'file';
+    return { rel, kind: 'link', target: path.relative(path.dirname(source), resolved), leadsTo };
   }
   if (dirent.isDirectory()) {
     return { rel, kind: 'directory' };
   }
   return { rel, kind: 'file' };
+}
+
+async function isFolder(target: string): Promise<boolean> {
+  try {
+    return (await fs.promises.stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 async function copyPlanned(realRoot: string, target: string, entries: readonly CopyEntry[], cancel: DesignCancel): Promise<void> {
@@ -306,13 +328,23 @@ async function copyPlanned(realRoot: string, target: string, entries: readonly C
       }
       const destination = path.join(target, entry.rel);
       if (entry.kind === 'link') {
-        await fs.promises.symlink(entry.target, destination);
+        const link = linkToMake(entry, destination);
+        await fs.promises.symlink(link.target, destination, link.type);
       } else {
         // Copy-on-write where the file system can (APFS, Btrfs, ReFS), a plain copy elsewhere.
         await fs.promises.copyFile(path.join(realRoot, entry.rel), destination, fs.constants.COPYFILE_FICLONE);
       }
     },
   );
+}
+
+// Windows lets anyone make a junction, which names a folder by its whole path, and only some people a symbolic link:
+// a folder is linked by a junction into the copy, so a project with a folder linked inside it can still be copied.
+function linkToMake(entry: Extract<CopyEntry, { kind: 'link' }>, destination: string): { readonly target: string; readonly type: 'junction' | undefined } {
+  if (process.platform === 'win32' && entry.leadsTo === 'folder') {
+    return { target: path.resolve(path.dirname(destination), entry.target), type: 'junction' };
+  }
+  return { target: entry.target, type: undefined };
 }
 
 /** Clones node_modules. macOS clones the whole tree in one call; elsewhere Node copies it, cloning where it can. */
@@ -364,27 +396,117 @@ async function linkTarget(link: string): Promise<string | undefined> {
   }
 }
 
-/** Removes a sandbox without holding the main process: the files go in the background. */
+/** Deletes a folder without holding the main process: the files go in the background. Rejects where one will not go. */
 export async function removeSandboxAsync(root: string): Promise<void> {
-  await fs.promises.rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  const retries = { maxRetries: DESIGN_SANDBOX_LIMITS.removeRetriesMax, retryDelay: DESIGN_SANDBOX_LIMITS.removeRetryMs };
+  await fs.promises.rm(root, { recursive: true, force: true, ...retries });
+}
+
+/** A file whose content is a secret: never kept in a draft, and deleted on its own from a copy that cannot go yet. */
+export function isSecretFile(rel: string): boolean {
+  const name = rel.split('/').at(-1) ?? rel;
+  if (name.startsWith('.env') || name === '.dev.vars') {
+    return true;
+  }
+  return /\.(pem|key|p12|pfx)$/i.test(name);
 }
 
 /**
- * Removes a sandbox as the app quits, when nothing can be awaited: on macOS and Linux a detached `rm` finishes after
- * the app has gone; elsewhere the removal is synchronous.
+ * Deletes the secret files of a copy one by one, packages aside, so they go even while the rest cannot. Links are not
+ * followed. Synchronous, for the app's quit. Returns how many are still there (at least one past the entry bound).
+ */
+export function scrubSecrets(root: string): number {
+  const pending: { readonly folder: string; readonly depth: number }[] = [{ folder: root, depth: 0 }];
+  let looked = 0;
+  let left = 0;
+  // Each turn takes one folder off the list, and the list only grows within the entry bound.
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    for (const entry of entriesOf(next.folder)) {
+      looked += 1;
+      if (looked > DESIGN_SANDBOX_LIMITS.scrubEntriesMax) {
+        return left + 1;
+      }
+      const full = path.join(next.folder, entry.name);
+      if (entry.isDirectory()) {
+        // The copy sits two folders (`site/<name>/`) below the sandbox's root.
+        if (entry.name !== 'node_modules' && next.depth < DESIGN_SANDBOX_LIMITS.walkDepthMax + 2) {
+          pending.push({ folder: full, depth: next.depth + 1 });
+        }
+      } else if (isSecretFile(entry.name)) {
+        left += deleteFile(full);
+      }
+    }
+  }
+  return left;
+}
+
+function entriesOf(folder: string): readonly fs.Dirent[] {
+  try {
+    return fs.readdirSync(folder, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/** 0 once the file is gone, 1 while it is not. */
+function deleteFile(file: string): 0 | 1 {
+  try {
+    fs.rmSync(file, { force: true });
+    return 0;
+  } catch {
+    return 1;
+  }
+}
+
+export type DiscardOutcome = 'removed' | 'kept';
+
+/**
+ * Deletes a sandbox, given what stopping its processes did. It is kept while one still runs from it (deleting would
+ * lose the only record by which a later start finds that process) or while a file will not go; its secret files are
+ * deleted either way, and the next sweep tries again. Where the processes could not be read, deleting is still tried:
+ * the copy is what must not stay. Never rejects.
+ */
+export async function discardSandbox(root: string, stop: StopOutcome): Promise<DiscardOutcome> {
+  let why = stop.kind === 'running' ? `process ${stop.pids.join(', ')} still runs from it` : '';
+  if (stop.kind !== 'running') {
+    try {
+      await removeSandboxAsync(root);
+      return 'removed';
+    } catch (error: unknown) {
+      why = stop.kind === 'unlisted' ? `${String(error)}; processes unread: ${stop.detail}` : String(error);
+    }
+  }
+  const left = scrubSecrets(root);
+  console.warn(`[design] a copy is kept for a later start to delete (${left} secret files left in it): ${why}`); // i18n-ignore: developer log text.
+  return 'kept';
+}
+
+/**
+ * Removes a sandbox as the app quits, when nothing can be awaited. Its secret files go first. On macOS and Linux a
+ * detached `rm` finishes after the app has gone; on Windows the removal is synchronous, and where the dev server has
+ * not let go yet the copy stays for the next start: quitting never fails over it.
  */
 export function removeSandboxAtQuit(root: string): void {
+  scrubSecrets(root);
   if (process.platform === 'win32') {
-    fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    try {
+      const retries = { maxRetries: DESIGN_SANDBOX_LIMITS.removeRetriesMax, retryDelay: DESIGN_SANDBOX_LIMITS.removeRetryMs };
+      fs.rmSync(root, { recursive: true, force: true, ...retries });
+    } catch (error: unknown) {
+      console.warn(`[design] a copy is kept for a later start to delete: ${String(error)}`); // i18n-ignore: developer log text.
+    }
     return;
   }
   const child = spawn('rm', ['-rf', root], { detached: true, stdio: 'ignore' });
+  // A spawn that fails leaves the copy for the next start; without a listener it would crash the quit.
+  child.once('error', () => undefined);
   child.unref();
 }
 
 /**
  * Removes every sandbox but `keep`: at startup, the copies a crash left behind, with the `.env` they hold, after
- * stopping any dev server still running from one (its command line names the sandbox's folder).
+ * stopping any dev server still running from one. Each is handled on its own, so one that cannot go yet holds back
+ * no other. Returns how many were removed.
  */
 export async function sweepSandboxes(appDataRoot: string, keep: string | undefined = undefined): Promise<number> {
   const parent = sandboxesRoot(appDataRoot);
@@ -393,31 +515,10 @@ export async function sweepSandboxes(appDataRoot: string, keep: string | undefin
   }
   const names = (await fs.promises.readdir(parent)).slice(0, DESIGN_SANDBOX_LIMITS.sandboxesMax);
   const swept = names.map((name) => path.join(parent, name)).filter((root) => keep === undefined || path.resolve(keep) !== path.resolve(root));
+  let removed = 0;
   for (const root of swept) {
-    await stopServersIn(root);
-    await removeSandboxAsync(root);
+    const outcome = await discardSandbox(root, await stopServersIn(root));
+    removed += outcome === 'removed' ? 1 : 0;
   }
-  return swept.length;
-}
-
-/** Stops the processes whose command line runs from `root` (a dev server a crash left running). macOS and Linux. */
-export async function stopServersIn(root: string): Promise<number> {
-  if (process.platform === 'win32') {
-    return 0;
-  }
-  const listed = await new Promise<string>((resolve) => {
-    execFile('pgrep', ['-f', root], { timeout: 5_000 }, (_error, stdout) => resolve(String(stdout)));
-  });
-  const pids = listed
-    .split('\n')
-    .map((line) => Number(line.trim()))
-    .filter((pid) => Number.isSafeInteger(pid) && pid > 1 && pid !== process.pid);
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 'SIGTERM');
-    } catch {
-      // Gone already.
-    }
-  }
-  return pids.length;
+  return removed;
 }

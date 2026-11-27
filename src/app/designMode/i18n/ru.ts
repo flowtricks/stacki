@@ -15,6 +15,7 @@ export const designModeRu: DesignCatalog = {
   'frame.delete': 'Удалить',
   'frame.changes': 'Изменено файлов: {count}',
   'frame.renameLabel': 'Название фрейма',
+  'frame.width': 'Ширина фрейма в пикселях',
   'board.title': 'Фреймы',
   'frame.loading': 'Фрейм отрисовывается',
   'menu.duplicate': 'Дублировать',

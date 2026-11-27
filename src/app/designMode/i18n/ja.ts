@@ -15,6 +15,7 @@ export const designModeJa: DesignCatalog = {
   'frame.delete': '削除',
   'frame.changes': '{count}個のファイルを変更',
   'frame.renameLabel': 'フレーム名',
+  'frame.width': 'フレームの幅（ピクセル）',
   'board.title': 'フレーム',
   'frame.loading': 'このフレームを描画中',
   'menu.duplicate': '複製',

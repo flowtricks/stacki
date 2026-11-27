@@ -7,7 +7,8 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { brush, close } from '../../ui/central/centralGeometry';
 import { cancelDesignMode } from './designActions';
 import { fitCamera } from './designCamera';
-import { DesignFrameTile, EMPTY_FRAME } from './DesignFrameTile';
+import { DesignFrameTile } from './DesignFrameTile';
+import { frameWidthPx } from './designFrameWidth';
 import { framePicture, useDesignView } from './designStore';
 import { useCanvasColumn } from './useCanvasColumn';
 import { useDesignWords } from './i18n/designWords';
@@ -28,7 +29,7 @@ export function DesignOpeningCanvas({ frames }: { readonly frames: readonly Desi
       setSize({ width: element.clientWidth, height: element.clientHeight });
     }
   }, [area.visible]);
-  const boxes = frames.map((frame) => ({ at: frame.at, widthPx: view.snapshots.get(frame.id)?.viewportWidthPx ?? EMPTY_FRAME.widthPx }));
+  const boxes = frames.map((frame) => ({ at: frame.at, widthPx: frameWidthPx(frame, view.snapshots.get(frame.id)) }));
   const camera = fitCamera(boxes, size.width, size.height);
   return (
     <>

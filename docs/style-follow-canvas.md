@@ -79,3 +79,15 @@ The mode and the target change in one commit. The `0` key arrives outside a Reac
 and the target's state update render in two commits and one frame shows the old query beside a
 link already off. `test/renderer/style/followCanvasPick.test.js` records the trigger frame by frame
 across each action.
+
+## Inline styles is always Base
+
+A style attribute applies at every width, so the panel never shows a query while the "Inline styles"
+chip is the target (`useStyleContexts`). Clicking the chip picks Base as the dropdown does. While it
+stays picked, following waits: a resized canvas, the link and the `0` key leave the target on Base.
+Reselecting an element on its attribute, and Design mode's inline default, move the target only, never
+the canvas. Picking or adding a query leaves the chip first, so the edit goes into a rule.
+In Design mode, where the canvas width is a frame's own, the chip (and an override note naming the attribute)
+moves the dropdown alone: no canvas move, so no frame is resized. Picking Base or a breakpoint in the dropdown
+still moves it.
+`test/renderer/style/inlineStyleBase.test.js` holds this.

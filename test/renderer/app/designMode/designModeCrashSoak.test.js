@@ -6,9 +6,11 @@
 // Method: two real launches of the desktop app, hidden, sharing one temporary user data folder and one copy of the
 // fixture project (test/helpers/e2e), with the mock keychain. The first enters Design mode by a real press, records
 // the processes running inside the copy, and kills its own main process with SIGKILL. No watchdog is attached to the
-// dev server, so nothing but the app stops it. The second launch waits for the copy to go. The suite skips where the
-// fixture's Astro install or the built main process is missing, and on Windows (no process table by path). Run it by
-// hand with `node test/renderer/app/designMode/designModeCrashSoak.test.js`.
+// dev server, so nothing but the app stops it. The second launch waits for the copy to go. Processes are found by the
+// rule the sweep itself uses (designLeftovers.ts). It presses the button with the real pointer, so it runs on macOS
+// only, and skips where the fixture's Astro install or the built main process is missing; stopping a leftover server
+// and deleting its copy are held on all three systems by designLeftovers.test.ts. Run it by hand with
+// `node test/renderer/app/designMode/designModeCrashSoak.test.js`.
 
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
@@ -22,14 +24,11 @@ const POLL_MS = 200;
 const RUN_MS_MAX = 150_000;
 const TREE_FILES_MAX = 50_000;
 
-/** Processes whose command line names `text`, this one left out. */
-function processesNaming(text) {
-  const listed = childProcess.spawnSync('ps', ['-Ao', 'pid=,command='], { encoding: 'utf8' }).stdout;
-  return listed
-    .split('\n')
-    .map((line) => /^\s*(\d+)\s+(.*)$/.exec(line))
-    .filter((found) => found !== null && found[2].includes(text) && Number(found[1]) !== process.pid)
-    .map((found) => ({ pid: Number(found[1]), command: found[2].slice(0, 200) }));
+/** The processes that run from the copy at `root`, this one and what started it left out. */
+async function processesIn(root) {
+  const { leftoverProcesses, listProcesses } = require('#dist/electron/handlers/designMode/designLeftovers.js');
+  const where = { roots: [root], platform: process.platform, ownPid: process.pid, ownProgram: process.execPath };
+  return leftoverProcesses(await listProcesses(), where).map((found) => ({ pid: found.pid, command: found.commandLine.slice(0, 200) }));
 }
 
 function treeDigest(root) {
@@ -58,7 +57,8 @@ function treeDigest(root) {
 async function orchestrate() {
   const { cloneModules, copySite, removeWithRetries, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
   const { RUN_DIRECTORY_PREFIX, stopRun, writeRegistry } = require('../../../helpers/e2e/soakProcesses.js');
-  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'Design mode is offered on macOS only';
+  // It drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
+  const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'a pointer probe, macOS only';
   if (unavailable !== undefined) {
     console.log(`# skip designModeCrashSoak: ${unavailable}`);
     return;
@@ -135,7 +135,7 @@ async function orchestrate() {
     const sandboxes = path.join(userData, 'design-sandboxes');
     // Up to three seconds for what the app started to end with it: the number is a note, the checks come after the restart.
     const { value: orphans } = await pollUntil({
-      read: () => processesNaming(kept.sandboxRoot),
+      read: () => processesIn(kept.sandboxRoot),
       until: (found) => found.length === 0,
       what: 'the processes of the copy to end',
       pollIntervalMs: 100,
@@ -147,9 +147,9 @@ async function orchestrate() {
     const after = await launch('after');
     check('the app starts again and finds the copy gone', after.code === 0, JSON.stringify(after));
     check('no copy and no .env of it is left', !fs.existsSync(sandboxes) || fs.readdirSync(sandboxes).length === 0);
-    const left = processesNaming(kept.sandboxRoot);
+    const left = await processesIn(kept.sandboxRoot);
     check('nothing still runs in the deleted copy', left.length === 0, JSON.stringify(left));
-    const allDead = kept.running.every((pid) => !processesNaming(kept.sandboxRoot).some((found) => found.pid === pid));
+    const allDead = kept.running.every((pid) => !left.some((found) => found.pid === pid));
     check('every process seen in the copy is gone', allDead);
     check('the project is byte-identical after everything, with its .env', treeDigest(project) === before);
   } finally {
@@ -202,7 +202,7 @@ async function runInElectron({ window, project, options }) {
   await driver.waitForApp();
   await until('the copy’s page live', () => driver.canvasEvaluate(`!!document.querySelector('#soak-plain')`).catch(() => false));
   const fence = designFenceState();
-  const running = processesNaming(fence.sandboxRoot).map((found) => found.pid);
+  const running = (await processesIn(fence.sandboxRoot)).map((found) => found.pid);
   fs.writeFileSync(options.note, JSON.stringify({ sandboxRoot: fence.sandboxRoot, running }));
   process.kill(process.pid, 'SIGKILL');
   return 1;

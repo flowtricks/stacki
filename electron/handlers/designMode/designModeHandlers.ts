@@ -15,7 +15,8 @@ import { lowerDesignFence, observeDesignFence, raiseDesignFence } from '../../li
 import { guardDesignWrites } from '../../lib/designMode/designWriteGuard';
 import { isPathWithin } from '../../lib/platform';
 import type { MainHost } from '../mainHost';
-import { createSandbox, removeSandboxAsync, removeSandboxAtQuit, stopServersIn, sweepSandboxes } from './designSandbox';
+import { stopServersIn } from './designLeftovers';
+import { createSandbox, discardSandbox, removeSandboxAtQuit, sweepSandboxes } from './designSandbox';
 import {
   announceShown,
   beginSession,
@@ -29,6 +30,7 @@ import {
   moveFrame,
   pageSourceOf,
   renameFrame,
+  resizeFrames,
   snapshotsOf,
   startOver,
   stateOf,
@@ -41,7 +43,7 @@ export interface DesignModeOptions {
   readonly appDataRoot: string;
   /** Runs `listener` once as the app quits. */
   readonly onQuit: (listener: () => void) => void;
-  /** The computer's platform: Design mode is offered on macOS only (designModeAvailable). */
+  /** The computer's platform: Design mode is offered on the systems Stacki ships on (designModeAvailable). */
   readonly platform: NodeJS.Platform;
 }
 
@@ -83,8 +85,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
       try {
         keepDraft(appDataRoot, await capture(closing));
       } finally {
-        await stopServersIn(closing.sandbox.root);
-        await removeSandboxAsync(closing.sandbox.root);
+        await discardSandbox(closing.sandbox.root, await stopServersIn(closing.sandbox.root));
       }
     })().catch(() => undefined);
     return ending;
@@ -192,6 +193,7 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
       case 'frame-rename':
       case 'frame-delete':
       case 'frame-move':
+      case 'frame-resize':
       case 'frame-snapshot':
       case 'frame-snapshots':
       case 'start-over': {
@@ -209,7 +211,14 @@ export function createDesignSessions(host: Pick<MainHost, 'openProject' | 'send'
   return { answer, end, endAtQuit, observe, current: (): Session | undefined => session };
 }
 
-const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set(['state', 'frame-move', 'frame-snapshot', 'frame-snapshots', 'frame-rename']);
+const CAPTURE_FREE: ReadonlySet<DesignSessionRequest['op']> = new Set([
+  'state',
+  'frame-move',
+  'frame-resize',
+  'frame-snapshot',
+  'frame-snapshots',
+  'frame-rename',
+]);
 
 type SessionRequest = Exclude<DesignSessionRequest, { op: 'enter' | 'take-handoff' | 'cancel' | 'preview' }>;
 
@@ -250,6 +259,8 @@ async function operate(
       return saved(renameFrame(session, request.frame, request.name));
     case 'frame-move':
       return saved(moveFrame(session, request.frame, request.at));
+    case 'frame-resize':
+      return saved(resizeFrames(session, request.frames));
     case 'start-over': {
       const next = await startOver(appDataRoot, session, request.frameName);
       return shown(appDataRoot, next, request.page);

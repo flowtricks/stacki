@@ -15,6 +15,7 @@ export const designModeEnglish = {
   'frame.delete': 'Delete',
   'frame.changes': '{count} changed files',
   'frame.renameLabel': 'Frame name',
+  'frame.width': 'Frame width in pixels',
   'board.title': 'Frames',
   'frame.loading': 'Drawing this frame',
   'menu.duplicate': 'Duplicate',

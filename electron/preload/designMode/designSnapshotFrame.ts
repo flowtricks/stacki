@@ -23,6 +23,9 @@ import { PATH_ATTR, inScope, pathsOf, regions, runsOf } from '../frameRegions';
 import { isElement } from '../frameBasics';
 import { AssetBudget, inlinePictures, inlineStylePictures } from './designSnapshotAssets';
 import { liveId, mirrorPreview } from './designLiveMirror';
+import { pairSurfaces, showSurfaces } from './designSnapshotPictures';
+import { applySettled, collapsePins, writeAdoptedSheets, writeShadowRoots, writeStyleRules } from './designSnapshotDom';
+import { settlePage, type DesignSettled } from './designSettle';
 import { FontInliner, freezeViewportUnits, rebaseCssURLs } from './designSnapshotCss';
 
 /** Whether this document is one of the canvas's frames, where the preload installs nothing. */
@@ -61,9 +64,14 @@ export function listenForDesignSnapshots(): void {
       void pageHtmlMessage(request.nonce).then(post);
       return;
     }
-    void snapshotMessage(request.nonce).then(post);
+    // One copy at a time: each may walk the page, and two walks would scroll it under each other.
+    post({ type: 'stacki:design-snapshot-started', nonce: request.nonce });
+    const walking = request.walking;
+    copying = copying.then(() => snapshotMessage(request.nonce, walking)).then(post);
   });
 }
+
+let copying: Promise<void> = Promise.resolve();
 
 function post(message: DesignCanvasMessage): void {
   window.parent.postMessage(message, '*');
@@ -84,7 +92,7 @@ function watchStyles(): void {
   watch.observe(document.head, { childList: true, subtree: true, characterData: true, attributes: true });
 }
 
-async function snapshotMessage(nonce: string): Promise<DesignCanvasMessage> {
+async function snapshotMessage(nonce: string, walking: 'allowed' | 'held'): Promise<DesignCanvasMessage> {
   const refused = (failure: DesignSnapshotFailure, detail: string): DesignCanvasMessage => ({
     type: 'stacki:design-snapshot-reply',
     nonce,
@@ -101,7 +109,13 @@ async function snapshotMessage(nonce: string): Promise<DesignCanvasMessage> {
     if (elements > DESIGN_SNAPSHOT_LIMITS.elementsMax) {
       return refused('too-many-elements', String(elements));
     }
-    const html = await snapshotHTML(root);
+    const rest = await settlePage(walking);
+    let html: string;
+    try {
+      html = await snapshotHTML(root, rest.settled);
+    } finally {
+      rest.release();
+    }
     if (html.length > DESIGN_SNAPSHOT_LIMITS.htmlCharsMax) {
       return refused('too-large', String(html.length));
     }
@@ -214,7 +228,7 @@ const STILL_CSS =
 /** Bounds the walk over a page's stylesheets. */
 const SHEETS_MAX = 2_000;
 
-async function snapshotHTML(root: HTMLElement): Promise<string> {
+async function snapshotHTML(root: HTMLElement, settled: DesignSettled): Promise<string> {
   // Cloned first, so the live page and the copy list their elements in the same order.
   const clone = root.cloneNode(true);
   if (!(clone instanceof HTMLElement)) {
@@ -222,6 +236,12 @@ async function snapshotHTML(root: HTMLElement): Promise<string> {
   }
   markIds(root, clone);
   markNodes(root, clone);
+  // Listed before anything is added to or taken from the copy.
+  const sources = [root, ...Array.from(root.getElementsByTagName('*'))];
+  const targets = [clone, ...Array.from(clone.getElementsByTagName('*'))];
+  applySettled(sources, targets, settled);
+  writeStyleRules(root, clone);
+  const surfaces = pairSurfaces(sources, targets);
   const assets = new AssetBudget();
   // Read while the copy still lists the page's elements one for one.
   await inlinePictures(root, clone, assets);
@@ -231,6 +251,11 @@ async function snapshotHTML(root: HTMLElement): Promise<string> {
     piece.remove();
   }
   quiet(clone);
+  // After the pictures were counted one for one, and before them in the budget: nothing else can stand in for these.
+  showSurfaces(surfaces, settled.surfaces, assets);
+  writeShadowRoots(sources, targets, LEFT_OUT);
+  collapsePins(clone);
+  writeAdoptedSheets(document, clone.querySelector('head') ?? clone);
   const screen = screenHeightPx();
   clone.style.removeProperty('--avb-vh');
   clone.style.setProperty('--design-vh', `${String(screen / 100)}px`);

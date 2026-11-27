@@ -15,6 +15,7 @@ export const designModeId: DesignCatalog = {
   'frame.delete': 'Hapus',
   'frame.changes': '{count} file diubah',
   'frame.renameLabel': 'Nama frame',
+  'frame.width': 'Lebar frame dalam piksel',
   'board.title': 'Frame',
   'frame.loading': 'Menggambar bingkai ini',
   'menu.duplicate': 'Duplikat',

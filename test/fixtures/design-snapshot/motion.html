@@ -1,0 +1,237 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        font: 16px/20px sans-serif;
+      }
+      section {
+        height: 500px;
+        overflow: hidden;
+      }
+      .toggle {
+        opacity: 0;
+        transition: opacity 0.8s 0.2s;
+      }
+      .toggle.in {
+        opacity: 1;
+      }
+      .mask {
+        overflow: hidden;
+        height: 40px;
+      }
+      .line {
+        display: block;
+        height: 40px;
+      }
+      .timeline {
+        height: 100px;
+        background: teal;
+        animation: appear linear both;
+        animation-timeline: view();
+        animation-range: entry 0% entry 100%;
+      }
+      @keyframes appear {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .loader {
+        height: 20px;
+        width: 20px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          rotate: 360deg;
+        }
+      }
+      canvas {
+        display: block;
+        width: 100%;
+      }
+    </style>
+    <style id="inserted"></style>
+  </head>
+  <body>
+    <section id="hero">
+      <h1>Hero</h1>
+      <div class="loader"></div>
+    </section>
+    <!-- A scroll-triggered entrance, delayed and staggered, as a tween library writes it. -->
+    <section id="tween">
+      <div class="card">One</div>
+      <div class="card">Two</div>
+      <div class="card">Three</div>
+    </section>
+    <!-- Text split into lines under masks, put back as it was once it has played. -->
+    <section id="split"><p class="split">First line and second line</p></section>
+    <!-- A reveal that reverses when its element leaves the screen. -->
+    <section id="reversing"><div class="toggle">Reversing reveal</div></section>
+    <!-- A value tied to the scroll position. -->
+    <section id="scrub"><div class="parallax" style="height: 100px; width: 200px">Parallax</div></section>
+    <section id="waapi"><div class="web" style="opacity: 0">Web animation</div></section>
+    <section id="view"><div class="timeline">View timeline</div></section>
+    <section id="drawn"><canvas class="flat" width="300" height="150"></canvas></section>
+    <section id="gl"><canvas class="solid" width="200" height="100"></canvas></section>
+    <section id="late"><div class="late">Late entrance</div></section>
+    <section id="rules">
+      <p class="by-insert">Inserted rule</p>
+      <p class="by-adopt">Adopted sheet</p>
+      <x-card></x-card>
+    </section>
+    <!-- A pinned sequence, with the scroll room its pin made. -->
+    <div class="pin-spacer" style="height: 1700px; padding-bottom: 1200px; box-sizing: border-box">
+      <section id="pinned" style="position: fixed; top: 0; left: 0; width: 400px; transform: translate(0px, 0px)">Pinned</section>
+    </div>
+    <section id="marquee"><div class="runner">Runs for ever</div></section>
+    <div id="menu" style="opacity: 0; visibility: hidden">A closed menu stays closed</div>
+    <script>
+      const one = (selector) => document.querySelector(selector);
+      const onScreen = (selector, run, again) => {
+        const observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              run(entry.target);
+              if (!again) observer.unobserve(entry.target);
+            } else if (again) {
+              again(entry.target);
+            }
+          }
+        });
+        for (const element of document.querySelectorAll(selector)) observer.observe(element);
+      };
+      const tween = (duration, delay, step, done) => {
+        let start;
+        const frame = (time) => {
+          start ??= time + delay;
+          const at = Math.min(1, Math.max(0, (time - start) / duration));
+          if (time >= start) step(at);
+          if (at < 1) requestAnimationFrame(frame);
+          else done?.();
+        };
+        requestAnimationFrame(frame);
+      };
+      window.armCards = () => {
+        const cards = Array.from(document.querySelectorAll('.card'));
+        for (const card of cards) {
+          card.style.cssText = 'opacity: 0; visibility: hidden; translate: 0px 56px';
+        }
+        let played = false;
+        const check = () => {
+          if (!played && cards[0].isConnected && cards[0].getBoundingClientRect().top < innerHeight * 0.9) {
+            played = true;
+            cards.forEach((card, index) =>
+              tween(
+                600,
+                250 + index * 120,
+                (at) => {
+                  card.style.visibility = at > 0 ? 'inherit' : 'hidden';
+                  card.style.opacity = String(at);
+                  card.style.translate = `0px ${(1 - at) * 56}px`;
+                },
+                () => card.removeAttribute('style'),
+              ),
+            );
+          }
+        };
+        addEventListener('scroll', check);
+      };
+      armCards();
+
+      const paragraph = one('.split');
+      const original = paragraph.innerHTML;
+      paragraph.innerHTML = ['First line and', 'second line', '']
+        .map((text) => `<span class="mask" style="display:block"><span class="line" style="translate: 0px 110%">${text}</span></span>`)
+        .join('');
+      onScreen('.split', () => {
+        const lines = paragraph.querySelectorAll('.line');
+        tween(
+          800,
+          100,
+          (at) => lines.forEach((line) => (line.style.translate = `0px ${(1 - at) * 110}%`)),
+          () => (paragraph.innerHTML = original),
+        );
+      });
+
+      onScreen(
+        '.toggle',
+        (element) => element.classList.add('in'),
+        (element) => element.classList.remove('in'),
+      );
+
+      const parallax = one('.parallax');
+      const scrub = () => {
+        const box = parallax.parentElement.getBoundingClientRect();
+        const progress = Math.min(1, Math.max(0, (innerHeight - box.top) / (innerHeight + box.height)));
+        parallax.style.transform = `translateY(${Math.round((progress - 0.5) * 200)}px)`;
+      };
+      addEventListener('scroll', scrub);
+      scrub();
+
+      onScreen('.web', (element) => element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 20000, delay: 100, fill: 'forwards' }));
+
+      onScreen('.flat', (canvas) => {
+        const context = canvas.getContext('2d');
+        context.fillStyle = 'rgb(255, 120, 0)';
+        context.fillRect(0, 0, 300, 150);
+      });
+
+      // Redrawn 30 times a second while on screen, into a buffer that is gone once the frame is shown.
+      const gl = one('.solid').getContext('webgl', { alpha: false });
+      window.drawsWebGL = !!gl;
+      let visible = false;
+      let last = 0;
+      const render = (time) => {
+        if (gl && time - last >= 33) {
+          last = time;
+          gl.clearColor(0, 0.8, 0, 1);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        if (visible) requestAnimationFrame(render);
+      };
+      onScreen(
+        '.solid',
+        () => {
+          if (!visible) {
+            visible = true;
+            requestAnimationFrame(render);
+          }
+        },
+        () => (visible = false),
+      );
+
+      const late = one('.late');
+      late.style.opacity = '1';
+      late.style.opacity = '0';
+      onScreen('.late', () => setTimeout(() => (late.style.opacity = '1'), 900));
+
+      one('#inserted').sheet.insertRule('.by-insert { color: rgb(1, 2, 3); }');
+      const adopted = new CSSStyleSheet();
+      adopted.replaceSync('.by-adopt { color: rgb(4, 5, 6); }');
+      document.adoptedStyleSheets = [adopted];
+      const root = one('x-card').attachShadow({ mode: 'open' });
+      const shadowSheet = new CSSStyleSheet();
+      shadowSheet.replaceSync('b { color: rgb(7, 8, 9); }');
+      root.adoptedStyleSheets = [shadowSheet];
+      root.innerHTML = '<style>b { display: block; height: 30px; }</style><b>In the shadow</b>';
+
+      const runner = one('.runner');
+      let offset = 0;
+      const run = () => {
+        offset = (offset + 1) % 300;
+        runner.style.translate = `${offset}px 0px`;
+        requestAnimationFrame(run);
+      };
+      requestAnimationFrame(run);
+    </script>
+  </body>
+</html>

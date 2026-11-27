@@ -16,11 +16,12 @@ import {
   DESIGN_SESSION_LIMITS,
   defaultFramePlace,
   parseDesignFrameId,
+  parseDesignFrameWidth,
   parseDesignPlace,
   type DesignFrameId,
   type DesignPlace,
 } from '../../../shared/ipc/designSession';
-import { ensurePrivateDirectory } from './designSandbox';
+import { ensurePrivateDirectory, isSecretFile } from './designSandbox';
 import { DESIGN_FRAME_LIMITS, type FileChange, type FrameFiles } from './designFrames';
 
 export const DESIGN_DRAFT_LIMITS = {
@@ -32,6 +33,7 @@ export interface DraftFrame {
   readonly id: DesignFrameId;
   readonly name: string;
   readonly at: DesignPlace;
+  readonly widthPx?: number;
   readonly files: FrameFiles;
 }
 
@@ -43,15 +45,6 @@ export interface Draft {
 const DRAFTS_FOLDER = 'design-drafts';
 const DRAFT_FILE = 'draft.json';
 const DRAFT_VERSION = 1;
-
-/** A file whose content is a secret: never kept in a draft. */
-export function isSecretFile(rel: string): boolean {
-  const name = rel.split('/').at(-1) ?? rel;
-  if (name.startsWith('.env') || name === '.dev.vars') {
-    return true;
-  }
-  return /\.(pem|key|p12|pfx)$/i.test(name);
-}
 
 export function draftFolder(appDataRoot: string, realRoot: string): string {
   const hash = createHash('sha256').update(path.resolve(realRoot)).digest('hex').slice(0, 32);
@@ -71,6 +64,7 @@ export function saveDraft(input: { readonly appDataRoot: string; readonly realRo
     id: frame.id,
     name: frame.name,
     at: frame.at,
+    widthPx: frame.widthPx,
     files: [...frame.files]
       .filter(([rel]) => !isSecretFile(rel))
       .map(([rel, change]) => ({
@@ -151,7 +145,8 @@ function parseDraft(input: unknown, where: { readonly realRoot: string; readonly
     const name = stringOf(frame['name'], 'Design draft frame name').slice(0, DESIGN_SESSION_LIMITS.frameNameCharsMax);
     // A draft kept before frames had places is laid out in a row.
     const at = frame['at'] === undefined ? defaultFramePlace(index) : parseDesignPlace(frame['at']);
-    return { id: parseDesignFrameId(frame['id']), name, at, files: changes };
+    const width = frame['widthPx'] === undefined ? {} : { widthPx: parseDesignFrameWidth(frame['widthPx']) };
+    return { id: parseDesignFrameId(frame['id']), name, at, ...width, files: changes };
   });
   const active = parseDesignFrameId(value['active']);
   if (!parsed.some((frame) => frame.id === active)) {

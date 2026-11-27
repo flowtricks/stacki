@@ -15,6 +15,7 @@ export const designModeZhTW: DesignCatalog = {
   'frame.delete': '刪除',
   'frame.changes': '已變更 {count} 個檔案',
   'frame.renameLabel': '框架名稱',
+  'frame.width': '框架寬度（像素）',
   'board.title': '框架',
   'frame.loading': '正在繪製此畫框',
   'menu.duplicate': '複製一份',
