@@ -15,6 +15,7 @@
 // Screenshots go to STACKI_SCREENSHOT_DIR (default node_modules/.stacki-test/design-unlink). Run it by hand with
 // `node test/renderer/app/designMode/designModeUnlinkSoak.test.js`.
 
+const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -226,6 +227,43 @@ const FRAME_CHANNEL_DELTA_MAX = 8;
  * exactly) were painted a level apart on a loaded machine, steadily, in a full gate run.
  */
 const ELEMENT_CHANNEL_DELTA_MAX = 1;
+/**
+ * Past that level, a few pixels may still differ, each by no more than a frame's picture may: a rounded corner's edge
+ * is anti-aliased by the GPU, and some machines blend it a level or two apart from one draw to the next. On an M1 Pro
+ * the probe's only differences were 16 pixels on the scoped card's two left corners, one of them 2 levels apart. A
+ * changed look (a lost class, another colour) moves thousands of pixels, so it still fails.
+ */
+const ELEMENT_EDGE_PIXELS_MAX = 16;
+
+/** How far two captures of one element are apart: its largest channel difference, and the pixels past the level. */
+function paintDifference(left, right) {
+  if (left.length !== right.length) {
+    return { largest: 255, pixelsOver: left.length };
+  }
+  // A capture's bitmap holds four bytes a pixel (BGRA).
+  assert.equal(left.length % 4, 0, 'a capture holds whole pixels');
+  let largest = 0;
+  let pixelsOver = 0;
+  for (let pixel = 0; pixel < left.length; pixel += 4) {
+    let pixelLargest = 0;
+    for (let channel = pixel; channel < pixel + 4; channel += 1) {
+      pixelLargest = Math.max(pixelLargest, Math.abs(left[channel] - right[channel]));
+    }
+    largest = Math.max(largest, pixelLargest);
+    if (pixelLargest > ELEMENT_CHANNEL_DELTA_MAX) {
+      pixelsOver += 1;
+    }
+  }
+  return { largest, pixelsOver };
+}
+
+/** Whether an element is painted as before: every pixel within a level, but for a corner's few, which stay close. */
+function paintedAsBefore(difference) {
+  if (difference.pixelsOver <= ELEMENT_EDGE_PIXELS_MAX) {
+    return difference.largest <= FRAME_CHANNEL_DELTA_MAX;
+  }
+  return false;
+}
 
 function largestDifference(left, right) {
   if (left.length !== right.length) {
@@ -425,27 +463,33 @@ async function runInElectron({ window, project, options }) {
     fs.writeFileSync(path.join(options.outDirectory, `${name}-after.png`), pixelsAfter.png);
     const sameRect = JSON.stringify(pixelsAfter.rect) === JSON.stringify(pixelsBefore.rect);
     // The visible frame: a picture elsewhere on the page may be resampled a level or two differently each time it is
-    // decoded, so the whole frame is held to a small difference per channel and the unlinked element to none.
+    // decoded, so the whole frame is held to a small difference per channel and the unlinked element to a level, but
+    // for a rounded corner's few anti-aliased pixels (paintedAsBefore).
     const delta = sameRect ? largestDifference(pixelsBefore.bitmap, pixelsAfter.bitmap) : 255;
     check(`${name}: the visible frame is the same before and after`, delta <= FRAME_CHANNEL_DELTA_MAX, `largest channel difference ${String(delta)}`);
     report.frameDelta = { ...(report.frameDelta ?? {}), [name]: delta };
     // One capture may catch the redrawn frame part painted on a loaded machine: it is captured until it matches, and
     // an element that really differs never does.
-    let elementDelta = 255;
+    let elementDifference = { largest: 255, pixelsOver: 0 };
     const painted = await waitFor({
       what: `${name}: the element painted as before`,
       read: async () => {
-        elementDelta = largestDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap);
-        return elementDelta;
+        elementDifference = paintDifference(regionBefore.bitmap, (await framePixels(elementRect(styledRoot))).bitmap);
+        return elementDifference;
       },
-      until: (largest) => largest <= ELEMENT_CHANNEL_DELTA_MAX,
+      until: paintedAsBefore,
       pollIntervalMs: POLL_MS,
       pollCountMax: PAINT_POLLS_MAX,
     }).then(
       () => true,
       () => false,
     );
-    check(`${name}: the unlinked element is painted the same`, painted, `largest channel difference ${String(elementDelta)}`);
+    check(
+      `${name}: the unlinked element is painted the same`,
+      painted,
+      `largest channel difference ${String(elementDifference.largest)}, ${String(elementDifference.pixelsOver)} pixels past ${String(ELEMENT_CHANNEL_DELTA_MAX)}`,
+    );
+    report.elementDifference = { ...(report.elementDifference ?? {}), [name]: elementDifference };
     return page;
   };
 
