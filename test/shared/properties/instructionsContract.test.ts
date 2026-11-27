@@ -290,6 +290,7 @@ test('the panel and its editing are role features; editing needs the panel', () 
     appPermissions: {},
     pinnedApps: [],
     componentRules: [],
+    editorOff: new Set<never>(),
   };
   assert.equal(can(editorOnly, 'instructions:edit'), false, 'a grant without the panel gives nothing');
   const both = { ...editorOnly, features: new Set(['instructions:edit', 'panel:instructions'] as const) };

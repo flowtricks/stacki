@@ -3,7 +3,7 @@
 // the hidden-component rules inside each role are parsed by shared/properties/componentAccess.ts.
 import { APP_PERMISSION_LIMITS } from '../../appPermissions';
 import { COMPONENT_ACCESS_LIMITS } from '../../componentAccess';
-import { ACCESS_FEATURES, ADMIN_ROLE_ID, ROLE_LIMITS, parseProjectRoles, serializeProjectRoles } from '../../projectRoles';
+import { ACCESS_FEATURES, ADMIN_ROLE_ID, EDITOR_PARTS, ROLE_LIMITS, parseProjectRoles, serializeProjectRoles } from '../../projectRoles';
 import { arrayOf, bool, field, literal, mapOf, objectOf, oneOf, text, type FileSchema, type ValueSchema } from '../stackiSchema';
 
 const APP_ID = '^[a-z0-9][a-z0-9._-]*$';
@@ -74,6 +74,11 @@ const role: ValueSchema = objectOf({
     {
       default: 'none pinned',
     },
+  ),
+  editorOff: field(
+    arrayOf(oneOf(...EDITOR_PARTS), EDITOR_PARTS.length, { unique: true }),
+    'Editing options switched off for this role: sidePanel (Style and Settings), navigator, canvasBar (breakpoints, breadcrumbs, guide), drag, text, images, elements (add, duplicate, delete). With drag, text and images off the role is read only. They also withhold permissions that reach the same thing another way. Dropped for admin.',
+    { default: 'every option the permissions allow is on' },
   ),
   componentRules: field(
     arrayOf(componentRule, COMPONENT_ACCESS_LIMITS.rulesMax),

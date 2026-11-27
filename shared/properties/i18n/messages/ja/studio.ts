@@ -64,6 +64,7 @@ export const messages = {
   'studio.collab.sessionExpired':
     'セッションの期限が切れたか、リポジトリへのアクセス権が変更されました。ローカルの編集内容は保持されています。もう一度サインインしてください。',
   'studio.collab.sourceProtected': 'Clientモードではコンポーネントのソースは保護されています。',
+  'studio.collab.roleCannot': 'あなたのロール（{role}）ではこの操作はできません。管理者にアクセスを依頼してください。',
   'studio.collab.takeOver': '引き継ぐ',
   'studio.component.packageReadOnly': 'パッケージのコンポーネントは読み取り専用です。インスタンスのプロパティはページ上で編集してください。',
   'studio.components.createInSource': 'コンポーネントのテンプレートはプロジェクトのソースで作成してください。',

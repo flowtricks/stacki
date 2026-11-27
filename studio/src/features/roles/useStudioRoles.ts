@@ -5,7 +5,8 @@
 // Resolution: a local Studio (no GitHub session) is admin. A GitHub user is the
 // role naming them, else the file's default role (admin unless the file says
 // otherwise, so every collaborator stays admin as before). No file is admin.
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { lockedClientRole } from './editorRoutes';
 import {
   ADMIN_ROLE_ID,
   ADMIN_VIEW,
@@ -21,7 +22,12 @@ import type { Session } from '../auth/useSession';
 import { readMetadata } from '../settings/metadataClient';
 import { setStudioRoles } from './roleStore';
 
-export function useStudioRoles(session: Session | undefined, revision: number, report: (error: unknown) => void): void {
+/**
+ * Whether the person's role has been read. The editor waits for it, so a panel the
+ * role does not have is never drawn, not even for a moment.
+ */
+export function useStudioRoles(session: Session | undefined, revision: number, report: (error: unknown) => void): 'loading' | 'ready' {
+  const [state, setState] = useState<'loading' | 'ready'>('loading');
   useEffect(() => {
     if (session === undefined) {
       return undefined;
@@ -34,6 +40,7 @@ export function useStudioRoles(session: Session | undefined, revision: number, r
         }
         if (file.source === undefined) {
           setStudioRoles(DEFAULT_PROJECT_ROLES, ADMIN_VIEW);
+          setState('ready');
           return;
         }
         try {
@@ -42,13 +49,20 @@ export function useStudioRoles(session: Session | undefined, revision: number, r
           setStudioRoles(roles, hostedRole(roles, session));
         } catch (error: unknown) {
           // The server refuses writes past a broken file as it would for Client; the UI says so.
-          setStudioRoles(DEFAULT_PROJECT_ROLES, session.kind === 'local' ? ADMIN_VIEW : roleViewOf(DEFAULT_PROJECT_ROLES, CLIENT_ROLE_ID));
+          const fallback = lockedClientRole(file.source) ?? roleViewOf(DEFAULT_PROJECT_ROLES, CLIENT_ROLE_ID);
+          setStudioRoles(DEFAULT_PROJECT_ROLES, session.kind === 'local' ? ADMIN_VIEW : fallback);
           report(new Error(`The project's roles file could not be read: ${error instanceof Error ? error.message : String(error)}`));
         }
+        setState('ready');
       },
       (error: unknown) => {
         if (active) {
           report(error);
+          // The role could not be asked for. A hosted person may have a restricted one, so the editor does not
+          // open on guesses: the next project load asks again.
+          if (session.kind === 'local') {
+            setState('ready');
+          }
         }
       },
     );
@@ -56,6 +70,7 @@ export function useStudioRoles(session: Session | undefined, revision: number, r
       active = false;
     };
   }, [session, revision, report]);
+  return state;
 }
 
 // The role the server will apply to this person (serverAccess.ts), shown so the interface matches it. A person signed

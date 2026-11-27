@@ -40,6 +40,7 @@ import { fileStamps, parseFileStampRequest } from '../features/apps/pageFileStam
 import { saveAsset } from '../features/storage/assetStorage';
 import { interceptBrowserReloads } from '../features/preview/browserReloads';
 import { assertRouteAllowed, connectionRole, requestRole, RoleRefusal, routeRule } from '../features/roles/serverAccess';
+import { assertEditorRequest, routeReadsBody } from '../features/roles/editorRoutes';
 
 interface Options {
   readonly root: string;
@@ -221,7 +222,7 @@ async function handleRequestInWorkspace(
     return;
   }
   if (url.pathname === '/studio/api/create' && request.method === 'POST') {
-    await createFile(request, response, options, rooms, url);
+    await createFile(readBody, response, options, rooms);
     return;
   }
   // The modification stamps a Stacki app's page index keys its cache by (pageFileStamps.ts).
@@ -250,10 +251,39 @@ async function roleAllows(
 ): Promise<boolean> {
   const rule = routeRule(request.method, pathname);
   if (rule === undefined) {
+    return editorAllows(request, response, root, pathname, readBody);
+  }
+  try {
+    const role = await requestRole(root, request);
+    assertRouteAllowed(role, rule, rule.kind === 'metadata' ? await readBody() : '');
+    assertEditorRequest(role, pathname, routeReadsBody(role, pathname) ? await readBody() : '');
+    return true;
+  } catch (error) {
+    if (error instanceof RoleRefusal) {
+      json(response, 403, { error: error.message });
+      return false;
+    }
+    throw error;
+  }
+}
+// A write with no rule of its own is still a write: a limited role's options apply to it too. A request that
+// carries no identity is left to the route, as before (a role cannot be resolved for it).
+async function editorAllows(
+  request: IncomingMessage,
+  response: ServerResponse,
+  root: string,
+  pathname: string,
+  readBody: () => Promise<string>,
+): Promise<boolean> {
+  if (request.method === 'GET' || request.method === 'HEAD' || request.method === undefined) {
+    return true;
+  }
+  const role = await requestRole(root, request).catch(() => undefined);
+  if (role === undefined) {
     return true;
   }
   try {
-    assertRouteAllowed(await requestRole(root, request), rule, rule.kind === 'metadata' ? await readBody() : '');
+    assertEditorRequest(role, pathname, routeReadsBody(role, pathname) ? await readBody() : '');
     return true;
   } catch (error) {
     if (error instanceof RoleRefusal) {
@@ -414,8 +444,9 @@ async function sendSourceRead(response: ServerResponse, url: URL, options: Optio
   return false;
 }
 
-async function createFile(request: IncomingMessage, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>, _url: URL) {
-  const input = record(JSON.parse(await body(request)));
+async function createFile(readBody: () => Promise<string>, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>) {
+  // Read once: the role check may already have read the body.
+  const input = record(JSON.parse(await readBody()));
   const file = sourcePath(input['file']);
   if (!/^src\/(pages|content|data)\//.test(file)) {
     throw new Error('Create pages or collection items here');

@@ -10,7 +10,9 @@
 // Which role: the one naming that person (a bare login means `github:<login>`) in `.stacki/roles.json`, else the
 // file's default role. No file is admin for everyone (today's behaviour). A file
 // that does not parse fails closed to the built-in client role, so a typo can
-// never widen access; fix it with Git or on Desktop.
+// never widen access; fix it with Git or on Desktop. A broken file that was using
+// editing options fails closed further, to a read only client: those options
+// cannot be read, so none of them may be dropped.
 import type { IncomingMessage } from 'node:http';
 import {
   ADMIN_VIEW,
@@ -28,6 +30,7 @@ import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { requestPerson } from '../auth/requestPerson';
 import { readMetadataSource } from '../settings/projectMetadata';
 import { METADATA_ACCESS, roleRefusal } from './documentAccess';
+import { lockedClientRole } from './editorRoutes';
 
 export { RoleRefusal } from './documentAccess';
 
@@ -140,7 +143,7 @@ export async function requestRole(root: string, request: Pick<IncomingMessage, '
   try {
     return resolveRole(parseProjectRolesSource(stored.source), person.identity, 'default', person.aliases);
   } catch {
-    return roleViewOf(DEFAULT_PROJECT_ROLES, CLIENT_ROLE_ID);
+    return lockedClientRole(stored.source) ?? roleViewOf(DEFAULT_PROJECT_ROLES, CLIENT_ROLE_ID);
   }
 }
 

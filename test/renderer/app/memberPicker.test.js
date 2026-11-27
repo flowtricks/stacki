@@ -72,7 +72,7 @@ const allowed = [];
 async function mount(members = ['flowtricks'], access = [], section = 'members') {
   added.length = 0;
   allowed.length = 0;
-  role = { id: 'writer', name: 'Writer', members, access, appPermissions: {}, pinnedApps: [], componentRules: [] };
+  role = { id: 'writer', name: 'Writer', members, access, appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] };
   const actions = {
     rename: () => undefined,
     remove: () => undefined,
@@ -383,6 +383,7 @@ test('the card lists flat summary rows that open their parts, and Admin has no P
     appPermissions: {},
     pinnedApps: ['seo'],
     componentRules: [],
+    editorOff: [],
   };
   const actions = new Proxy({}, { get: () => () => undefined });
   root = createRoot(document.getElementById('root'));
@@ -391,13 +392,13 @@ test('the card lists flat summary rows that open their parts, and Admin has no P
   const rows = [...document.querySelectorAll('.app-role-row')];
   assert.deepEqual(
     rows.map((row) => row.dataset.section),
-    ['members', 'pins', 'components', 'permissions'],
+    ['members', 'pins', 'components', 'editing', 'permissions'],
   );
-  assert.match(rows[3].textContent, /^Permissions3 of \d+$/);
+  assert.match(rows[4].textContent, /^Permissions3 of \d+$/);
   assert.equal(rows[0].textContent, 'Members1');
   assert.equal(rows[1].textContent, 'Sidebar apps1');
   assert.equal(document.querySelectorAll('.app-role [role="switch"]').length, 0, 'no switches on the card');
-  await act(async () => rows[3].click());
+  await act(async () => rows[4].click());
   assert.deepEqual(opened, ['permissions']);
   await unmount();
 

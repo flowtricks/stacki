@@ -475,7 +475,10 @@ const rolesAdd = rolesWrite({
       name,
       roles.roles.map((role) => role.id),
     );
-    return ok({ ...roles, roles: [...roles.roles, { id, name, members: [], access: ['cli:read'], appPermissions: {}, pinnedApps: [], componentRules: [] }] });
+    return ok({
+      ...roles,
+      roles: [...roles.roles, { id, name, members: [], access: ['cli:read'], appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] }],
+    });
   },
   summary: (context) => `Add role "${text(context, 'name')}".`,
 });

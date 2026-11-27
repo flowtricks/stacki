@@ -8,6 +8,7 @@ import { LockedSettings } from './LockedSettings';
 import { slotOptions } from './slotOptions';
 import { useBindContext } from './bindContext';
 import PropsPanel from '../../../vendor/stacki/src/features/props/PropsPanel';
+import { ImagePropFields } from '../../../vendor/stacki/src/features/props/ImagePropFields';
 import { useEditorRole } from '../roles/useEditorRole';
 import { parsePageModel, parsePageNode, type ImportDecl } from '../../../vendor/stacki/shared/page/pageNode';
 import { type PropsPanelProps } from '../../../vendor/stacki/src/features/props/propsPanelTypes';
@@ -38,6 +39,8 @@ interface Props {
   readonly project: Project;
   readonly openCode?: () => void;
   readonly error: (error: unknown) => void;
+  /** The canvas image popup: only these fields of the selected element, drawn and written as the panel does. */
+  readonly imageFields?: readonly string[];
 }
 export function Settings(props: Props) {
   const client = useEditorRole() === 'client';
@@ -74,6 +77,35 @@ export function Settings(props: Props) {
   const notice = document.selectionNotice;
   if (notice) {
     return <LockedSettings notice={notice} report={props.error} />;
+  }
+  if (props.imageFields !== undefined) {
+    if (current?.kind !== 'element' && current?.kind !== 'component') {
+      return null;
+    }
+    // A picture is chosen or typed here, never bound to data: no binding sources are offered.
+    return (
+      <ImagePropFields
+        node={current}
+        fieldNames={props.imageFields}
+        valuePolicy="instance"
+        schema={component?.fields ?? []}
+        isLayout={node?.id === 'layout'}
+        currentLayoutName={node?.name ?? ''}
+        projectClasses={project.classes}
+        projectPath="studio"
+        filePath={document.file}
+        frontmatterSource={/^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1] ?? ''}
+        frontmatterImports={page.imports}
+        onSetAssetProp={(id, name, picked, _reference, also) =>
+          change((source) => {
+            const withAsset = assetProp(source, id, document.file, name, picked.rel);
+            return also === undefined ? withAsset : writeAttributes(withAsset, id, also);
+          })
+        }
+        {...handlers}
+        {...structure.handlers}
+      />
+    );
   }
   return (
     <VariantPreview file={document.file} node={selected} component={component?.file} source={source}>

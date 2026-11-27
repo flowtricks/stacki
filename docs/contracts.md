@@ -863,6 +863,32 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   Navigator, and may be copied, pasted or duplicated. It never changes `can()`, so a restricted admin keeps
   Settings. Nothing in the app moves or renames a component yet; `moveComponentRules` is ready for the
   rename that does, and until then a moved path shows as missing.
+- Editing options: any role but admin may hold `editorOff: ["sidePanel", "navigator", "canvasBar", "drag", "text",
+  "images", "elements"]` (any subset; shared/properties/projectRoles.ts), written only when non-empty. It is a deny
+  list: an option only takes away, and a file without it grants and reads exactly as before. `sidePanel` is the
+  right panel (Style and Settings), `navigator` the element tree, `canvasBar` the bar over the page; `drag`, `text`,
+  `images` and `elements` (add, paste, duplicate, delete) are what may be done on the page. With `drag`, `text` and
+  `images` all off the role is read only and `elements` goes with them (also when a role with neither right panel
+  permission switches off `drag` and `text`: it never changed pictures). A value this version cannot read, an unknown
+  part included, reads as every part off. `can()` withholds what would reach a switched-off option another way
+  (`editorWithholds`): `navigator` takes `panel:navigator`; `sidePanel` takes the Style, Settings, Selectors and
+  Variables panels and breakpoint settings; `sidePanel` or any page option takes Code, `code:edit`, AI chat, Git,
+  Audits, component properties, creating and editing components and `page:create`; `text` or `images` takes the CMS;
+  `images` takes Assets; `elements` takes Add elements and Components; read only also takes publishing, renaming and
+  deleting pages, settings writes and the CLI's write commands. The navigator and canvas bar alone limit no write.
+- Studio enforces editing options on the server. A read only role sends no write route at all but the few POSTs
+  that only read (`READ_ONLY_POSTS`, editorRoutes.ts) and changes no document. A limited role may not create page
+  files or save markup through `/studio/api/create` or `/studio/api/source`. Over the socket, named actions are
+  judged by kind (`editorActions.ts`: `move` is `drag`; `insert`, `duplicate`, `delete` and `paste` are `elements`;
+  a paste must be a verbatim copy of a node on that page; app markup is refused). A plain text edit is judged by what
+  it changes (`editorContent.ts`): without the panel only the allowed words and pictures may differ, byte for byte;
+  with it, what is switched off must read the same. Which component props are words, and which frontmatter strings
+  the page prints, come from the canvas text editor's own tracers. A limited person may undo and redo their own
+  accepted changes while nobody else has changed the file (`editorUndo.ts`).
+- Editing options and older versions: 1.4.21 and earlier ignore the unknown key, so they apply none of these options
+  (nobody gains anything the role's `access` did not already give), and their Roles tab or CLI drops the key when it
+  saves the file. Options therefore hold only once the Studio server runs this version or later. A broken roles file
+  still falls back to Client on Studio, as before, and to a read only Client when the file names `editorOff`.
 - No file means everyone is admin, exactly as before. Studio gives a signed-in GitHub user the role
   naming them, else `defaultRole` (admin unless set). A local Studio, with no sign-in, is admin.
   **Desktop never resolves a restricted role**: whoever is signed in, and whatever the file says, the

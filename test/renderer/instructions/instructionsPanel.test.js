@@ -362,6 +362,7 @@ test('without instructions:edit the files show but nothing creates or hides', as
     id: 'client',
     name: 'Client',
     isAdmin: false,
+    editorOff: new Set(),
     features: new Set(['panel:instructions']),
     appPermissions: {},
     pinnedApps: [],
