@@ -61,6 +61,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'تغيّرت الجلسة. حدّد العنصر مرة أخرى.',
   'studio.collab.sessionExpired': 'انتهت جلستك أو تغيّر الوصول إلى المستودع. تعديلاتك المحلية محفوظة. سجّل الدخول مرة أخرى.',
   'studio.collab.sourceProtected': 'مصدر المكوّن محمي في وضع العميل.',
+  'studio.collab.roleCannot': 'دورك ({role}) لا يسمح بذلك. اطلب الوصول من أحد المشرفين.',
   'studio.collab.takeOver': 'استلام التحكم',
   'studio.component.packageReadOnly': 'مكوّنات الحزم للقراءة فقط. عدّل خصائص النسخة في الصفحة.',
   'studio.components.createInSource': 'أنشئ قوالب المكوّنات في مصدر المشروع.',

@@ -63,6 +63,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'Oturum değişti. Öğeyi yeniden seçin.',
   'studio.collab.sessionExpired': 'Oturumunuzun süresi doldu veya depo erişimi değişti. Yerel düzenlemeleriniz korunuyor. Yeniden oturum açın.',
   'studio.collab.sourceProtected': 'Bileşen kaynağı Müşteri modunda korunur.',
+  'studio.collab.roleCannot': 'Rolünüz ({role}) bunu yapamaz. Bir yöneticiden erişim isteyin.',
   'studio.collab.takeOver': 'Devral',
   'studio.component.packageReadOnly': 'Paket bileşenleri salt okunurdur. Örnek özelliklerini sayfada düzenleyin.',
   'studio.components.createInSource': 'Bileşen şablonlarını proje kaynağında oluşturun.',

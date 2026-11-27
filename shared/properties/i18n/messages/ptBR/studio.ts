@@ -64,6 +64,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'A sessão mudou. Selecione o elemento de novo.',
   'studio.collab.sessionExpired': 'Sua sessão expirou ou o acesso ao repositório mudou. Suas edições locais foram preservadas. Entre de novo.',
   'studio.collab.sourceProtected': 'O código do componente é protegido no modo Cliente.',
+  'studio.collab.roleCannot': 'Sua função ({role}) não pode fazer isso. Peça acesso a um administrador.',
   'studio.collab.takeOver': 'Assumir',
   'studio.component.packageReadOnly': 'Componentes de pacotes são somente leitura. Edite as propriedades da instância na página.',
   'studio.components.createInSource': 'Crie modelos de componentes no código-fonte do projeto.',

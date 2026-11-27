@@ -60,6 +60,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'ההפעלה השתנתה. יש לבחור את האלמנט שוב.',
   'studio.collab.sessionExpired': 'תוקף ההפעלה פג או שהגישה למאגר השתנתה. העריכות המקומיות נשמרו. יש להתחבר שוב.',
   'studio.collab.sourceProtected': 'מקור הרכיב מוגן במצב Client.',
+  'studio.collab.roleCannot': 'התפקיד שלך ({role}) לא יכול לעשות זאת. אפשר לבקש גישה ממנהל.',
   'studio.collab.takeOver': 'השתלטות',
   'studio.component.packageReadOnly': 'רכיבי חבילות הם לקריאה בלבד. אפשר לערוך את מאפייני ה־instance בדף.',
   'studio.components.createInSource': 'יש ליצור תבניות רכיבים במקור הפרויקט.',

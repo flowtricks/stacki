@@ -76,7 +76,13 @@ esbuild.buildSync({
 const apps = require(outfile);
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
-const client = { id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps', 'panel:assets', 'panel:cms', 'app:picker']) };
+const client = {
+  id: 'client',
+  name: 'Client',
+  isAdmin: false,
+  editorOff: new Set(),
+  features: new Set(['panel:apps', 'panel:assets', 'panel:cms', 'app:picker']),
+};
 
 function summary(id, { installedAt = '2026-11-10T00:00:00.000Z', commands = [], shortcutClaims = [] } = {}) {
   return {

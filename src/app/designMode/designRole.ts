@@ -46,6 +46,7 @@ export function designRole(name: string): RoleView {
     appPermissions: {},
     pinnedApps: [],
     componentRules: actual.componentRules,
+    editorOff: new Set(),
   };
 }
 

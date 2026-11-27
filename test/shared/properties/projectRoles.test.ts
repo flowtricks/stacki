@@ -78,6 +78,7 @@ test('custom roles keep their members, access and app grants', () => {
     appPermissions: {},
     pinnedApps: [],
     componentRules: [],
+    editorOff: [],
   });
   assert.equal(roles.defaultRole, 'writer');
 });

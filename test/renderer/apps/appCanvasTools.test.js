@@ -364,7 +364,7 @@ test('the dispatcher gates reading other pages by panel:pages and wires the new 
   const { capture } = captureWorld();
   const context = (role) => ({ host: fakeHost, role: () => role, setOverlay: () => undefined, capture });
   const request = (id, method, params) => ({ stacki: 'app', v: 1, id, method, params });
-  const noPages = { id: 'c', name: 'Client', isAdmin: false, features: new Set(['panel:apps', 'app:pins']) };
+  const noPages = { id: 'c', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(['panel:apps', 'app:pins']) };
   const denied = await host.answerAppMessage(session, request(1, 'page.findByAttribute', { name: 'data-note' }), context(noPages));
   assert.equal(denied.error.code, 'role-denied');
   const found = await host.answerAppMessage(session, request(2, 'page.findByAttribute', { name: 'data-note', limit: 2 }), context(roles.ADMIN_VIEW));

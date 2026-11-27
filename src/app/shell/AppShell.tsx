@@ -265,7 +265,8 @@ function cmsCovering(app: ShellView): boolean {
 // the conflict notice, the busy overlay and the toast.
 export function AppOverlays({ app }: { readonly app: ShellView }) {
   const translate = useTranslate();
-  const canCode = can(useCurrentRole(), 'code:edit');
+  const role = useCurrentRole();
+  const canCode = can(role, 'code:edit');
   return (
     <>
       {/* Below `.main`, so it spans the full window rather than being boxed in
@@ -278,7 +279,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       </PanelBoundary>
       <CanvasTextFormatBar />
       <CanvasTextSourceCue />
-      {app.insertOpen && <DesktopInsertSearch app={app} />}
+      {app.insertOpen && !role.editorOff.has('elements') && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
       <ErrorToast
         message={

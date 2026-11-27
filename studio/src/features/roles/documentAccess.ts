@@ -12,12 +12,21 @@
 // code `code:edit`. Page files are open to every role, but a role without
 // `page:layout` edits only inside the page layout (Client mode).
 //
+// A role whose editing options are limited (shared/properties/projectRoles.ts) is
+// held to them here too: which named actions it may send (editorActions.ts), and,
+// for an edit that arrives as text, that it only changes what the role may change
+// (`assertEditorContentAllowed`, editorContent.ts).
+//
 // This module stays free of Node imports: the room that calls it is also
 // type-checked for the browser demo.
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { METADATA_FILES, type MetadataKind } from '../../../vendor/stacki/shared/properties/projectMetadata';
 import { can, type AccessFeature, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { limitsEditing, readOnlyEditor } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { editorActionRefusal } from './editorActions';
+import { checkEditorContent, type ContentRefusal } from './editorContent';
+import { componentTextProps, printedLiterals, type SourceReader } from './editorFacts';
 import type { TreeAction } from '../source/source';
 import { assertClientAction, assertClientSourceChange } from './clientPolicy';
 import { checkComponentImports, checkComponentInsert, type ComponentHiddenError } from './componentAccess';
@@ -120,6 +129,10 @@ function assertComponentsAllowed(checked: { readonly ok: true } | { readonly ok:
 export function assertDocumentActionAllowed(role: RoleView, file: string, source: string, action: TreeAction): void {
   assert(source.length > 0, 'A structural action edits a non-empty source');
   assertDocumentWritable(role, file);
+  const refusal = editorActionRefusal(role, file, source, action);
+  if (refusal !== undefined) {
+    throw new RoleRefusal(`Your role (${role.name}) ${refusal} Ask an admin for access.`);
+  }
   if (can(role, 'page:layout')) {
     return;
   }
@@ -129,7 +142,58 @@ export function assertDocumentActionAllowed(role: RoleView, file: string, source
   assertClientAction(source, action);
 }
 
+const CONTENT_REFUSALS: Readonly<Record<ContentRefusal, string>> = {
+  text: 'cannot change text in this project.',
+  images: 'cannot change images in this project.',
+  structure: 'cannot add, remove or reorder elements this way in this project.',
+  settings: 'cannot change styles or settings in this project.',
+};
+
+/**
+ * Throws when a limited role's text edit of `file` changes more than its editing
+ * options allow. Reads the page's components first, so it is not part of
+ * `assertDocumentChangeAllowed`, and named actions do not pass through it: those
+ * are judged by what they do (editorActions.ts).
+ */
+export async function assertEditorContentAllowed(
+  role: RoleView,
+  file: string,
+  change: { readonly before: string; readonly after: string },
+  read: SourceReader,
+): Promise<void> {
+  if (!limitsEditing(role.editorOff) || !file.endsWith('.astro')) {
+    return;
+  }
+  assert(!role.isAdmin, 'Admin has no editing limits');
+  // Without the panel, knowing of no component prop or printed string can only refuse more. So typing in the page's
+  // own text and swapping a picture are accepted at once, and the components are read only for what that refuses.
+  const unread = { off: role.editorOff, textProp: () => undefined, literals: { before: [], after: [] } };
+  if (role.editorOff.has('sidePanel') && checkEditorContent(change.before, change.after, unread).ok) {
+    return;
+  }
+  const textProp = await componentTextProps(file, [change.before, change.after], read);
+  const checked = checkEditorContent(change.before, change.after, {
+    off: role.editorOff,
+    textProp,
+    literals: {
+      before: await printedLiterals(file, change.before, textProp),
+      after: await printedLiterals(file, change.after, textProp),
+    },
+  });
+  if (!checked.ok) {
+    throw new RoleRefusal(`Your role (${role.name}) ${CONTENT_REFUSALS[checked.refusal]} Ask an admin for access.`);
+  }
+}
+
 function assertDocumentWritable(role: RoleView, file: string): void {
+  // A read only role writes nothing at all, the column guide included.
+  if (readOnlyEditor(role.editorOff)) {
+    throw roleRefusal(role);
+  }
+  // Under a limit, the only page files a role writes are the Astro pages the content check can read.
+  if (limitsEditing(role.editorOff) && file.startsWith('src/pages/') && !file.endsWith('.astro')) {
+    throw roleRefusal(role);
+  }
   const features = documentFeatures(file);
   if (features === undefined) {
     return;
