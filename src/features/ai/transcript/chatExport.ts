@@ -4,6 +4,7 @@
 // changes) is left out: it is the agent's process, not the conversation, and a command's output can
 // be megabytes. A subagent's words are left out too: the transcript itself draws them elsewhere.
 import { assert } from '../../../../shared/core/assert';
+import { sentMarkdownText } from '../../../../shared/properties/ai/sentMessage';
 import type { TranscriptItem } from '../chatReducer';
 
 export const EXPORT_LIMITS = {
@@ -62,7 +63,8 @@ function sectionOf(item: TranscriptItem, labels: ExportLabels): string | undefin
   if (item.kind === 'user') {
     const names = item.attachments.map((attachment) => attachment.name);
     const attached = names.length === 0 ? '' : `\n\n${labels.attachments}: ${names.join(', ')}`;
-    return `## ${labels.you}\n\n${item.text.trim()}${attached}`;
+    // Selected code is fenced, so the export reads as Markdown and no code closes its own block.
+    return `## ${labels.you}\n\n${sentMarkdownText(item.text, item.parts).trim()}${attached}`;
   }
   assert(item.kind === 'text', 'sectionOf: a conversation item is a message');
   return `## ${labels.agent}\n\n${item.text.trim()}`;

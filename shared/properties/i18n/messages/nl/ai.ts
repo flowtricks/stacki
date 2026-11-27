@@ -31,6 +31,12 @@ export const messages = {
     one: '{count} ding op het web opgezocht',
     other: '{count} dingen op het web opgezocht',
   },
+  'ai.add.empty': 'Die selectie bevat geen code.',
+  'ai.add.noCode': 'Deze selectie heeft geen code die kan worden toegevoegd.',
+  'ai.add.selectionTooLong': 'De selectie is langer dan {max} tekens. Selecteer minder code.',
+  'ai.add.tooManyChips': 'Dit bericht heeft te veel chips. Verwijder er eerst een.',
+  'ai.add.tooManySelections': 'Een bericht kan {max} codeselecties bevatten. Verwijder er eerst een.',
+  'ai.add.tooMuchCode': 'De geselecteerde code in één bericht mag maximaal {max} tekens zijn. Verwijder eerst een selectie.',
   'ai.agent.badge.installing': 'Installeren',
   'ai.agent.badge.notInstalled': 'Niet geïnstalleerd',
   'ai.agent.badge.ready': 'Gereed',
@@ -91,6 +97,26 @@ export const messages = {
   'ai.changes.untracked.off': 'Snapshots staan uit',
   'ai.changes.untracked.turnOn': 'Aanzetten',
   'ai.changes.untracked.unavailable': 'Wijzigingen konden voor deze beurt niet worden vastgelegd',
+  'ai.chip.card.code': 'Geselecteerde code',
+  'ai.chip.kind.asset': 'Asset', // same
+  'ai.chip.kind.class': 'Klasse',
+  'ai.chip.kind.code': 'Codeselectie',
+  'ai.chip.kind.component': 'Component', // same
+  'ai.chip.kind.element': 'Element', // same
+  'ai.chip.kind.file': 'Bestand',
+  'ai.chip.kind.instructions': 'Instructies',
+  'ai.chip.kind.layout': 'Lay-out',
+  'ai.chip.kind.page': 'Pagina',
+  'ai.chip.kind.skill': 'Skill', // same
+  'ai.chip.kind.variable': 'Variabele',
+  'ai.chip.member.attr': 'Attribuut',
+  'ai.chip.member.prop': 'Eigenschap',
+  'ai.chip.member.slot': 'Slot', // same
+  'ai.chip.member.text': 'Tekst',
+  'ai.chip.place.componentLabel': 'Component {name}',
+  'ai.chip.place.layoutLabel': 'Lay-out {name}',
+  'ai.chip.place.route': 'Route {route}', // same
+  'ai.chip.place.viewedOn': 'Gezien op {page}',
   'ai.code.copy': 'Code kopiëren',
   'ai.command.clear': 'Nieuwe chat starten',
   'ai.command.export': 'Deze chat als Markdown kopiëren',
@@ -812,6 +838,7 @@ export const messages = {
     other: '{count} taken',
   },
   'ai.store.mentionInvalid': 'Sommige vermeldingen komen niet meer overeen met dit project: {names}. Verwijder ze of kies ze opnieuw en verstuur dan.',
+  'ai.store.messageTooLong': 'Het bericht is langer dan {max} tekens. Verwijder wat tekst of geselecteerde code.',
   'ai.store.queueFull': {
     one: 'Er kan maar {count} bericht wachten. Verstuur of verwijder er eerst een.',
     other: 'Er kunnen maar {count} berichten wachten. Verstuur of verwijder er eerst een.',

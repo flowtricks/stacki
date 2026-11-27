@@ -18,7 +18,7 @@ import {
   type PinWords,
   type SentPin,
 } from '../../../../shared/properties/ai/commentPinBrief';
-import { isReferenceChip, plainTextOf, type ComposerSegments } from '../../../../shared/properties/ai/mentions';
+import { isHostChip, plainTextOf, type ComposerSegments } from '../../../../shared/properties/ai/mentions';
 import { pinSendMode } from '../../../../shared/properties/ai/agentPresentation';
 import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import {
@@ -785,7 +785,7 @@ export function pinExpandedMentions(
   const found: { readonly pinIndex: number; readonly segment: ComposerSegments[number] }[] = [];
   pins.forEach((pin, pinIndex) => {
     for (const segment of pin.segments ?? []) {
-      if (segment.kind !== 'chip' || isReferenceChip(segment.chip)) {
+      if (segment.kind !== 'chip' || !isHostChip(segment.chip)) {
         continue;
       }
       const chip = segment.chip;

@@ -14,7 +14,17 @@ import { toArray, toRecord } from '../../core/record';
 import { parseAgentId, type AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
 import { PIN_SEND_MODES, parseSentPins, type PinSendMode, type SentPin } from './commentPinBrief';
-import { BUILTIN_CHIP_IDS, SKILL_SOURCES, isProjectRelativePath, isSkillDisplayPath, type BuiltinChipId, type SkillSource } from './mentions';
+import {
+  BUILTIN_CHIP_IDS,
+  SKILL_SOURCES,
+  isHostChip,
+  isProjectRelativePath,
+  isSkillDisplayPath,
+  parseMentionChip,
+  type BuiltinChipId,
+  type CodeOrReferenceChip,
+  type SkillSource,
+} from './mentions';
 
 export type ChatId = Brand<string, 'ChatId'>;
 export type TurnId = Brand<string, 'TurnId'>;
@@ -106,6 +116,8 @@ export type SentPart =
   | { readonly kind: 'file'; readonly path: string; readonly truncated: boolean; readonly excerpt: string | undefined }
   | { readonly kind: 'skill'; readonly name: string; readonly source: SkillSource; readonly path: string }
   | { readonly kind: 'builtin'; readonly id: BuiltinChipId; readonly textHash: string }
+  /** A reference chip (component, element, member, CSS, asset, page) or a code selection, as it stood in the message. */
+  | { readonly kind: 'chip'; readonly chip: CodeOrReferenceChip }
   /** Comment pins sent with "Send all" (commentPinBrief.ts): each pin's number, words and names, never the agent's instructions. */
   | { readonly kind: 'pins'; readonly mode: PinSendMode; readonly pins: readonly SentPin[] };
 
@@ -402,6 +414,13 @@ export function parseSentPart(input: unknown): SentPart {
         throw new Error('part.textHash: expected 8 to 64 hex digits');
       }
       return { kind: 'builtin', id: oneOf(value['id'], BUILTIN_CHIP_IDS, 'part.id'), textHash };
+    }
+    case 'chip': {
+      const chip = parseMentionChip(value['chip']);
+      if (isHostChip(chip)) {
+        throw new Error('part.chip: expected a reference or code chip');
+      }
+      return { kind: 'chip', chip };
     }
     case 'pins':
       return { kind: 'pins', mode: oneOf(value['mode'], PIN_SEND_MODES, 'part.mode'), pins: parseSentPins(value['pins']) };

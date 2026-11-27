@@ -2511,8 +2511,8 @@ right after a component chip, or after one of its member chips, lists that compo
 values (a choice's options, a switch's `true`/`false`: its variants), then its slots. A `component` chip carries the
 project-relative file (the scan's `file`, relative to the project root the agent runs in, whatever the components
 folder or the project's depth in its repository; a package component's path is made relative the same way); a
-`member` chip carries that file, `role` (`prop` or `slot`), `name` and, for a prop, an optional `value`. Neither is a
-prompt part: `promptPartsOf` and `plainTextOf` write each as its compact reference inside the text, and nothing else
+`member` chip carries that file, `role` (`prop` or `slot`), `name` and, for a prop, an optional `value`. The agent
+reads each as its compact reference inside the text (`plainTextOf` writes the same), and nothing else
 (no type, description, schema or file contents): `src/components/Hero.astro`, then `prop:variant=large`,
 `prop:title` or `slot:header`; a token that is empty or holds whitespace, `"`, `=` or a control character is a JSON
 string; a member not right after its component (only whitespace or that component's members between) carries the
@@ -2528,6 +2528,24 @@ feature may not import the props feature, so `src/app/shell/aiMemberField.tsx` r
 the component chip, a cleared one (or the default) removes it, and a row's include dot toggles `prop:name`. Each change
 is one isolated history event and leaves the caret where it was; Tab moves between controls and Escape returns focus
 to the composer.
+
+**Add to chat** (`shared/properties/ai/mentions.ts`, `src/features/ai/addToChat.ts`,
+`src/app/shell/aiAddToChat.ts`). A selection (the Code panel's selected text or highlighted element; an element from
+the canvas or Navigator menu; ⌘L / Ctrl+L) becomes two chips at the composer's caret: a `code` chip (path, lines,
+element name and the code as it read when added, unsaved text included) and a `page` chip (the file it is in: `page`,
+`layout`, `component` or `file`, plus `viewedOn`, the page on the canvas when that is another file). Bounds
+(`AI_LIMITS`): `codeChipCharsMax` per selection, `codeChipsMax` and `codeChipsCharsMax` per message; a selection past
+one, or past `promptCharsMax`, is refused with a toast and never cut.
+
+**What a message keeps.** A prompt's parts are `text`, `file`, `skill`, `builtin`, `reference` (a component,
+element, member, CSS, asset or page chip with the words the agent reads) and `code`. The host sends a reference's
+words inside the text, and a code part as its own text block, fenced with more backticks than the code holds, never
+read from disk and never the message's last text block (`@` in selected code is not a mention). The stored `user`
+event keeps every chip (`SentPart` kind `chip`), so the transcript, a reopened chat, Edit, Resend and Retry have
+them; chats stored earlier hold reference chips as words and read as before. `sentMessage.ts` turns a stored message
+back into its draft and into the plain text Copy gives (the button and a selection, `chipCopy.ts`): each chip written
+out where it stood, code under a line with its path and lines. Every chip shows its value in a card on hover or
+keyboard focus (`useChipCard.tsx`).
 
 **Protocol capabilities Stacki declares.** The host declares only open ACP capabilities
 (`session.compaction`, `session.notices`, `_meta.terminal_output_delta`; not `jetbrains`, not

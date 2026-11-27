@@ -62,12 +62,31 @@
   font-size: 11px;
   color: var(--text-faint);
 }
+/* An attachment is a chip too: a fill, no border. Its tooltip shows the picture or the whole name. */
 .ai-message-attachment {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
+  padding-block: 2px;
+  padding-inline: 2px 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.ai-message-attachment:not(:has(.ai-message-thumb)) {
+  padding-inline-start: 7px;
+}
+.ai-message-attachment:hover,
+.ai-message-attachment:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+.rail-tooltip.ai-message-attachment-tip {
+  z-index: 10001;
+  max-width: min(360px, calc(100vw - 16px));
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 .ai-message-attachment-label {
   min-width: 0;
@@ -1042,4 +1061,11 @@ button.ai-agents-head:hover {
 ::highlight(ai-find-current) {
   background-color: #ffb020;
   color: #111;
+}
+/* Where a copied selection is laid out to read its line breaks (chipCopy.ts): off screen, but rendered. */
+.ai-copy-stage {
+  position: fixed;
+  top: 0;
+  inset-inline-start: -100000px;
+  white-space: pre-wrap;
 }

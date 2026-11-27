@@ -100,6 +100,7 @@ import { withAgentTitle, type ChatRecord, type ChatStore } from './chatStore';
 import { EventPump } from './eventPump';
 import { cancelled, PermissionBroker } from './permissionBroker';
 import { buildPrompt, inside, type BuiltPrompt } from './promptBlocks';
+import { segmentsOfSent, sentTypedText } from '../../../shared/properties/ai/sentMessage';
 import { PinPictures, type PinPictureFiles } from './pinPictures';
 import { pinQuestionsOf } from '../../../shared/properties/ai/commentPinBrief';
 import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
@@ -655,7 +656,9 @@ export class AgentHost {
       userEvent(turn, now, { text, attachments, sent: built.value.sent, mode: undefined }, this.deps.thumbnail),
     ]);
     if (record.title === NEW_CHAT_TITLE) {
-      this.retitle(runtime, titleFrom(text, attachments));
+      // The title is made of what the person typed: selected code and its place would only name the file.
+      const typed = sentTypedText(segmentsOfSent(text, built.value.sent)).trim();
+      this.retitle(runtime, titleFrom(typed === '' ? text : typed, attachments));
     }
     void this.runTurn(process, runtime, turn, built.value.blocks, 'message');
     assert(runtime.turn === turn, 'prompt: the turn is running');

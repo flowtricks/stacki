@@ -114,6 +114,13 @@ export const AI_LIMITS = {
   sectionNameCharsMax: 60,
   /** Mention chips on one prompt; past it the prompt is refused at the parser. */
   mentionsMax: 16,
+  /**
+   * "Add to chat" code chips (mentions.ts): one selection's characters, the selections on one message, and all of
+   * their code together. Code past a bound is refused with the reason, never cut: a cut snapshot would not be the code selected.
+   */
+  codeChipCharsMax: 20_000,
+  codeChipsMax: 8,
+  codeChipsCharsMax: 60_000,
   /** One mentioned file embedded in a prompt, and all of them together; past either the file travels as a link. */
   mentionFileCharsMax: 100_000,
   mentionTotalCharsMax: 400_000,
@@ -139,8 +146,8 @@ export const AI_LIMITS = {
   composerSegmentsMax: 256,
   /** Drafts kept in browser storage per project. */
   draftsStoredMax: 50,
-  /** Parts (text runs and chips) in one prompt. */
-  promptPartsMax: 64,
+  /** Parts (text runs and chips) in one prompt: each segment of a draft is at most one part. */
+  promptPartsMax: 256,
   /** Blocks beyond the parts and attachments that mention expansion may add (links, wrappers). */
   promptBlocksExtraMax: 8,
   /** Background tasks the transcript tracks at once. */

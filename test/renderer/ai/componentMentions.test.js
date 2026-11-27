@@ -455,7 +455,7 @@ test('in the composer: a component that left the project turns its chips invalid
     pills().map((pill) => pill.kind),
     ['invalid', 'invalid'],
   );
-  assert.match(document.querySelector('.cm-content .chip-editor-chip').title, /Hero is no longer in this project/);
+  assert.match(document.querySelector('.cm-content .chip-editor-chip').getAttribute('aria-label'), /Hero is no longer in this project/);
   assert.deepEqual(
     pills().map((pill) => pill.label),
     ['Hero', 'variant = small'],
@@ -529,7 +529,17 @@ test('a valid component mention sends only its compact reference, as text', asyn
   assert.equal(await model.sendPrompt(CHAT), true);
   const [call] = named('aiPrompt');
   assert.equal(call.payload.text, 'Make src/components/Hero.astro prop:variant=large bigger');
-  assert.deepEqual(call.payload.parts, [{ kind: 'text', text: 'Make src/components/Hero.astro prop:variant=large bigger' }]);
+  // Each chip travels with its words, so the transcript can keep it; the agent reads the words alone.
+  assert.deepEqual(
+    call.payload.parts.map((part) => [part.kind, part.text, part.chip?.kind]),
+    [
+      ['text', 'Make ', undefined],
+      ['reference', 'src/components/Hero.astro', 'component'],
+      ['text', ' ', undefined],
+      ['reference', 'prop:variant=large', 'member'],
+      ['text', ' bigger', undefined],
+    ],
+  );
 });
 
 // ---------------------------------------------------------------------------

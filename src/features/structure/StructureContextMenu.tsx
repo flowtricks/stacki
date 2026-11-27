@@ -8,7 +8,7 @@ import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useShortcutTip } from '../../ui/shortcutTip';
 
 export type ContextAction =
-  'defaults' | 'open' | 'canvas' | 'unlink' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
+  'defaults' | 'open' | 'canvas' | 'add-to-chat' | 'unlink' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
 export interface ContextPosition {
   readonly left: number;
   readonly top: number;
@@ -32,6 +32,8 @@ interface MenuProps {
   readonly canCut: boolean;
   readonly canChange: boolean;
   readonly protectedNode: boolean;
+  /** "Add to chat": absent where there is no AI panel (Studio), so the row is left out. */
+  readonly addToChat: 'enabled' | 'disabled' | 'absent';
   readonly onClose: () => void;
   readonly onAction: (action: ContextAction) => void;
 }
@@ -63,6 +65,17 @@ export function ContextMenu(props: MenuProps) {
       }}
     >
       {props.component && <ComponentMenuHeader {...props} />}
+      {props.addToChat !== 'absent' && (
+        <>
+          <MenuItem
+            label={translate('workspace.code.addToChat')}
+            shortcut={shortcut('L')}
+            disabled={props.addToChat === 'disabled'}
+            onSelect={() => props.onAction('add-to-chat')}
+          />
+          <div className="ctx-divider" role="separator" />
+        </>
+      )}
       {props.plainText ? <ConvertMenu {...props} /> : <WrapMenu {...props} />}
       <div className="ctx-divider" role="separator" />
       <MenuItem label={translate('structure.menu.cut')} disabled={!props.canCut} onSelect={() => props.onAction('cut')} />

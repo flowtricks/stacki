@@ -8,6 +8,85 @@
 button.mention-chip-view {
   cursor: pointer;
 }
+/* A sent chip sits level with the words around it, and is selected whole, so a copy that starts or ends on one
+   takes all of it (chipCopy.ts). */
+.mention-chip-view {
+  vertical-align: middle;
+  user-select: all;
+}
+/* A chip reached with the keyboard: a brighter fill and a soft glow, no border. */
+.chip-editor-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #0099ff) 55%, transparent);
+}
+
+/* The card a chip opens to show its value (useChipCard.tsx): the app's tooltip, made wide enough for code and open
+   to the pointer, so it can be scrolled and selected. */
+/* Past the fitted tip's own reading width (styles.css), so code has room. */
+.rail-tooltip.ai-chip-card.ai-chip-card[data-fitted] {
+  z-index: 10002;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(440px, calc(100vw - 16px));
+  padding: 8px 10px;
+  pointer-events: auto;
+  text-align: start;
+  white-space: normal;
+}
+.ai-chip-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-chip-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.ai-chip-card-kind {
+  flex: none;
+  opacity: 0.65;
+  font-size: 11px;
+}
+.ai-chip-card-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.ai-chip-card-detail {
+  opacity: 0.75;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.ai-chip-card-code {
+  box-sizing: border-box;
+  max-width: 100%;
+  max-height: min(260px, 40vh);
+  min-width: 0;
+  margin-block-start: 2px;
+  padding: 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  white-space: pre;
+  cursor: text;
+}
+.ai-chip-card-code:focus-visible {
+  outline: none;
+  background: rgba(0, 0, 0, 0.55);
+}
+.ai-chip-card-value {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.ai-chip-card-why {
+  color: var(--red);
+  font-size: 11px;
+}
 .chip-editor-chip.is-copied {
   background: var(--chip-purple-fill-hover);
   color: var(--chip-purple-text-hover);

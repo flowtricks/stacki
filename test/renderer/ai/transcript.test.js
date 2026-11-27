@@ -713,14 +713,14 @@ test('the person’s last message can be copied, put back in the composer, or se
   assert.deepEqual(copied, ['Look at @src/pages/index.astro please'], 'the plain text is what is copied');
 
   await click(container.querySelector('[aria-label="Edit message"]'));
-  assert.equal(
-    ui
-      .aiState()
-      .drafts.get(CHAT)
-      .segments.map((segment) => segment.text)
-      .join(''),
-    'Look at @src/pages/index.astro please',
-    'the words are back in the composer, nothing is sent',
+  assert.deepEqual(
+    ui.aiState().drafts.get(CHAT).segments,
+    [
+      { kind: 'text', text: 'Look at ' },
+      { kind: 'chip', chip: { kind: 'file', path: 'src/pages/index.astro', name: 'index.astro' } },
+      { kind: 'text', text: ' please' },
+    ],
+    'the message is back in the composer with its chip, nothing is sent',
   );
   assert.equal(calls.filter((call) => call.name === 'aiPrompt').length, 0);
 

@@ -13,6 +13,8 @@ export interface ElementActionProps {
   readonly onOpenComponent?: (name: string, id: string) => void;
   /** Opens the component canvas for the instance's component; left out where there is no canvas (Studio). */
   readonly onOpenCanvas?: (name: string, id: string) => void;
+  /** Puts the element's code in the AI panel's message box; left out where there is no AI panel (Studio). */
+  readonly onAddToChat?: (id: string) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
   /** Gives bare text a tag. Left out where a page cannot write one, and the menu then offers none. */
   readonly onConvertText?: (id: string, tag: TextTag) => void;
@@ -53,6 +55,11 @@ export function ElementContextMenu(
 
 function runContextAction(action: ContextAction, props: ElementActionProps, menu: ContextPosition): void {
   const capabilities = contextCapabilities(props, menu);
+  // Adding to the chat changes nothing, so a protected node allows it.
+  if (action === 'add-to-chat') {
+    props.onAddToChat?.(menu.nodeId);
+    return;
+  }
   if (capabilities.protectedNode && action !== 'paste' && action !== 'open' && action !== 'canvas' && action !== 'defaults') {
     return;
   }
@@ -150,6 +157,7 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
   const convert = props.onConvertText !== undefined && canChange;
   return {
     component,
+    addToChat: addToChatState({ offered: props.onAddToChat !== undefined, hasCode: node !== undefined && node.kind !== 'chunk-group' }),
     plainText: node?.kind === 'text' && props.onConvertText !== undefined,
     protectedNode,
     canChange,
@@ -163,6 +171,13 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
     canConvertDiv: convert && canConvertText(nodes, position.nodeId, 'div'),
     canConvertSpan: convert && canConvertText(nodes, position.nodeId, 'span'),
   };
+}
+
+function addToChatState(state: { readonly offered: boolean; readonly hasCode: boolean }): 'enabled' | 'disabled' | 'absent' {
+  if (!state.offered) {
+    return 'absent';
+  }
+  return state.hasCode ? 'enabled' : 'disabled';
 }
 
 function openCanvasState(state: { readonly offered: boolean; readonly opens: boolean }): 'enabled' | 'disabled' | 'absent' {

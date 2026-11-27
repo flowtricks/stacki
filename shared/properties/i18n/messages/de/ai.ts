@@ -31,6 +31,12 @@ export const messages = {
     one: '{count} Sache im Web nachgeschlagen',
     other: '{count} Dinge im Web nachgeschlagen',
   },
+  'ai.add.empty': 'Diese Auswahl enthält keinen Code.',
+  'ai.add.noCode': 'Diese Auswahl hat keinen Code, der hinzugefügt werden kann.',
+  'ai.add.selectionTooLong': 'Die Auswahl ist länger als {max} Zeichen. Wähle weniger Code aus.',
+  'ai.add.tooManyChips': 'Diese Nachricht hat zu viele Chips. Entferne zuerst einen.',
+  'ai.add.tooManySelections': 'Eine Nachricht fasst höchstens {max} Code-Auswahlen. Entferne zuerst eine.',
+  'ai.add.tooMuchCode': 'Der ausgewählte Code einer Nachricht darf höchstens {max} Zeichen haben. Entferne zuerst eine Auswahl.',
   'ai.agent.badge.installing': 'Wird installiert',
   'ai.agent.badge.notInstalled': 'Nicht installiert',
   'ai.agent.badge.ready': 'Bereit',
@@ -93,6 +99,26 @@ export const messages = {
   'ai.changes.untracked.off': 'Snapshots sind aus',
   'ai.changes.untracked.turnOn': 'Einschalten',
   'ai.changes.untracked.unavailable': 'Die Änderungen dieses Durchgangs konnten nicht erfasst werden',
+  'ai.chip.card.code': 'Ausgewählter Code',
+  'ai.chip.kind.asset': 'Asset', // same
+  'ai.chip.kind.class': 'Klasse',
+  'ai.chip.kind.code': 'Code-Auswahl',
+  'ai.chip.kind.component': 'Komponente',
+  'ai.chip.kind.element': 'Element', // same
+  'ai.chip.kind.file': 'Datei',
+  'ai.chip.kind.instructions': 'Anweisungen',
+  'ai.chip.kind.layout': 'Layout', // same
+  'ai.chip.kind.page': 'Seite',
+  'ai.chip.kind.skill': 'Skill', // same
+  'ai.chip.kind.variable': 'Variable', // same
+  'ai.chip.member.attr': 'Attribut',
+  'ai.chip.member.prop': 'Eigenschaft',
+  'ai.chip.member.slot': 'Slot', // same
+  'ai.chip.member.text': 'Text', // same
+  'ai.chip.place.componentLabel': 'Komponente {name}',
+  'ai.chip.place.layoutLabel': 'Layout {name}',
+  'ai.chip.place.route': 'Route {route}', // same
+  'ai.chip.place.viewedOn': 'Gesehen auf {page}',
   'ai.code.copy': 'Code kopieren',
   'ai.command.clear': 'Neuen Chat starten',
   'ai.command.export': 'Diesen Chat als Markdown kopieren',
@@ -815,6 +841,7 @@ export const messages = {
     other: '{count} Aufgaben',
   },
   'ai.store.mentionInvalid': 'Einige Erwähnungen passen nicht mehr zu diesem Projekt: {names}. Entferne sie oder wähle sie erneut aus und sende dann.',
+  'ai.store.messageTooLong': 'Die Nachricht ist länger als {max} Zeichen. Entferne etwas Text oder ausgewählten Code.',
   'ai.store.queueFull': {
     one: 'Nur {count} Nachricht kann warten. Sende oder entferne zuerst eine.',
     other: 'Nur {count} Nachrichten können warten. Sende oder entferne zuerst eine.',

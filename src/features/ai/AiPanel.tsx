@@ -42,7 +42,7 @@ import {
   openStartingChat,
   runSetup,
   reviewChange,
-  sendPrompt,
+  resendMessage,
   setPanelVisibility,
   useAiState,
   type AiState,
@@ -230,8 +230,8 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   const setup = state.setups.get(agent);
   const reading = useMemo(() => readSignInFailures(view.items), [view.items]);
   const stage = signInStage({ setup, expired: availability?.state === 'sign-in' });
-  const retryText = view.running === undefined && reading.interrupted ? view.lastPrompt?.text : undefined;
-  const moment = useSignedInMoment({ agent, needed: stage !== undefined, holdMs: retryText === undefined ? SIGNED_IN_MS : SIGNED_IN_RETRY_MS });
+  const retryPrompt = view.running === undefined && reading.interrupted ? view.lastPrompt : undefined;
+  const moment = useSignedInMoment({ agent, needed: stage !== undefined, holdMs: retryPrompt === undefined ? SIGNED_IN_MS : SIGNED_IN_RETRY_MS });
   const started = view.items.some((item) => item.kind === 'user');
   const [choosingAgents, setChoosingAgents] = useState(false);
   const badges = Object.fromEntries(
@@ -243,7 +243,7 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   const hold = useAiHold(); // Design mode (experimental): docs/design-mode/REMOVE.md
   const blocked = hold ?? (!state.trusted ? translate('ai.panel.trustFirst') : composerBlock({ agent, availability, stage, started, translate }));
   const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): Promise<void> => runReview(props, chatId, turn, path, action);
-  const retry = retryText === undefined ? undefined : (): void => void sendPrompt(chatId, retryText);
+  const retry = retryPrompt === undefined ? undefined : (): void => void resendMessage(chatId, retryPrompt);
   // Start the agent early, invisibly, once it is installed, signed in and allowed here; let go when the chat starts or the panel closes.
   usePrewarm({
     projectPath,

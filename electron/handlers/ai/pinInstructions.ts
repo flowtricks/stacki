@@ -14,7 +14,7 @@
 // Pure: the host passes the brief, and a test reads the text.
 import { assert } from '../../../shared/core/assert';
 import type { PinPictureFile, PinPictureFiles } from './pinPictures';
-import { isReferenceChip } from '../../../shared/properties/ai/mentions';
+import { isHostChip } from '../../../shared/properties/ai/mentions';
 import { PIN_LIMITS, PIN_QUESTION_LEAD, pinWaves, type PinBrief, type PinBriefEntry } from '../../../shared/properties/ai/commentPinBrief';
 
 /** The text block for a brief, wrapped in a tag so the agent reads it as one set of instructions. */
@@ -93,7 +93,7 @@ function singleText(pins: readonly PinBriefEntry[]): string {
 // The files, skills and instructions a pin mentions travel as the message's own parts, as the chat's mentions do.
 // Said only when there are some: every other mention is already in the pin's comment.
 function mentionRules(pins: readonly PinBriefEntry[], use: string): readonly string[] {
-  const expanded = pins.some((pin) => pin.segments?.some((segment) => segment.kind === 'chip' && !isReferenceChip(segment.chip)) === true);
+  const expanded = pins.some((pin) => pin.segments?.some((segment) => segment.kind === 'chip' && isHostChip(segment.chip)) === true);
   return expanded
     ? [`- Some pins mention files, skills or instructions. What they bring is attached to this message, after a line "Pin <number> mentions:". ${use}`]
     : [];

@@ -604,10 +604,10 @@ test('a chip in a sent message is the same pill; the instructions chip copies an
       React.createElement(
         'div',
         {},
-        React.createElement(input.MentionChipView, { chip: { kind: 'builtin', id: 'app-builder' } }),
-        React.createElement(input.MentionChipView, { chip: { kind: 'file', path: 'docs/apps.md' } }),
+        React.createElement(input.MentionChipView, { chip: { kind: 'builtin', id: 'app-builder', title: 'App builder instructions' } }),
+        React.createElement(input.MentionChipView, { chip: { kind: 'file', path: 'docs/apps.md', name: 'apps.md' } }),
         React.createElement(input.MentionChipView, {
-          chip: { kind: 'skill', name: 'lumos', path: '.claude/skills/lumos/SKILL.md' },
+          chip: { kind: 'skill', name: 'lumos', source: 'project', path: '.claude/skills/lumos/SKILL.md' },
           onClick: () => (clicks += 1),
         }),
       ),
@@ -617,7 +617,9 @@ test('a chip in a sent message is the same pill; the instructions chip copies an
   assert.equal(builder.tagName, 'BUTTON');
   assert.equal(plain.tagName, 'SPAN');
   assert.equal(plain.textContent, 'apps.md');
-  assert.equal(plain.getAttribute('title'), 'docs/apps.md');
+  // Its value shows in a card (chipCards.test.js), so it carries no native tooltip; a reader hears the path.
+  assert.equal(plain.getAttribute('title') ?? '', '');
+  assert.equal(plain.getAttribute('aria-label'), 'apps.md, docs/apps.md');
   await act(async () => builder.click());
   await settle(1);
   assert.deepEqual(clipboard, [input.appBuildPrompt()]);

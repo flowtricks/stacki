@@ -177,7 +177,7 @@ export interface ChatView {
   readonly activeTasks: readonly BackgroundTask[];
   readonly title: string | undefined;
   /** The last prompt the person sent, for Retry. */
-  readonly lastPrompt: { readonly turn: TurnId; readonly text: string } | undefined;
+  readonly lastPrompt: { readonly turn: TurnId; readonly text: string; readonly parts?: readonly SentPart[] | undefined } | undefined;
 }
 
 export const EMPTY_CHAT: ChatView = {
@@ -220,7 +220,7 @@ export function applyEvent(view: ChatView, event: ChatEvent): ChatView {
           parts: event.parts,
           mode: event.mode,
         })),
-        lastPrompt: { turn: event.turn, text: event.text },
+        lastPrompt: { turn: event.turn, text: event.text, parts: event.parts },
       };
     case 'text':
       return appendText(view, event);

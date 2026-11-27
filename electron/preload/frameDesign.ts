@@ -259,6 +259,8 @@ function forwardShortcut(event: KeyboardEvent): void {
   // ⌘Enter jumps to the class field. The canvas is where the selection is
   // usually made, so it has to reach the app from in here too.
   const isClassJump = mod && !event.altKey && !event.shiftKey && event.key === 'Enter';
+  // ⌘L adds the selected element's code to the AI chat (src/lib/shortcutLabel.ts), from a selection made here.
+  const isAddToChat = mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'l';
   // The rail's panel chords, Option and a letter (src/app/railShortcuts.ts RAIL_SHORTCUTS, held to this list by
   // test/renderer/app/railSettings.test.js; the preload imports nothing). A field, handled above, keeps them to type.
   const panelCodes = 'KeyE KeyP KeyN KeyK KeyD KeyV KeyG KeyC KeyB KeyO KeyF KeyS KeyU KeyZ KeyA KeyR KeyM KeyI KeyQ';
@@ -280,7 +282,7 @@ function forwardShortcut(event: KeyboardEvent): void {
   const isInspectorTab = !mod && !event.altKey && ['s', 'd'].includes(event.key.toLowerCase());
   // The parent owns component/defaults navigation even while this frame has focus.
   const isClose = !mod && !event.altKey && !event.shiftKey && event.key === 'Escape';
-  if (isDelete || isDuplicate || isClassJump || isProperties || isGuide || isClose || isInspectorTab) {
+  if (isDelete || isDuplicate || isClassJump || isAddToChat || isProperties || isGuide || isClose || isInspectorTab) {
     event.preventDefault();
     try {
       window.parent.postMessage({ type: 'avb:shortcut', name: 'key', key: event.key, meta: mod }, '*');

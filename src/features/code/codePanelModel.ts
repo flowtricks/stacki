@@ -111,6 +111,44 @@ export function componentSourceRanges(nodes: readonly EditorNode[], source: stri
   return ranges;
 }
 
+/** A selection as "Add to chat" takes it: the code as it reads now, its lines, and the element it is, if it is one. */
+export interface SourceSelection {
+  readonly code: string;
+  readonly startLine: number;
+  readonly endLine: number;
+  readonly element: string | undefined;
+}
+
+/** The text a person selected in the editor, exactly. */
+export function textSelectionOf(source: string, range: SourceRange): SourceSelection | undefined {
+  if (range.from < 0 || range.to <= range.from || range.to > source.length) {
+    return undefined;
+  }
+  const code = source.slice(range.from, range.to);
+  return { code, startLine: sourceLineAt(source, range.from), endLine: sourceLineAt(source, range.to - 1), element: undefined };
+}
+
+/**
+ * Node `id`'s own code: from the start of its first line when only the indent precedes it, so the code reads as
+ * it is laid out. Undefined for a node with no code of its own, or one whose place no longer matches the source (an
+ * edit the tree has not read yet): a wrong slice would be worse than none.
+ */
+export function nodeSelectionOf(source: string, model: EditorModel | undefined, id: string | undefined): SourceSelection | undefined {
+  const range = sourceRangeForSelection(model, id, source.length);
+  if (model === undefined || id === undefined || range === undefined || range.to <= range.from) {
+    return undefined;
+  }
+  const node = id === 'frontmatter' ? undefined : sourceNodeById(model.nodes, id);
+  const tagged = node?.kind === 'element' || node?.kind === 'component';
+  if (tagged && source.charAt(range.from) !== '<') {
+    return undefined;
+  }
+  const lineStart = source.lastIndexOf('\n', range.from - 1) + 1;
+  const from = range.from > 0 && /^[ \t]*$/u.test(source.slice(lineStart, range.from)) ? lineStart : range.from;
+  const selection = textSelectionOf(source, { from, to: range.to });
+  return selection === undefined ? undefined : { ...selection, element: tagged ? node.name : undefined };
+}
+
 export function sourceLineLabel(source: string, range: SourceRange | undefined): string | undefined {
   if (!range) {
     return undefined;

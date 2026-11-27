@@ -3,6 +3,7 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/workspace';
 
 export const messages = {
+  'workspace.code.addToChat': 'Sohbete ekle',
   'workspace.code.close': 'Kapat (düzenlemeler anında kaydedilir)',
   'workspace.code.title': 'Kod',
   'workspace.files.cancel': 'İptal',

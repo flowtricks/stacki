@@ -36,10 +36,14 @@ import type {
   SectionId,
   TurnId,
   TurnStop,
+  SentPart,
 } from '../../../shared/properties/ai/chatModel';
+import { segmentsOfSent } from '../../../shared/properties/ai/sentMessage';
 import {
+  chipBoundProblem,
   plainTextOf,
   promptPartsOf,
+  type MentionChip,
   type BuiltinChipId,
   type ComposerSegments,
   type MentionCandidate,
@@ -153,23 +157,23 @@ export function isDraftEmpty(draft: ChatDraft): boolean {
 }
 
 /**
- * The segments cut to what a prompt can carry: at most `composerSegmentsMax` segments, `mentionsMax` chips
- * and `promptCharsMax` characters of text, the rest dropped from the end. An editor keeps within these; the
+ * The segments cut to what a prompt can carry: at most `composerSegmentsMax` segments, each kind of chip within
+ * its bound (chipBoundProblem) and `promptCharsMax` characters of text, the rest dropped from the end. An editor keeps within these; the
  * cut is the store's backstop so no path (a paste, a restored draft) can hand the parser an oversized prompt.
  */
 export function boundSegments(segments: ComposerSegments): ComposerSegments {
   const kept: ComposerSegments[number][] = [];
   let characters = 0;
-  let chips = 0;
+  const chips: MentionChip[] = [];
   for (const segment of segments) {
     if (kept.length >= AI_LIMITS.composerSegmentsMax) {
       break;
     }
     if (segment.kind === 'chip') {
-      if (chips >= AI_LIMITS.mentionsMax) {
+      if (chipBoundProblem([...chips, segment.chip]) !== undefined) {
         continue;
       }
-      chips += 1;
+      chips.push(segment.chip);
       kept.push(segment);
     } else {
       const room = AI_LIMITS.promptCharsMax - characters;
@@ -624,8 +628,14 @@ function contentOf(draft: ChatDraft): PromptContent | undefined {
     fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: invalid.join(', ') }) });
     return undefined;
   }
+  const text = draftText(draft);
+  if (text.length > AI_LIMITS.promptCharsMax) {
+    // Typed words and selected code together: refused whole, never cut.
+    fail({ code: 'invalid', ...described('ai.store.messageTooLong', { max: AI_LIMITS.promptCharsMax }) });
+    return undefined;
+  }
   return {
-    text: draftText(draft),
+    text,
     parts: hasChip ? promptPartsOf(draft.segments, builtinTextOf) : undefined,
     attachments: draft.attachments.map((entry) => entry.attachment),
   };
@@ -698,7 +708,24 @@ export function subscribeAiState(listener: () => void): () => void {
   return subscribe(listener);
 }
 
-/** Sends the chat's draft, or `text` when given (Retry, a hand-off). True when the agent took it. */
+/**
+ * Sends an earlier message again (Resend, Retry), with its chips as they were sent: a code chip sends the code it
+ * captured then. A component mention that no longer matches the project refuses it, as it refuses any send.
+ */
+export async function resendMessage(chat: ChatId, message: { readonly text: string; readonly parts?: readonly SentPart[] | undefined }): Promise<boolean> {
+  const content = contentOf({ segments: segmentsOfSent(message.text, message.parts), attachments: [] });
+  if (content === undefined || content.text.trim() === '') {
+    return false;
+  }
+  const reply = await submitPrompt(chat, content);
+  if (!reply.ok) {
+    reportSendFailure(reply.error);
+    return false;
+  }
+  return true;
+}
+
+/** Sends the chat's draft, or `text` when given (a quick reply, a hand-off). True when the agent took it. */
 export async function sendPrompt(chat: ChatId, text?: string): Promise<boolean> {
   const draft = state.drafts.get(chat) ?? EMPTY_DRAFT;
   const content = text === undefined ? contentOf(draft) : { text, parts: undefined, attachments: [] };
@@ -1274,7 +1301,19 @@ const OPEN_CHAT_KEY_PREFIX = 'stacki.ai.open.';
  * Opening the panel goes straight to a chat, never the list: the one open last
  * in this project, else the newest, else a new empty one with the preferred agent.
  */
-export async function openStartingChat(): Promise<void> {
+export function openStartingChat(): Promise<void> {
+  // The panel and a hand-off (Add to chat) can both ask as the panel opens: one answer, so no second chat is made.
+  if (starting === undefined) {
+    starting = startingChat().finally(() => {
+      starting = undefined;
+    });
+  }
+  return starting;
+}
+
+let starting: Promise<void> | undefined;
+
+async function startingChat(): Promise<void> {
   const projectPath = requireProject();
   if (state.open !== undefined) {
     return;

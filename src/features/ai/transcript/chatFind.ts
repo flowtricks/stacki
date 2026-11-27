@@ -5,6 +5,7 @@
 //
 // The composer and the transcript are siblings, so a request to open the bar from the composer goes
 // through `requestChatFind`, a counter per chat the transcript watches.
+import { segmentsOfSent, sentTypedText } from '../../../../shared/properties/ai/sentMessage';
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import type { TranscriptItem } from '../chatReducer';
@@ -64,12 +65,17 @@ export function matchingMessageIds(items: readonly TranscriptItem[], query: stri
     if (ids.length >= FIND_LIMITS.openedMessagesMax) {
       break;
     }
-    if (isSearchedMessage(item) && textMatches(item.text, query, 1).length > 0) {
+    if (isSearchedMessage(item) && textMatches(drawnWords(item), query, 1).length > 0) {
       ids.push(item.id);
     }
   }
   assert(ids.length <= FIND_LIMITS.openedMessagesMax, 'matchingMessageIds: the bound holds');
   return ids;
+}
+
+/** The words a message draws: a sent message's code and place chips show a label, not their text. */
+function drawnWords(item: Extract<TranscriptItem, { readonly kind: 'user' | 'text' }>): string {
+  return item.kind === 'user' ? sentTypedText(segmentsOfSent(item.text, item.parts)) : item.text;
 }
 
 /** The match after (or before) `current` among `count`, wrapping at either end; undefined when there is none. */

@@ -68,7 +68,7 @@ test('a user message shows its text, attachments, time and a Copy that writes th
   assert.match(container.querySelector('.ai-msg-time').textContent, /\d/);
   assert.ok(container.querySelector('.ai-msg-time').title, 'the hover title carries the full date');
   await click(action(container, 'Copy message'));
-  assert.deepEqual(written, ['Change line two']);
+  assert.deepEqual(written, ['Change line two\n[shot.png]']);
   assert.equal(action(container, 'Copy message').title, 'Copied');
 });
 

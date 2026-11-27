@@ -3,6 +3,7 @@ import type { CatalogOf } from '../../../../core/i18n/catalog';
 import type { MessageKey } from '../en/workspace';
 
 export const messages = {
+  'workspace.code.addToChat': '채팅에 추가',
   'workspace.code.close': '닫기(편집 내용은 자동으로 저장됨)',
   'workspace.code.title': '코드',
   'workspace.files.cancel': '취소',
