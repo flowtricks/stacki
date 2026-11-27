@@ -2265,6 +2265,7 @@
     "src/ui/DateField.tsx",
     "src/ui/DateTimePicker.tsx",
     "src/ui/DockableWindow.tsx",
+    "src/ui/DirectionIcons.tsx",
     "src/ui/DropLine.tsx",
     "src/ui/Dropdown.tsx",
     "src/ui/ElementIcons.tsx",

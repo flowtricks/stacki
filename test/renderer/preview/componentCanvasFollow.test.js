@@ -73,6 +73,8 @@ const canvas = require(output);
 
 const ID = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const BUTTON = 'src/components/Button.astro';
+// Past the segmented control's hover delay (SegmentedControl.tsx), by which its tip is up.
+const TOOLTIP_WAIT_MS = 650;
 const component = {
   file: BUTTON,
   name: 'Button',
@@ -283,6 +285,46 @@ test('Fixed at All frames writes from the drawn size, and frames that differ are
   await draw(same);
   assert.equal(pressed(), 'Fixed');
   assert.equal(width().querySelector('input')?.value, '183');
+  canvas.noteComponentCanvas({ kind: 'idle' });
+});
+
+// The owner's request: the Layout choices are drawn with the Style panel's direction arrows, not words. Each segment's
+// words are still its accessible name and its hover tip, and choosing one sets that arrangement.
+test('Layout shows direction icons, named and tipped by their words', async (context) => {
+  const { state } = openCanvas();
+  const arrangements = [];
+  const panelControl = { ...control, setArrangement: (next) => arrangements.push(next) };
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  context.after(() => act(async () => root.unmount()));
+  canvas.noteComponentCanvas(state);
+  await act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: panelControl, state })));
+  const group = host.querySelector('.component-canvas-arrangement');
+  assert.equal(group.getAttribute('aria-label'), 'Layout');
+  const segments = [...group.querySelectorAll('[role="radio"]')];
+  assert.deepEqual(
+    segments.map((segment) => segment.getAttribute('aria-label')),
+    ['Side by side', 'Stacked', 'Wrap'],
+  );
+  for (const segment of segments) {
+    assert.equal(segment.textContent, '', 'no visible words');
+    assert.equal(segment.querySelectorAll('svg[aria-hidden="true"]').length, 1, 'one decorative icon');
+  }
+  assert.deepEqual(
+    segments.map((segment) => segment.querySelector('svg').getAttribute('data-central-icon') ?? undefined),
+    // The wrap icon is the direction bar's own drawing, which carries no Central name.
+    ['arrowRight', 'arrowDown', undefined],
+  );
+  assert.equal(segments[2].querySelectorAll('svg path[opacity="0.4"]').length, 1, 'the direction bar’s wrap icon');
+  assert.equal(segments[0].getAttribute('aria-checked'), 'true', 'side by side is what nobody arranged');
+  await act(async () => {
+    segments[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, TOOLTIP_WAIT_MS));
+  });
+  assert.equal(document.querySelector('[role="tooltip"]')?.textContent, 'Stacked', 'the words are the hover tip');
+  await act(async () => segments[2].dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
+  assert.deepEqual(arrangements, ['wrap']);
   canvas.noteComponentCanvas({ kind: 'idle' });
 });
 
