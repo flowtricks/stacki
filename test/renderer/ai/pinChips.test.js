@@ -370,7 +370,8 @@ const SOURCE = {
   agent: 'claude',
   embeddedContext: true,
   commands: new Set(),
-  read: (file) => (file.endsWith(NOTES) ? 'Brand notes' : undefined),
+  // The prompt builder reads by the resolved path, which has Windows' separators there.
+  read: (file) => (file.replaceAll('\\', '/').endsWith(NOTES) ? 'Brand notes' : undefined),
 };
 
 test('Send gives the agent what the chat would for the same words, and the card draws the chips', async () => {

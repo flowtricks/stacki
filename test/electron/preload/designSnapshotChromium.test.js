@@ -11,6 +11,10 @@
 // entrances finished and keeps the edit. The live page is left where it was scrolled, and is never scrolled while
 // the request says the person can see it.
 //
+// The window renders offscreen: on Linux and Windows a merely hidden window draws too few frames for the page's
+// scroll events, observers and WebGL to run, which the shown canvas in the app does. It draws 30 frames a second, the
+// pace of the page's WebGL loop: at 60 on software GL its picture was missed about one run in six.
+//
 // Method: a real Electron window (jsdom has no layout, observers or canvases) serves a host page over localhost with
 // one canvas iframe at `#avb-design`, the built preload running in it as in the app, on the page in
 // test/fixtures/design-snapshot/motion.html. The host sends the app's own snapshot requests and draws each answer
@@ -133,8 +137,10 @@ const { waitFor } = require(${JSON.stringify(waitForPath)});
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     show: false, width: 600, height: 800,
-    webPreferences: { preload: ${JSON.stringify(preload)}, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true, backgroundThrottling: false },
+    webPreferences: { preload: ${JSON.stringify(preload)}, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true, backgroundThrottling: false, offscreen: true },
   });
+  // Frames at the pace the fixture's WebGL loop draws, so each frame the preload reads has a picture in it.
+  win.webContents.setFrameRate(30);
   const run = (code) => win.webContents.executeJavaScript(code);
   const live = (code) => run('document.getElementById("live").contentWindow.eval(' + JSON.stringify(code) + ')');
   await win.loadURL('http://127.0.0.1:${port}/host.html');

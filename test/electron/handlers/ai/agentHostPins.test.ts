@@ -292,9 +292,9 @@ test('parallel pins: each subagent’s words name its own pictures, readable wit
   );
   const rule = new PinPictures(userData).readRule(root);
   assert.deepEqual(allowed[0], [rule], 'the session may read that folder, and nothing more is allowed');
-  const folder = rule.slice('Read('.length + 1, -'/**)'.length);
   for (const file of paths) {
-    assert.ok(file.startsWith(`${folder}${path.sep}`), 'under the folder the rule names');
+    // A rule spells a Windows drive and its separators its own way, so the file's folder is spelled as a rule too.
+    assert.equal(readRuleFor(path.dirname(path.dirname(file))), rule, 'under the folder the rule names');
     assert.ok(path.relative(root, file).startsWith('..'), 'never in the project');
     assert.equal(fs.existsSync(file), false, 'removed once the turn ended');
   }

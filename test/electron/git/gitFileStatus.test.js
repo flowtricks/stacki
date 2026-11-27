@@ -121,7 +121,8 @@ test('a project that is itself new or ignored is told as a whole, and reading ne
   fs.utimesSync(path.join(root, '.gitignore'), new Date(), new Date(Date.now() + 5_000));
   const read = await readFileGitStatus(git, root);
   assert.equal(fs.statSync(index).mtimeMs, before);
-  assert.equal(fs.realpathSync(read.gitDirectory), fs.realpathSync(path.join(root, '.git')));
+  // The native form expands a Windows short name (RUNNER~1), which git spells out in full and the temp folder does not.
+  assert.equal(fs.realpathSync.native(read.gitDirectory), fs.realpathSync.native(path.join(root, '.git')));
 });
 
 test('outside a repository, and with no git at all, the answer is none; another failure is thrown', async (context) => {
