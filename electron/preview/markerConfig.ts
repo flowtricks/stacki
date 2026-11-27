@@ -353,8 +353,8 @@ const { studioEntryPlugin } = require(`,
   `);
 const { previewWarmupIntegration } = require(`,
   `);
-// Images from the image endpoint go out with no-cache, so one replaced under the same name shows
-// (previewServer/previewImageCache.ts).
+// Images go out with no-store, so one replaced under the same name shows, and a frame that leaves
+// mid-load cannot blank the same image on the canvas (previewServer/previewImageCache.ts).
 const { previewImageCachePlugin } = require(`,
   `);
 const PROJECT_DIRS = `,
