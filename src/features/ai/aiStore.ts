@@ -20,10 +20,11 @@ import type {
   SectionAction,
   SetupAction,
   SetupState,
+  ChatSetting,
 } from '../../../shared/ipc/aiChat';
 import { AGENT_IDS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
-import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
+import { PIN_LIMITS, type PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import { applyRemember, NO_REMEMBERED_SETTINGS, type RememberedSettings } from '../../../shared/properties/ai/rememberedSettings';
 import type {
   ChatEvent,
@@ -245,8 +246,21 @@ export interface AiState {
   readonly composerFocusRequests: number;
 }
 
-/** Chats whose transcripts stay in memory at once; the oldest others are read again when opened. */
+/**
+ * Chats whose transcripts stay in memory at once; the oldest others are read again when opened. Beyond them are kept
+ * the chats a reply is running in and the chats a holder asks for (comment pins): their events are folded as they
+ * arrive, so a transcript let go would never say how its work went.
+ */
 const VIEWS_MAX = 16;
+/** Running replies (one a request, `pendingRequestsMax`) and held chats (one a pin of a full board) kept beyond `VIEWS_MAX`. */
+const VIEWS_KEPT_MAX = AI_LIMITS.pendingRequestsMax + PIN_LIMITS.pinsMax;
+
+let viewHolder: (() => ReadonlySet<ChatId>) | undefined;
+
+/** Registers who needs transcripts kept in memory: the chats it answers with are never let go. */
+export function holdChatViews(holder: () => ReadonlySet<ChatId>): void {
+  viewHolder = holder;
+}
 
 const INITIAL: AiState = {
   projectPath: undefined,
@@ -405,6 +419,40 @@ export async function newChat(agent: AgentId, surface: AgentSurface = 'chat'): P
   // The new chat shows at once; where it ranks among pinned chats and sections is the main process's to say.
   void refreshChatList();
   return chat.id;
+}
+
+/**
+ * A new chat that is not opened: the person stays where they are. For work sent while the open chat is still
+ * answering (comment pins), which gets a chat of its own with `settings` on top of the ones last used. `made` hears
+ * of the chat before its transcript is kept, so a holder (holdChatViews) names it before any other chat arrives.
+ */
+export async function newBackgroundChat(agent: AgentId, settings: readonly ChatSetting[], made: (chat: ChatId) => void): Promise<ChatId | undefined> {
+  const projectPath = requireProject();
+  const chosen = new Map([...agentSettingsForSurface('chat', agent), ...settings].map((setting) => [setting.option, setting.value]));
+  const merged = [...chosen].map(([option, value]) => ({ option, value }));
+  const reply = await aiChatCreate(merged.length === 0 ? { projectPath, agent } : { projectPath, agent, settings: merged });
+  if (!reply.ok) {
+    fail(reply.error);
+    return undefined;
+  }
+  const chat = reply.value;
+  if (state.projectPath !== projectPath) {
+    return undefined;
+  }
+  made(chat.id);
+  update((current) => ({
+    ...current,
+    chats: [chat, ...current.chats.filter((other) => other.id !== chat.id)],
+    views: withView(current.views, chat.id, EMPTY_CHAT),
+  }));
+  // Not waited for: the caller holds the chat's transcript from this moment (holdChatViews).
+  void refreshChatList();
+  return chat.id;
+}
+
+/** Whether `chat` can take a message of its own now: no reply running in it and nothing waiting to be sent to it. */
+export function isChatIdle(chat: ChatId): boolean {
+  return state.views.get(chat)?.running === undefined && (state.queue.get(chat) ?? []).length === 0;
 }
 
 export async function openChat(chat: ChatId | undefined): Promise<void> {
@@ -664,12 +712,16 @@ function reportSendFailure(error: AiFailure): void {
   }
 }
 
+/** How a send of pins fared: its reply started; the chat could not take a message just now; or it was refused, and why was shown. */
+export type PinMessageOutcome = { readonly kind: 'sent'; readonly turn: TurnId } | { readonly kind: 'taken' } | { readonly kind: 'refused' };
+
 /**
  * Sends a message of comment pins (pins/pinStore.ts): their instructions travel as `pins`, their images as the
  * attachments, and `text` is the plain words the transcript keeps. A pin's `@` chips reach the agent as the chat's
  * would: a reference is in the pin's words, and the files, skills and instructions it mentions (`mentions`) travel as
- * parts; a component mention that no longer matches the project refuses the send, as it refuses the chat's. The turn
- * it started, or undefined when it was refused (the failure is shown as any send's is).
+ * parts; a component mention that no longer matches the project refuses the send, as it refuses the chat's. `taken`
+ * (the chat is answering, or full) shows nothing: the caller sends to a chat of its own. Any other refusal is shown as
+ * any send's is.
  */
 export async function sendPinMessage(
   chat: ChatId,
@@ -680,12 +732,12 @@ export async function sendPinMessage(
     readonly drafts: readonly ComposerSegments[];
     readonly mentions: ComposerSegments;
   },
-): Promise<TurnId | undefined> {
+): Promise<PinMessageOutcome> {
   assert(message.pins.pins.length >= 1, 'sendPinMessage: a message of pins has a pin');
   const invalid = mentionCheck === undefined ? [] : message.drafts.flatMap((draft) => mentionCheck?.(draft) ?? []);
   if (invalid.length > 0) {
     fail({ code: 'invalid', ...described('ai.store.mentionInvalid', { names: [...new Set(invalid)].join(', ') }) });
-    return undefined;
+    return { kind: 'refused' };
   }
   const parts = message.mentions.length === 0 ? undefined : promptPartsOf([{ kind: 'text', text: `${message.text}\n\n` }, ...message.mentions], builtinTextOf);
   const reply = await aiPrompt({
@@ -697,10 +749,13 @@ export async function sendPinMessage(
     ...(parts === undefined ? {} : { parts }),
   });
   if (!reply.ok) {
+    if (reply.error.code === 'busy' || reply.error.code === 'read-only') {
+      return { kind: 'taken' };
+    }
     reportSendFailure(reply.error);
-    return undefined;
+    return { kind: 'refused' };
   }
-  return reply.value.turn;
+  return { kind: 'sent', turn: reply.value.turn };
 }
 
 /** Tells `listener` after every change of the store; returns the unsubscribe. For stores that follow chats (comment pins). */
@@ -1197,16 +1252,17 @@ function withView(views: ReadonlyMap<ChatId, ChatView>, chat: ChatId, view: Chat
   const next = new Map(views);
   next.delete(chat);
   next.set(chat, view);
+  const held = viewHolder?.() ?? new Set<ChatId>();
   // Oldest first in insertion order: the least recently changed transcripts leave first.
-  for (const key of next.keys()) {
+  for (const [key, kept] of next) {
     if (next.size <= VIEWS_MAX) {
       break;
     }
-    if (key !== state.open) {
+    if (key !== state.open && key !== chat && kept.running === undefined && !held.has(key)) {
       next.delete(key);
     }
   }
-  assert(next.size <= VIEWS_MAX + 1, 'withView: transcripts in memory are bounded');
+  assert(next.size <= VIEWS_MAX + 1 + VIEWS_KEPT_MAX, 'withView: transcripts in memory are bounded');
   return next;
 }
 

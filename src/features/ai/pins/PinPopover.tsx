@@ -15,13 +15,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import { PIN_LIMITS } from '../../../../shared/properties/ai/commentPinBrief';
-import type { CommentPin, PinImageId } from '../../../../shared/properties/ai/commentPins';
+import type { CommentPin, PinId, PinImageId } from '../../../../shared/properties/ai/commentPins';
+import type { ChatId } from '../../../../shared/properties/ai/chatModel';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { crop as centralCrop, image as centralImage, close as centralClose } from '../../../ui/central/centralGeometry';
 import { reportErrorToast } from '../../../ui/errorNotices';
 import Popup from '../../../ui/Popup';
-import { preferredAgent, useAiState, type ChatDraft, type DraftAttachment } from '../aiStore';
+import { openChat, preferredAgent, useAiState, type ChatDraft, type DraftAttachment } from '../aiStore';
 import { ChipWords } from '../mentions/ChipWords';
 import { prepareImage } from '../chatImages';
 import { ComposerInput, type ComposerHandle } from '../composer/ComposerInput';
@@ -30,7 +31,7 @@ import { DictationLine } from '../composer/VoiceLine';
 import '../composer/composer.css';
 import { useComposerVoice } from '../composer/useComposerVoice';
 import { AttachmentChips } from '../screenshot/AttachmentChips';
-import { hasPersonContent, segmentsOfWords, workingCopy, type PinProgress } from './pinModel';
+import { hasPersonContent, pinRunning, segmentsOfWords, workingCopy, type PinProgress } from './pinModel';
 import { addImagesToPin, closePinBox, removePinImage, reopenSentPin, savePinBox, setPinSegments, startMovingPin, usePinState } from './pinStore';
 import { PinBadge } from './PinBadge';
 import { PinModelPicker } from './PinModelPicker';
@@ -70,7 +71,9 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
   const [position, setPosition] = useState<CSSProperties>({ position: 'fixed', left: -10_000, top: 0, width: POPOVER_WIDTH_PX });
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(0);
-  const editable = pin.delivery.kind === 'draft';
+  // A pin on its way is read-only too: what is typed now would not be in the message.
+  const editable = pin.delivery.kind === 'draft' && !pins.sending.has(pin.id);
+  const atWork = pinRunning(progress);
   const working = workingCopy(pin);
   // The box's words and chips as a draft, as the composer holds its own.
   const latest = useRef(pin);
@@ -120,9 +123,11 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
     const roomRight = window.innerWidth - box.right - POPOVER_GAP_PX;
     const left =
       roomRight >= POPOVER_WIDTH_PX + POPOVER_GAP_PX ? box.right + POPOVER_GAP_PX : Math.max(POPOVER_GAP_PX, box.left - POPOVER_GAP_PX - POPOVER_WIDTH_PX);
-    const top = Math.min(Math.max(POPOVER_GAP_PX, box.top - POPOVER_GAP_PX), Math.max(POPOVER_GAP_PX, window.innerHeight - height - POPOVER_GAP_PX));
+    // The pins' bar (and the warning over it) sits at the bottom of the canvas: a box over it ends above it.
+    const floor = barTop(left, POPOVER_WIDTH_PX) ?? window.innerHeight;
+    const top = Math.min(Math.max(POPOVER_GAP_PX, box.top - POPOVER_GAP_PX), Math.max(POPOVER_GAP_PX, floor - height - POPOVER_GAP_PX));
     setPosition((previous) => (previous['left'] === left && previous['top'] === top ? previous : { position: 'fixed', left, top, width: POPOVER_WIDTH_PX }));
-  }, [anchor, layout, working.images.length, working.comment, voice.listening, voice.transcribing]);
+  }, [anchor, layout, working.images.length, working.comment, voice.listening, voice.transcribing, atWork, editable]);
   // The box takes the keyboard when a pin opens, so the person can just type.
   const pinId = pin.id;
   // After the popup has placed its own focus, and out of the canvas frame the click left it in: the frame holds the
@@ -307,13 +312,49 @@ export function PinPopover({ pin, progress, anchor, detached, onRecapture, layou
             <div className="ai-pin-sent-comment">
               {pin.comment.trim() === '' ? translate('ai.pins.noComment') : <ChipWords segments={segmentsOfWords(pin)} />}
             </div>
-            <button type="button" className="ai-pin-reopen" onClick={() => reopenSentPin(pin.id)}>
-              {translate('ai.pins.reopen')}
-            </button>
+            {pin.delivery.kind === 'sent' && <SentActions pin={pin.id} chat={pin.delivery.chat} atWork={atWork} />}
           </div>
         )}
       </div>
     </Popup>
+  );
+}
+
+// The top of the pins' bar, or of what stands over it, where a box `width` wide at `left` would cross it.
+function barTop(left: number, width: number): number | undefined {
+  let top: number | undefined;
+  for (const element of document.querySelectorAll('.ai-pin-bar, .ai-pin-bar-slot > .ai-billing')) {
+    const box = element.getBoundingClientRect();
+    if (box.left < left + width && box.right > left) {
+      top = Math.min(box.top, top ?? box.top);
+    }
+  }
+  return top;
+}
+
+// A sent pin's ways on: its chat, where its reply is read and stopped, and Reopen. A pin still at work has no Reopen
+// (it would run twice): stopping it in its chat brings the button back.
+function SentActions({ pin, chat, atWork }: { readonly pin: PinId; readonly chat: ChatId; readonly atWork: boolean }) {
+  const translate = useTranslate();
+  return (
+    <div className="ai-pin-sent-actions">
+      {/* The box closes on the way: left open, it would take the first press in the chat, Stop's among them. */}
+      <button
+        type="button"
+        className="ai-pin-reopen"
+        onClick={() => {
+          closePinBox('keep');
+          void openChat(chat);
+        }}
+      >
+        {translate('ai.pins.showChat')}
+      </button>
+      {!atWork && (
+        <button type="button" className="ai-pin-reopen" onClick={() => reopenSentPin(pin)}>
+          {translate('ai.pins.reopen')}
+        </button>
+      )}
+    </div>
   );
 }
 

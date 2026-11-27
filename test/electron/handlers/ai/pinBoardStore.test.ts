@@ -120,9 +120,9 @@ test('the instructions for subagents name each pin and its paths, and start pins
   assert.match(text, /\n<\/comment-pins>$/);
   assert.match(text, /one subagent per pin/);
   assert.match(text, /"Pin <number>: <three to six words>"/);
-  assert.match(text, /Wave 1: pin 1, pin 2, pin 3\n/, 'pins 1 and 3 share a file and still start together');
-  assert.ok(!text.includes('Wave 2'));
-  assert.match(text, /all of its Agent calls in one single message/);
+  assert.match(text, /all 3 Agent calls together in one single message/, 'pins 1 and 3 share a file and still start together');
+  assert.match(text, /There is no limit on how many run at once/);
+  assert.ok(!/Wave \d/.test(text), 'no pin waits for another');
   assert.match(text, /never change a file with a shell command/);
   assert.match(text, /read it again and redo only your own change/);
   assert.match(text, /Question for pin <number>: /);
@@ -133,14 +133,14 @@ test('the instructions for subagents name each pin and its paths, and start pins
   });
   assert.match(chosen, /set its Agent call's model parameter to exactly that value/);
   assert.equal(chosen.match(/\n {2}Model: haiku/g)?.length, 1, 'only the pin that chose it');
-  const five = pinInstructions({ mode: 'subagents', pins: [1, 2, 3, 4, 5].map((number) => entry(number, 'src/pages/index.astro')) });
-  assert.match(five, /Wave 1: pin 1, pin 2, pin 3, pin 4\n {2}Wave 2: pin 5/);
-  assert.match(five, /the first 4 pins are running at the same time and the rest are waiting/);
+  const full = pinInstructions({ mode: 'subagents', pins: Array.from({ length: 40 }, (_, index) => entry(index + 1, 'src/pages/index.astro')) });
+  assert.match(full, /all 40 Agent calls together in one single message/);
+  assert.equal(full.match(/\nPin \d+\n/g)?.length, 40, 'every pin of a full board is in the one message');
   assert.match(text, /written in src\/pages\/index\.astro at child path 0\.3/);
   assert.match(text, /an instance of src\/components\/Hero\.astro/);
   assert.match(text, /canvas 768px wide/);
   assert.match(text, /Comment: Line one\n {4}Line two/);
-  assert.match(text, /each after a note that starts "Pin 1, image"/);
+  assert.ok(!text.includes('each after a note'), 'a subagent’s pictures are files, not images of the message');
 });
 
 test('the instructions for one pin per message ask the agent to make that change itself', () => {
@@ -148,6 +148,7 @@ test('the instructions for one pin per message ask the agent to make that change
   assert.match(text, /Make the change it asks for/);
   assert.ok(!text.includes('subagent'));
   assert.match(text, /Pin 4\n {2}Comment: Change 4/);
+  assert.match(text, /other pins and other chats may be editing the same files/);
 });
 
 test('a prompt of pins: the instructions first, the images after, the transcript keeps names only', () => {

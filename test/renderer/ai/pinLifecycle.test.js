@@ -56,7 +56,7 @@ const said = (turn, text, over = {}) => ({ kind: 'text', turn, role: 'agent', te
 const user = (turn, text) => ({ kind: 'user', turn, text, attachments: [], at: 4 });
 const ended = (turn, stop = 'end_turn') => ({ kind: 'turn-end', turn, stop, message: undefined, at: 9 });
 const fold = (...events) => reduceChat(EMPTY_CHAT, events.flat());
-const progressOf = (view, number, mode) => model.pinProgress(sent(number, mode), view, 'running');
+const progressOf = (view, number, mode) => model.pinProgress(sent(number, mode), view);
 const kinds = (view, numbers, mode) => numbers.map((number) => progressOf(view, number, mode).kind);
 
 async function hostRun(comment) {
@@ -135,12 +135,12 @@ test('a background agent from a real host run outlives its launch call: working 
     assert.deepEqual([status.kind, status.end], ['running', 'reply'], `after event ${length}: launched is not finished`);
     const strip = subagents.stripState(subagents.deriveSubagents(view), { open: false });
     assert.equal(strip.kind, 'live', 'the strip never folds to finished while it works');
-    assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), view, 'running'), { kind: 'working', end: 'reply' });
+    assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), view), { kind: 'working', end: 'reply' });
     assert.equal(model.pinFinished(sent(1, 'subagents', turn), view), false, 'so its pin is not deleted');
   }
   const after = reduceChat(EMPTY_CHAT, events);
   assert.equal(subagents.deriveSubagentWork(after).units.get('agent1').agent.status.kind, 'done', 'the held reply ending well proves it');
-  assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), after, 'running'), { kind: 'done' });
+  assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), after), { kind: 'done' });
   const words = after.items.filter((item) => item.kind === 'text').map((item) => item.text);
   assert.deepEqual(words, ['Pin 1 is running.', 'Still going.'], 'two messages stay two paragraphs, though the agent’s work came between them');
 });
@@ -149,7 +149,7 @@ test('a background agent whose parent reply dies did not finish', async () => {
   const { events, turn } = await hostRun('Change it in the background, then dies');
   const view = reduceChat(EMPTY_CHAT, events);
   assert.equal(subagents.deriveSubagentWork(view).units.get('agent1').agent.status.kind, 'failed');
-  assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), view, 'running'), { kind: 'unfinished', reason: 'failed' });
+  assert.deepEqual(model.pinProgress(sent(1, 'subagents', turn), view), { kind: 'unfinished', reason: 'failed' });
 });
 
 test('the reported case: a reply that dies leaves the other pins not started, never needing the person; restarting them later moves them', () => {
@@ -216,7 +216,7 @@ test('words that merely ask, without the form, never claim to need the person', 
 test('one message per pin: a question stays on its pin while the next pin runs', () => {
   const view = fold(send([1], 'single'), said(FIRST, 'Question for pin 1: Which size?\n- Small\n- Large'), ended(FIRST), send([2], 'single', SECOND));
   assert.equal(progressOf(view, 1, 'single').reason, 'question');
-  assert.equal(model.pinProgress(sent(2, 'single', SECOND), view, 'running').kind, 'working');
+  assert.equal(model.pinProgress(sent(2, 'single', SECOND), view).kind, 'working');
 });
 
 test('two pins can wait on permissions at once, each naming its own card', () => {

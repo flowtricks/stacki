@@ -73,7 +73,7 @@ test('images: a crop replaces the last crop, the count and the size stop the res
   assert.equal(full.kind, 'limited');
   assert.equal(full.reason, 'count');
   assert.equal(model.workingCopy(full.pin).images.length, 4);
-  const heavy = model.addPinImages(pin, [image(7, 'added', 24_000_001)], 0, sizeOf);
+  const heavy = model.addPinImages(pin, [image(7, 'added', 60_000_001)], 0, sizeOf);
   assert.equal(heavy.kind, 'limited');
   assert.equal(heavy.reason, 'size');
   assert.deepEqual(model.workingCopy(heavy.pin).images, []);
@@ -109,7 +109,7 @@ const sent = (number, mode = 'subagents', turn = TURN) => ({ number, delivery: {
 test('one message, a subagent per pin: each pin reads its own subagent, the rest of the run its turn', () => {
   const start = [{ kind: 'turn-start', turn: TURN, at: 1 }, userPins];
   const before = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1), before, 'running'), { kind: 'working', end: 'own' }, 'before any subagent, the coordinator is working');
+  assert.deepEqual(model.pinProgress(sent(1), before), { kind: 'working', end: 'own' }, 'before any subagent, the coordinator is working');
   const view = reduceChat(EMPTY_CHAT, [
     ...start,
     agentCall('a1', 'Pin 1: Bigger heading', 'in_progress'),
@@ -119,11 +119,11 @@ test('one message, a subagent per pin: each pin reads its own subagent, the rest
     { kind: 'permission', turn: TURN, request: 'p1', call: 'e4', title: 'Edit Hero.astro', options: [{ id: 'y', name: 'Allow', kind: 'allow_once' }] },
     { ...child('e4', 'a4'), toolKind: 'edit', toolName: 'Edit' },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), view, 'running'), { kind: 'working', end: 'own' });
-  assert.deepEqual(model.pinProgress(sent(2), view, 'running'), { kind: 'done' });
-  assert.deepEqual(model.pinProgress(sent(3), view, 'running'), { kind: 'queued' }, 'a pin of a later wave waits while others run');
+  assert.deepEqual(model.pinProgress(sent(1), view), { kind: 'working', end: 'own' });
+  assert.deepEqual(model.pinProgress(sent(2), view), { kind: 'done' });
+  assert.deepEqual(model.pinProgress(sent(3), view), { kind: 'queued' }, 'a pin whose subagent has not started yet waits');
   assert.deepEqual(
-    model.pinProgress(sent(4), view, 'running'),
+    model.pinProgress(sent(4), view),
     { kind: 'attention', reason: 'permission', request: 'p1' },
     'a permission inside its subagent needs the person, and names the card that answers it',
   );
@@ -132,16 +132,16 @@ test('one message, a subagent per pin: each pin reads its own subagent, the rest
     agentCall('a1', 'Pin 1: Bigger heading', 'failed'),
     { kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 9 },
   ]);
-  assert.deepEqual(model.pinProgress(sent(1), ended, 'running'), { kind: 'unfinished', reason: 'failed' });
+  assert.deepEqual(model.pinProgress(sent(1), ended), { kind: 'unfinished', reason: 'failed' });
   assert.deepEqual(
-    model.pinProgress(sent(3), ended, 'running'),
+    model.pinProgress(sent(3), ended),
     { kind: 'unfinished', reason: 'not-started' },
     'other pins had subagents and this one none: it is not claimed done',
   );
   const stopped = reduceChat(view, [{ kind: 'turn-end', turn: TURN, stop: 'cancelled', message: undefined, at: 9 }]);
-  assert.deepEqual(model.pinProgress(sent(3), stopped, 'running'), { kind: 'unfinished', reason: 'not-started' });
-  assert.deepEqual(model.pinProgress(sent(1), undefined, 'running'), { kind: 'sent' }, 'a chat not open here says only sent');
-  assert.deepEqual(model.pinProgress({ number: 1, delivery: { kind: 'draft' } }, view, 'running'), { kind: 'draft' });
+  assert.deepEqual(model.pinProgress(sent(3), stopped), { kind: 'unfinished', reason: 'not-started' });
+  assert.deepEqual(model.pinProgress(sent(1), undefined), { kind: 'sent' }, 'a chat not open here says only sent');
+  assert.deepEqual(model.pinProgress({ number: 1, delivery: { kind: 'draft' } }, view), { kind: 'draft' });
 });
 
 test('finished: only a pin whose work is confirmed done, and never past a turn that ended badly', () => {
@@ -181,20 +181,19 @@ test('finished: only a pin whose work is confirmed done, and never past a turn t
   assert.equal(model.pinFinished(sent(1, 'single'), reduceChat(EMPTY_CHAT, start)), false, 'its own turn still running');
 });
 
-test('one message per pin: queued until its turn, then its turn decides, and a held run is on hold', () => {
+test('one message per pin: waiting until it has a reply, then its reply decides', () => {
   const waiting = { number: 2, delivery: { kind: 'sent', chat: CHAT, turn: undefined, mode: 'single', at: 1 } };
-  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'running'), { kind: 'queued' });
-  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT, 'paused'), { kind: 'held' });
+  assert.deepEqual(model.pinProgress(waiting, EMPTY_CHAT), { kind: 'queued' });
   const start = [
     { kind: 'turn-start', turn: TURN, at: 1 },
     { ...userPins, parts: [{ kind: 'pins', mode: 'single', pins: [] }] },
   ];
   const running = reduceChat(EMPTY_CHAT, start);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), running, 'running'), { kind: 'working', end: 'own' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), running), { kind: 'working', end: 'own' });
   const done = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'end_turn', message: undefined, at: 3 }]);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), done, 'running'), { kind: 'done' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), done), { kind: 'done' });
   const failed = reduceChat(running, [{ kind: 'turn-end', turn: TURN, stop: 'error', message: 'x', at: 3 }]);
-  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed, 'running'), { kind: 'unfinished', reason: 'failed' });
+  assert.deepEqual(model.pinProgress(sent(1, 'single'), failed), { kind: 'unfinished', reason: 'failed' });
 });
 
 test('a send: images in pin order with their notes, briefs naming them, words without paths', () => {
@@ -233,29 +232,6 @@ test('a send: images in pin order with their notes, briefs naming them, words wi
   assert.deepEqual(message.brief.pins[0].images, [0, 1]);
   assert.equal(message.brief.pins[0].file, 'src/pages/index.astro');
   assert.ok(!message.text.includes('src/'), 'the plain words hold no path');
-  assert.equal(model.sendRefusal([], 'subagents'), 'none');
-  assert.equal(
-    model.sendRefusal(
-      Array.from({ length: 17 }, () => ({ images: [] })),
-      'subagents',
-    ),
-    'too-many-pins',
-  );
-  assert.equal(
-    model.sendRefusal(
-      Array.from({ length: 5 }, () => ({ images: [1, 2, 3, 4] })),
-      'subagents',
-    ),
-    'too-many-images',
-  );
-  assert.equal(
-    model.sendRefusal(
-      Array.from({ length: 30 }, () => ({ images: [1, 2, 3, 4] })),
-      'single',
-    ),
-    undefined,
-    'one per message is not bound by one message',
-  );
   assert.equal(model.commentLine('  First line that is long\nsecond', 10), 'First lin…');
 });
 
@@ -437,4 +413,67 @@ test('Codex lists every model once, and a choice that cannot be used shows the c
   assert.deepEqual(rowsFor(codex, {}, { agent: 'codex', mode: 'single' }), { rows: ['gpt-a GPT A', '(chat) GPT B'], selected: '(chat)', shown: 'GPT B' });
   const gone = rowsFor(codex, { model: { agent: 'claude', value: 'opus', name: 'Opus 5.5' } }, { agent: 'codex', mode: 'single' });
   assert.equal(gone.shown, 'GPT B');
+});
+
+test('at work: waiting, working or asking for permission; a pin that asked a question or ended is not', () => {
+  const at = (kind, over = {}) => model.pinRunning({ kind, ...over });
+  assert.equal(at('queued'), true);
+  assert.equal(at('working', { end: 'reply' }), true);
+  assert.equal(at('attention', { reason: 'permission', request: 'p1' }), true);
+  assert.equal(at('attention', { reason: 'question' }), false);
+  for (const kind of ['draft', 'done', 'unfinished', 'unreported', 'sent']) {
+    assert.equal(at(kind), false, kind);
+  }
+});
+
+// Two pins of one message, each with its own subagent doing something different: a row shows its own and no other.
+const step = (call, parent, toolKind, file) => ({
+  kind: 'tool',
+  turn: TURN,
+  call,
+  title: `Step ${call}`,
+  toolKind,
+  status: 'in_progress',
+  paths: [file],
+  diffs: undefined,
+  output: undefined,
+  exitCode: undefined,
+  parent,
+  toolName: undefined,
+  at: 3,
+});
+const brief = (numbers) => ({
+  ...userPins,
+  parts: [{ kind: 'pins', mode: 'subagents', pins: numbers.map((number) => ({ number, comment: 'x', pageLabel: 'Home', elementLabel: 'Heading' })) }],
+});
+
+test('live work: each pin has its own subagent’s newest step, and nothing before that is its own', () => {
+  const started = reduceChat(EMPTY_CHAT, [{ kind: 'turn-start', turn: TURN, at: 1 }, brief([1, 2, 3]), step('own', undefined, 'read', 'src/a.astro')]);
+  assert.deepEqual(model.pinWork(sent(1), started), { kind: 'none' }, 'the reply’s own work is for all its pins, so it is shown for none');
+  const view = reduceChat(started, [
+    agentCall('a1', 'Pin 1: Bigger', 'in_progress'),
+    agentCall('a2', 'Pin 2: Bluer', 'in_progress'),
+    step('s1', 'a1', 'edit', 'src/components/Hero.astro'),
+    step('s2', 'a2', 'read', 'src/styles/base.css'),
+  ]);
+  const activity = (number) => {
+    const work = model.pinWork(sent(number), view);
+    return work.kind === 'subagent' ? work.agent.activity : work.kind;
+  };
+  assert.deepEqual(activity(1), { kind: 'file', verb: 'editing', file: 'Hero.astro' });
+  assert.deepEqual(activity(2), { kind: 'file', verb: 'reading', file: 'base.css' });
+  assert.equal(activity(3), 'none', 'a pin not started yet shows no other pin’s work');
+});
+
+test('live work: a pin worked by the reply itself shows the reply’s newest step: one message a pin, or a send of one', () => {
+  for (const mode of ['single', 'subagents']) {
+    const items = [
+      { kind: 'turn-start', turn: TURN, at: 5 },
+      { ...brief([1]), parts: [{ kind: 'pins', mode, pins: brief([1]).parts[0].pins }] },
+    ];
+    const quiet = reduceChat(EMPTY_CHAT, items);
+    assert.deepEqual(model.pinWork(sent(1, mode), quiet), { kind: 'reply', activity: { kind: 'starting' }, startedAt: 5 });
+    const working = reduceChat(quiet, [step('r1', undefined, 'edit', 'src/pages/index.astro')]);
+    assert.deepEqual(model.pinWork(sent(1, mode), working).activity, { kind: 'file', verb: 'editing', file: 'index.astro' });
+  }
 });

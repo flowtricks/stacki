@@ -93,7 +93,7 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
           {pins.map((pin) => {
             const thumbnail = pin.image === undefined ? undefined : attachments[pin.image]?.thumbnail;
             const onBoard = sentPinOf(chat, turn, pin.number);
-            const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view, 'running');
+            const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view);
             const call = mode === 'subagents' ? pinSubagentCall(view, turn, pin.number) : undefined;
             const open =
               progress.kind === 'attention'

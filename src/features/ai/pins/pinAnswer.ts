@@ -8,7 +8,6 @@ import { aiState, draftText, draftWithText, openChat, requestComposerFocus, send
 import { revealRequest } from '../transcript/permissionAttention';
 import type { PinProgress } from './pinModel';
 import { pinReplyLead } from './pinModel';
-import { pinState } from './pinStore';
 
 type Needed = Extract<PinProgress, { readonly kind: 'attention' }>;
 
@@ -27,9 +26,7 @@ export async function goToPinAnswer(chat: ChatId, pin: Pick<SentPin, 'comment' |
   requestComposerFocus();
 }
 
-/** Sends a choice picked for a pin's question. While one message per pin is going out, it waits for the reply under way. */
+/** Sends a choice picked for a pin's question: into the reply when one is running, else as its own message. */
 export function answerPinQuestion(chat: ChatId, pin: Pick<SentPin, 'comment' | 'elementLabel'>, choice: string): Promise<boolean> {
-  const run = pinState().run;
-  const whileRunning = run !== undefined && run.chat === chat ? 'queue' : 'steer';
-  return sendReply(chat, `${pinReplyLead(pin)}${choice}`, { whileRunning });
+  return sendReply(chat, `${pinReplyLead(pin)}${choice}`, { whileRunning: 'steer' });
 }

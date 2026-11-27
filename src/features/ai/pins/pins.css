@@ -76,7 +76,6 @@ button.ai-pin-marker.is-unsaved {
 }
 .ai-pin-marker.is-sent,
 .ai-pin-marker.is-unfinished,
-.ai-pin-marker.is-held,
 .ai-pin-marker.is-unreported {
   background: var(--bg-active);
   color: var(--text);
@@ -90,7 +89,6 @@ button.ai-pin-marker.is-attention:hover:not(:disabled) {
 button.ai-pin-marker.is-queued:hover:not(:disabled),
 button.ai-pin-marker.is-sent:hover:not(:disabled),
 button.ai-pin-marker.is-unfinished:hover:not(:disabled),
-button.ai-pin-marker.is-held:hover:not(:disabled),
 button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   background: var(--bg-pressed);
   color: var(--text);
@@ -131,22 +129,47 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   }
 }
 
-/* The mode's bar, over the canvas under its toolbar: a slot as wide as the canvas centres it and is the container the
-   bar's narrow layout asks about, so the pill keeps its centre as its contents change. */
+/* The mode's bar, at the bottom of the canvas so it never covers the page's own navigation: a slot as wide as the
+   canvas centres it and is the container the bar's narrow layout asks about, so the pill keeps its centre as its
+   contents change. It stacks upward: what comes with the bar stands over it. */
 .ai-pin-bar-slot {
   position: absolute;
-  top: 56px;
+  bottom: 16px;
   inset-inline: 12px;
   z-index: 20;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   align-items: center;
   gap: 6px;
   pointer-events: none;
   container-type: inline-size;
   container-name: pin-bar;
 }
-/* The billing warning under the bar: over the canvas, so it takes the pointer and casts the bar's shadow. */
+/* For the frame of a pin's crop the bar and the toasts step aside: both sit over the bottom of the canvas. */
+.ai-pin-bar-slot.is-capturing,
+body:has(.ai-pin-bar-slot.is-capturing) .toast-stack {
+  visibility: hidden;
+}
+/* Toasts and the refused-save notice sit at the window's bottom centre: while the bar is up they start above it. */
+body:has(.ai-pin-bar-slot) .toast-stack {
+  bottom: 68px;
+}
+body:has(.ai-pin-bar-slot) .save-conflict {
+  bottom: 104px;
+}
+body:has(.ai-pin-bar-slot > .ai-billing) .toast-stack {
+  bottom: 116px;
+}
+body:has(.ai-pin-bar-slot > .ai-billing) .save-conflict {
+  bottom: 152px;
+}
+/* A pin's list or box was opened on purpose and stands over the bar: a notice waits under it, and takes no press
+   meant for it. */
+body:has(.ai-pin-list) .toast-stack,
+body:has(.ai-pin-popover) .toast-stack {
+  z-index: 50;
+}
+/* The billing warning over the bar: over the canvas, so it takes the pointer and casts the bar's shadow. */
 .ai-pin-bar-slot > .ai-billing {
   max-width: 100%;
   pointer-events: auto;
@@ -240,20 +263,22 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   background: var(--accent-pressed);
 }
 
-/* The list of every pin. */
+/* The list of every pin. Its place and size are set above the bar (PinList.tsx listPosition). */
 .ai-pin-list {
-  width: 380px;
-  max-height: min(60vh, 520px);
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  /* The bar's own faded edge, and no shadow. */
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
   background: var(--bg-panel);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
   color: var(--text);
   font-size: 12px;
   z-index: 60;
 }
 .ai-pin-rows {
+  min-height: 0;
   list-style: none;
   margin: 0;
   padding: 4px;
@@ -308,17 +333,50 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
   color: var(--text-dim);
   font-size: 11px;
 }
+/* A sent pin's work, live: one fixed line, so a row keeps its height whatever is said. */
+.ai-pin-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  line-height: 18px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ai-pin-live > .ai-agent-dot {
+  flex: none;
+}
+.ai-pin-live-words {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-pin-live-time {
+  flex: none;
+  min-width: 44px;
+  text-align: end;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.ai-pin-live.is-queued .ai-pin-live-words,
+.ai-pin-live.is-sent .ai-pin-live-words,
+.ai-pin-live.is-unreported .ai-pin-live-words {
+  color: var(--text-dim);
+}
+.ai-pin-live.is-unfinished .ai-pin-live-words {
+  color: var(--red);
+}
+.ai-pin-live.is-attention .ai-pin-live-words {
+  color: var(--orange);
+}
+
 .ai-pin-list-empty {
   padding: 16px;
   color: var(--text-dim);
   text-align: center;
-}
-.ai-pin-list-foot {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px;
-  background: var(--bg-hover);
 }
 
 /* A pin's number, in the list, the popover and a message. */
@@ -342,7 +400,6 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
 .ai-pin-number.is-queued,
 .ai-pin-number.is-sent,
 .ai-pin-number.is-unfinished,
-.ai-pin-number.is-held,
 .ai-pin-number.is-unreported {
   background: var(--bg-active);
   color: var(--text);
@@ -477,6 +534,10 @@ button.ai-pin-marker.is-unreported:hover:not(:disabled) {
 .ai-pin-sent {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+.ai-pin-sent-actions {
+  display: flex;
   gap: 8px;
 }
 .ai-pin-sent-comment {
@@ -667,7 +728,6 @@ button.ai-pins-message-open:hover:not(:disabled) {
 }
 
 .ai-pin-progress.is-queued,
-.ai-pin-progress.is-held,
 .ai-pin-progress.is-unreported {
   background: var(--bg-input);
 }

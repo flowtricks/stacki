@@ -31,7 +31,7 @@ import {
 } from '../properties/ai/chatModel';
 import { parseAutoCompactPercent } from '../properties/ai/autoCompact';
 import { parseRememberAction, parseRememberedSettings, type RememberedSettings } from '../properties/ai/rememberedSettings';
-import { parsePinBrief } from '../properties/ai/commentPinBrief';
+import { PIN_LIMITS, parsePinBrief } from '../properties/ai/commentPinBrief';
 import { parsePinBoardStrict, parsePinImages, type PinBoardRead } from '../properties/ai/commentPins';
 import { parseMentionCandidates, parseMentionKinds, parseMentionQuery, parsePromptParts, type MentionCandidate } from '../properties/ai/mentions';
 import { parseMergeResolution, type MergeResolution } from './mergeResolution';
@@ -122,20 +122,58 @@ export function parsePromptAttachment(input: unknown): PromptAttachment {
   throw new Error('attachment.kind: unknown kind');
 }
 
-function attachments(input: unknown): readonly PromptAttachment[] {
-  const values = toArray(input);
-  if (values === undefined) {
-    throw new Error('attachments: expected array');
+// What one message may carry: the composer's bounds, or (a send of comment pins) every image a full board holds.
+interface AttachmentBounds {
+  readonly countMax: number;
+  readonly imageCharsMax: number;
+}
+
+const MESSAGE_ATTACHMENTS: AttachmentBounds = { countMax: AI_LIMITS.attachmentsMax, imageCharsMax: AI_LIMITS.attachmentsImageCharsMax };
+const PIN_SEND_ATTACHMENTS: AttachmentBounds = { countMax: PIN_LIMITS.sendImagesMax, imageCharsMax: PIN_LIMITS.boardImageCharsMax };
+
+function attachmentsWithin(bounds: AttachmentBounds): (input: unknown) => readonly PromptAttachment[] {
+  assert(bounds.countMax >= 1, 'attachmentsWithin: a bound holds at least one attachment');
+  assert(bounds.imageCharsMax >= AI_LIMITS.imageBase64CharsMax, 'attachmentsWithin: one largest image fits');
+  return (input) => {
+    const values = toArray(input);
+    if (values === undefined) {
+      throw new Error('attachments: expected array');
+    }
+    if (values.length > bounds.countMax) {
+      throw new Error('attachments: exceeds limit');
+    }
+    const parsed = values.map(parsePromptAttachment);
+    // The pair of the composer's draft bound: the main process refuses a payload the composer could not have built.
+    const imageChars = parsed.reduce((sum, attachment) => sum + (attachment.kind === 'image' ? attachment.data.length : 0), 0);
+    if (imageChars > bounds.imageCharsMax) {
+      throw new Error('attachments: images exceed limit');
+    }
+    return parsed;
+  };
+}
+
+const attachments = attachmentsWithin(MESSAGE_ATTACHMENTS);
+
+const promptFields = object({
+  projectPath,
+  chat,
+  text: prompt,
+  attachments: attachmentsWithin(PIN_SEND_ATTACHMENTS),
+  parts: optional(parsePromptParts),
+  mode: optional(promptMode),
+  // Comment pins sent with "Send all": what the agent is told about each (commentPinBrief.ts).
+  pins: optional(parsePinBrief),
+});
+
+// A message is held to the composer's bounds. Only a send of pins that run each in a subagent may carry more: its
+// pictures reach the agents as files, never as blocks of one message.
+function promptPayload(input: unknown): ReturnType<typeof promptFields> {
+  const parsed = promptFields(input);
+  if (parsed.pins?.mode !== 'subagents') {
+    attachments(record(input)['attachments']);
+    assert(parsed.attachments.length <= MESSAGE_ATTACHMENTS.countMax, 'promptPayload: an ordinary message keeps its own bound');
   }
-  if (values.length > AI_LIMITS.attachmentsMax) {
-    throw new Error('attachments: exceeds limit');
-  }
-  const parsed = values.map(parsePromptAttachment);
-  // The pair of the composer's draft bound: the main process refuses a payload the composer could not have built.
-  const imageChars = parsed.reduce((sum, attachment) => sum + (attachment.kind === 'image' ? attachment.data.length : 0), 0);
-  if (imageChars > AI_LIMITS.attachmentsImageCharsMax) {
-    throw new Error('attachments: images exceed limit');
-  }
+  assert(parsed.attachments.length <= PIN_SEND_ATTACHMENTS.countMax, 'promptPayload: no message is past a send of pins');
   return parsed;
 }
 
@@ -332,16 +370,7 @@ export const AI_PAYLOADS = {
   }),
   'ai:chatDelete': object({ projectPath, chat }),
   'ai:chatRead': object({ projectPath, chat }),
-  'ai:prompt': object({
-    projectPath,
-    chat,
-    text: prompt,
-    attachments,
-    parts: optional(parsePromptParts),
-    mode: optional(promptMode),
-    // Comment pins sent with "Send all": what the agent is told about each (commentPinBrief.ts).
-    pins: optional(parsePinBrief),
-  }),
+  'ai:prompt': promptPayload,
   'ai:steer': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts) }),
   'ai:compact': object({ projectPath, chat }),
   /** The project's comment pins and their images, kept under userData (electron/handlers/ai/pinBoardStore.ts). */

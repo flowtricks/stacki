@@ -12,14 +12,15 @@ import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
-import { AgentHost } from '#dist/electron/handlers/ai/agentHost.js';
+import { AgentHost, pinsEnvironment } from '#dist/electron/handlers/ai/agentHost.js';
 import { ChatStore } from '#dist/electron/handlers/ai/chatStore.js';
 import { PIN_PICTURE_LIMITS, PinPictures, readRuleFor } from '#dist/electron/handlers/ai/pinPictures.js';
 import { toRecord } from '#dist/shared/core/record.js';
 import { toChatId } from '#dist/shared/properties/ai/chatModel.js';
 import type { ChatEvent } from '#dist/shared/properties/ai/chatModel.js';
 import { parseAiEventsPush } from '#dist/shared/ipc/aiChat.js';
-import { parsePinBrief } from '#dist/shared/properties/ai/commentPinBrief.js';
+import { PIN_LIMITS, parsePinBrief } from '#dist/shared/properties/ai/commentPinBrief.js';
+import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 
 const FAKE_ADAPTER = path.resolve('test/fixtures/ai/fakeAdapter.mjs');
 
@@ -29,8 +30,17 @@ function temporary(name: string): string {
 
 type Request = { readonly method: string; readonly params: Record<string, unknown> };
 
-/** `heard` is told each request the host writes to the adapter, before the adapter gets it. */
-function fakeHost(heard: (request: Request) => void = () => undefined) {
+interface FakeOptions {
+  /** Told each request the host writes to the adapter, before the adapter gets it. */
+  readonly heard?: (request: Request) => void;
+  /** Switches for the stand-in adapter (fakeAdapter.mjs). */
+  readonly environment?: Readonly<Record<string, string>>;
+  readonly sessionSignal?: () => Promise<'continue' | 'stop'>;
+  readonly permit?: () => Promise<'allowed'>;
+}
+
+function fakeHost(options: FakeOptions = {}) {
+  const heard = options.heard ?? (() => undefined);
   const root = fs.realpathSync(temporary('project'));
   const userData = temporary('user');
   const bin = temporary('bin');
@@ -61,7 +71,9 @@ function fakeHost(heard: (request: Request) => void = () => undefined) {
       trash: async (file: string) => fs.rmSync(file),
     },
     snapshots: { snapshot: async () => undefined, changes: async () => [], blob: async () => undefined },
-    environment: () => ({ PATH: `${bin}${path.delimiter}${process.env['PATH'] ?? ''}`, HOME: os.homedir() }),
+    environment: () => ({ PATH: `${bin}${path.delimiter}${process.env['PATH'] ?? ''}`, HOME: os.homedir(), ...options.environment }),
+    ...(options.sessionSignal === undefined ? {} : { sessionSignal: options.sessionSignal }),
+    ...(options.permit === undefined ? {} : { permit: options.permit }),
     now: () => 1_000,
     version: 'test',
     askBeforeTrust: () => true,
@@ -131,7 +143,7 @@ test('one turn of pins: the agent gets every instruction and image, each pin its
   await until(() => events().some((event) => event.kind === 'turn-end'));
   const all = events();
   const said = all.flatMap((event) => (event.kind === 'text' ? [event.text] : [])).join('');
-  assert.match(said, /Got 2 images and 2 notes/, 'the images and their notes reached the agent');
+  assert.match(said, /Got 0 images and 0 notes/, 'the pictures travel as files, never as blocks of the one message');
   const starts = all.flatMap((event) => (event.kind === 'tool' && event.toolName === 'Agent' && event.status === 'in_progress' ? [event.title] : []));
   assert.deepEqual(starts, ['Pin 1: Make the change', 'Pin 2: Make the change', 'Pin 3: Make the change']);
   // Pins 1 and 3 share index.astro and still run together: every call starts before any finishes.
@@ -220,7 +232,7 @@ function pictureFilesOf(prompt: unknown): ReadonlyMap<number, readonly string[]>
   const first: unknown = Array.isArray(prompt) ? prompt[0] : undefined;
   const text = toRecord(first)?.['text'];
   assert.ok(typeof text === 'string' && text.startsWith('<comment-pins>'));
-  assert.match(text, /A subagent gets only the words you give it, never the images attached to this message/);
+  assert.match(text, /A subagent gets only the words you give it: tell it to open every picture file/);
   const files = new Map<number, string[]>();
   let pin = 0;
   for (const line of text.split('\n')) {
@@ -238,23 +250,25 @@ test('parallel pins: each subagent’s words name its own pictures, readable wit
   const opened = new Map<number, string[]>();
   const paths: string[] = [];
   const allowed: unknown[] = [];
-  const { root, userData, store, host, events, until } = fakeHost((request) => {
-    if (request.method === 'session/new') {
-      const meta = toRecord(toRecord(toRecord(request.params['_meta'])?.['claudeCode'])?.['options']);
-      allowed.push(toRecord(toRecord(meta?.['settings'])?.['permissions'])?.['allow']);
-    }
-    if (request.method === 'session/prompt') {
-      for (const [pin, files] of pictureFilesOf(request.params['prompt'])) {
-        paths.push(...files);
-        opened.set(
-          pin,
-          files.map((file) => fs.readFileSync(file).toString('base64')),
-        );
-        if (process.platform !== 'win32') {
-          assert.equal(fs.statSync(files[0] ?? '').mode & 0o077, 0, 'the person’s alone');
+  const { root, userData, store, host, events, until } = fakeHost({
+    heard: (request) => {
+      if (request.method === 'session/new') {
+        const meta = toRecord(toRecord(toRecord(request.params['_meta'])?.['claudeCode'])?.['options']);
+        allowed.push(toRecord(toRecord(meta?.['settings'])?.['permissions'])?.['allow']);
+      }
+      if (request.method === 'session/prompt') {
+        for (const [pin, files] of pictureFilesOf(request.params['prompt'])) {
+          paths.push(...files);
+          opened.set(
+            pin,
+            files.map((file) => fs.readFileSync(file).toString('base64')),
+          );
+          if (process.platform !== 'win32') {
+            assert.equal(fs.statSync(files[0] ?? '').mode & 0o077, 0, 'the person’s alone');
+          }
         }
       }
-    }
+    },
   });
   context.after(() => host.stopAll());
   store.trust(root);
@@ -288,10 +302,12 @@ test('parallel pins: each subagent’s words name its own pictures, readable wit
 
 test('pictures are kept while a pin has asked a question, and go with the chat or the agents', async (context) => {
   const paths: string[] = [];
-  const { root, store, host, events, until } = fakeHost((request) => {
-    if (request.method === 'session/prompt') {
-      paths.push(...[...pictureFilesOf(request.params['prompt']).values()].flat());
-    }
+  const { root, store, host, events, until } = fakeHost({
+    heard: (request) => {
+      if (request.method === 'session/prompt') {
+        paths.push(...[...pictureFilesOf(request.params['prompt']).values()].flat());
+      }
+    },
   });
   context.after(() => host.stopAll());
   store.trust(root);
@@ -331,4 +347,145 @@ test('what a crash left is swept once it is a day old; the read rule is an absol
   assert.equal(fs.existsSync(file), false);
   assert.equal(readRuleFor('/Users/a/Library/Application Support/Stacki/x'), 'Read(//Users/a/Library/Application Support/Stacki/x/**)');
   assert.equal(readRuleFor('C:\\Users\\a\\x'), 'Read(//c/Users/a/x/**)');
+});
+
+const TURN_ENDS = (events: readonly ChatEvent[]): number => events.filter((event) => event.kind === 'turn-end').length;
+const AGENT_STARTS = (events: readonly ChatEvent[]): number =>
+  events.filter((event) => event.kind === 'tool' && event.toolName === 'Agent' && event.status === 'in_progress').length;
+const sendOfPins = (count: number) =>
+  parsePinBrief({ mode: 'subagents', pins: Array.from({ length: count }, (_, index) => entry(index + 1, 'src/pages/index.astro', [index])) });
+
+test('a full board in one send: forty subagents at work at once, and the chat keeps a picture of each pin', async (context) => {
+  const gate = temporary('gate');
+  const { root, store, host, events, until } = fakeHost({ environment: { FAKE_PIN_GATE: gate } });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = store.create(root, 'claude', 'New chat', 1);
+  assert.ok(chat !== undefined);
+  const count = PIN_LIMITS.pinsMax;
+  const pictures = Array.from({ length: count }, (_, index) => pinned(index + 1));
+  const payload = { projectPath: root, chat: chat.id, text: 'Pins', attachments: pictures, pins: sendOfPins(count) };
+  assert.equal(parseIpcPayload('ai:prompt', payload).attachments.length, count, 'the main process takes the whole send');
+  assert.throws(() => parseIpcPayload('ai:prompt', { ...payload, pins: undefined }), /exceeds limit/, 'an ordinary message keeps its own bound');
+  const started = await host.prompt(root, chat.id, 'Comments on 40 pins', pictures, { pins: sendOfPins(count) });
+  assert.ok(started.ok, JSON.stringify(started));
+  await until(() => AGENT_STARTS(events()) === count);
+  assert.equal(TURN_ENDS(events()), 0, 'all forty are at work and none was waited for');
+  fs.writeFileSync(path.join(gate, 'pins'), '');
+  await until(() => TURN_ENDS(events()) === 1);
+  const done = events().filter((event) => event.kind === 'tool' && /^agent\d+$/.test(event.call) && event.status === 'completed');
+  assert.equal(done.length, count, 'every pin ran to its end');
+  const stored = store.read(root, chat.id).events.find((event) => event.kind === 'user');
+  assert.ok(stored !== undefined && stored.kind === 'user', 'the stored message reads back');
+  const part = stored.parts?.find((candidate) => candidate.kind === 'pins');
+  assert.ok(part !== undefined && part.kind === 'pins');
+  assert.equal(stored.attachments.length, count);
+  assert.deepEqual(
+    part.pins.map((pin) => pin.image),
+    Array.from({ length: count }, (_, index) => index),
+  );
+});
+
+test('pins run beside a chat reply: stopping one reply leaves the others working, and each hears its own end', async (context) => {
+  const gate = temporary('gate');
+  let permits = 0;
+  const { root, store, host, until, events } = fakeHost({
+    environment: { FAKE_PIN_GATE: gate },
+    permit: async () => {
+      permits += 1;
+      return 'allowed';
+    },
+  });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const make = () => {
+    const record = store.create(root, 'claude', 'New chat', 1);
+    assert.ok(record !== undefined);
+    return record.id;
+  };
+  const [reply, first, second] = [make(), make(), make()];
+  const brief = () => parsePinBrief({ mode: 'subagents', pins: [entry(1, 'src/pages/index.astro', [])] });
+  const sent = await Promise.all([
+    host.prompt(root, reply, 'hold this reply', []),
+    host.prompt(root, first, 'Pins', [], { pins: brief() }),
+    host.prompt(root, second, 'Pins', [], { pins: brief() }),
+  ]);
+  assert.ok(
+    sent.every((outcome) => outcome.ok),
+    JSON.stringify(sent),
+  );
+  await until(() => AGENT_STARTS(events()) === 2 && events().some((event) => event.kind === 'text' && event.text === 'Working'));
+  assert.ok(permits >= 3, 'the sign-in was asked about for every message');
+  host.cancel(root, first);
+  await until(() => TURN_ENDS(events()) === 1);
+  assert.notEqual(host.runningTurn(root, reply), undefined, 'the chat reply goes on');
+  assert.notEqual(host.runningTurn(root, second), undefined, 'the other send goes on');
+  assert.equal(host.runningTurn(root, first), undefined);
+  fs.writeFileSync(path.join(gate, 'pins'), '');
+  fs.writeFileSync(path.join(gate, 'chat'), '');
+  await until(() => TURN_ENDS(events()) === 3);
+  const stops = events().flatMap((event) => (event.kind === 'turn-end' ? [event.stop] : []));
+  assert.deepEqual(stops.sort(), ['cancelled', 'end_turn', 'end_turn']);
+  const words = store.read(root, reply).events.flatMap((event) => (event.kind === 'text' ? [event.text] : []));
+  assert.ok(!words.join('').includes('pins'), 'nothing of the pins reached the chat’s own transcript');
+});
+
+test('every reply running at once is stopped when its own session reports billing per use', async (context) => {
+  const { root, store, host, until, events } = fakeHost({ sessionSignal: async () => 'stop' });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chats = [1, 2, 3].map(() => {
+    const record = store.create(root, 'claude', 'New chat', 1);
+    assert.ok(record !== undefined);
+    return record.id;
+  });
+  const sent = await Promise.all(chats.map((chat) => host.prompt(root, chat, 'report billing', [])));
+  assert.ok(
+    sent.every((outcome) => outcome.ok),
+    JSON.stringify(sent),
+  );
+  await until(() => TURN_ENDS(events()) === 3);
+  assert.deepEqual(
+    events().flatMap((event) => (event.kind === 'turn-end' ? [event.stop] : [])),
+    ['cancelled', 'cancelled', 'cancelled'],
+  );
+});
+
+test('a chat made for pins lets its session go when the reply ends, and a later message resumes it', async (context) => {
+  const asked: string[] = [];
+  let closed: () => void = () => undefined;
+  const closing = new Promise<void>((resolve) => (closed = resolve));
+  const { root, store, host, until, events } = fakeHost({
+    heard: (request) => {
+      asked.push(request.method);
+      if (request.method === 'session/close') {
+        closed();
+      }
+    },
+    environment: { FAKE_CLOSE: '1' },
+  });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const forPins = store.create(root, 'claude', 'New chat', 1);
+  const ordinary = store.create(root, 'claude', 'New chat', 1);
+  assert.ok(forPins !== undefined && ordinary !== undefined);
+  const plain = await host.prompt(root, ordinary.id, 'hello', []);
+  assert.ok(plain.ok);
+  await until(() => TURN_ENDS(events()) === 1);
+  const brief = parsePinBrief({ mode: 'subagents', pins: [entry(1, 'src/pages/index.astro', [])] });
+  assert.ok((await host.prompt(root, forPins.id, 'Pins', [], { pins: brief })).ok);
+  await until(() => TURN_ENDS(events()) === 2);
+  await closing;
+  assert.equal(asked.filter((method) => method === 'session/close').length, 1, 'only the pins’ chat lets its session go');
+  assert.ok((await host.prompt(root, forPins.id, 'and one more thing', [])).ok);
+  await until(() => TURN_ENDS(events()) === 3);
+  assert.equal(asked.filter((method) => method === 'session/resume').length, 1, 'the conversation is resumed, not started again');
+  assert.equal(asked.filter((method) => method === 'session/close').length, 1, 'the chat is the person’s now: it stays open');
+});
+
+test('Claude is told it may run a full board of subagents; a value the person set is kept, and Codex is told nothing', () => {
+  const variable = 'CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS';
+  assert.equal(pinsEnvironment('claude', {})[variable], String(PIN_LIMITS.subagentsAtOnceMax));
+  assert.equal(pinsEnvironment('claude', { [variable]: '5' })[variable], '5');
+  assert.equal(pinsEnvironment('codex', {})[variable], undefined);
 });

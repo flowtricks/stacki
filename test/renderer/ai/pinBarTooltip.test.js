@@ -19,6 +19,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { PinBar } from './src/features/ai/pins/PinBar';",
+      "export { listPosition } from './src/features/ai/pins/PinList';",
       "export * as pins from './src/features/ai/pins/pinStore';",
       "export * as ai from './src/features/ai/aiStore';",
     ].join('\n'),
@@ -176,7 +177,7 @@ test('the mode tip goes when the mode is left under the pointer, and does not re
   }
 });
 
-test('Claude billed beyond the subscription: the warning stands under the bar, with the way to sign in', async () => {
+test('Claude billed beyond the subscription: the warning stands over the bar, with the way to sign in', async () => {
   const root = await mount();
   const warning = () => document.querySelector('.ai-pin-bar-slot > .ai-billing');
   const account = { name: undefined, plan: 'Max', email: undefined, source: 'account' };
@@ -204,6 +205,82 @@ test('Claude billed beyond the subscription: the warning stands under the bar, w
     await act(async () => Simulate.click(warning().querySelector('button')));
     await settle();
     assert.deepEqual(setupCalls, ['signIn']);
+  } finally {
+    await act(async () => root.unmount());
+  }
+});
+
+test('the list opens upward, centred on the bar, and stays inside a narrow or short window', () => {
+  const window = { width: 1600, height: 1000 };
+  const wide = ui.listPosition({ left: 700, top: 940, width: 200 }, window);
+  assert.deepEqual(wide, { position: 'fixed', left: 610, width: 380, bottom: 68, maxHeight: 520 });
+  assert.equal(ui.listPosition({ left: 650, top: 940, width: 300 }, window).left, 610, 'a wider bar keeps the same centre');
+  const edge = ui.listPosition({ left: 20, top: 940, width: 100 }, window);
+  assert.equal(edge.left, 8);
+  const narrow = ui.listPosition({ left: 60, top: 240, width: 200 }, { width: 320, height: 300 });
+  assert.deepEqual([narrow.left, narrow.width, narrow.maxHeight], [8, 304, 224]);
+});
+
+const agent = (turn, call, number) => ({
+  kind: 'tool',
+  turn,
+  call,
+  title: `Pin ${number}: Change`,
+  toolKind: 'think',
+  status: 'in_progress',
+  paths: undefined,
+  diffs: undefined,
+  output: undefined,
+  exitCode: undefined,
+  parent: undefined,
+  toolName: 'Agent',
+  at: Date.now(),
+});
+const step = (turn, call, parent, toolKind, file) => ({ ...agent(turn, call, 0), title: 'Step', toolKind, paths: [file], parent, toolName: undefined });
+
+test('the open list shows each working pin’s own step live, and a finished one’s state with no clock', async () => {
+  const root = await mount();
+  try {
+    await pinOne();
+    await pinOne();
+    await pinOne();
+    await act(async () => void (await ui.pins.sendAllPins(translate)));
+    const turn = `t${'1'.padStart(16, '0')}`;
+    const push = (events) => act(async () => ui.ai.receiveEvents({ projectPath: '/site', chat: CHAT, events }));
+    const rows = () =>
+      [...document.querySelectorAll('.ai-pin-list .ai-pin-row')].map((row) => [
+        row.querySelector('.ai-pin-live-words')?.textContent,
+        row.querySelector('.ai-agent-time') !== null,
+      ]);
+    await push([
+      { kind: 'turn-start', turn, at: Date.now() },
+      { kind: 'user', turn, text: 'Pins', attachments: [], at: Date.now() },
+    ]);
+    await act(async () => ui.pins.setPinListOpen('open'));
+    await settle();
+    assert.deepEqual(rows(), [
+      ['Starting', false],
+      ['Starting', false],
+      ['Starting', false],
+    ]);
+    await push([
+      agent(turn, 'a1', 1),
+      agent(turn, 'a2', 2),
+      step(turn, 's1', 'a1', 'edit', 'src/components/Hero.astro'),
+      step(turn, 's2', 'a2', 'read', 'src/styles/base.css'),
+    ]);
+    assert.deepEqual(rows(), [
+      ['Editing Hero.astro', true],
+      ['Reading base.css', true],
+      ['Waiting', false],
+    ]);
+    await push([{ ...agent(turn, 'a1', 1), status: 'failed' }]);
+    assert.deepEqual(rows()[0], ['Didn’t finish', false]);
+    assert.deepEqual(rows()[1], ['Reading base.css', true], 'one pin’s end changes no other row');
+    const count = () => document.querySelector('.ai-pin-bar button[aria-expanded]').textContent;
+    assert.equal(count(), '2 working', 'the pin that did not finish is not counted as working');
+    await push([{ kind: 'turn-end', turn, stop: 'cancelled', message: undefined, at: Date.now() }]);
+    assert.equal(count(), '3 pins');
   } finally {
     await act(async () => root.unmount());
   }

@@ -1,19 +1,19 @@
-// Comment mode's bar over the canvas: one small pill, as quiet as it can be for what there is to do.
+// Comment mode's bar at the bottom of the canvas, clear of the page's own navigation: one small pill, as quiet as
+// it can be for what there is to do. Its list opens upward.
 //   No pins yet       the pin icon and the mode's name, and ✕ to leave the mode.
 //   Pins              the pin icon alone (its tooltip names the mode and says what it does), one count that opens
 //                     the list ("2 pins", or "2 working" / "1 needs you" once every pin is sent), the blue Send for
 //                     the pins that can go ("Send", "Send 3"), and ✕. Send is there only with something to send; when
-//                     it cannot go yet (the agent busy or not set up) it is a quiet button whose tooltip says why,
-//                     never a washed-out blue one.
+//                     it cannot go yet (the agent not set up) it is a quiet button whose tooltip says why, never a
+//                     washed-out blue one. A reply or pins already running never hold it back.
 //   Moving a pin      where the next click puts it, and Cancel.
 // Only the primary button and hover or open states carry a fill. On a narrow canvas the mode's name drops first
 // (a container query on the bar's own slot), so nothing truncates. ✕ and Escape leave the mode; pins stay.
 //
 // The list (PinList.tsx) reviews every pin on every page: jump to one, include or leave it out of the next send,
 // and delete it; a pin whose work finished well is deleted by itself.
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { createPortal } from 'react-dom';
-import type { MessageKey } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { bubbleText as centralBubbleText, close as centralClose } from '../../../ui/central/centralGeometry';
@@ -25,49 +25,36 @@ import { setPanelMode } from '../panelModes';
 import { TipButton } from '../sessions/TipButton';
 import { COMMENT_MODE_ID } from './commentMode';
 import { PinList } from './PinList';
-import {
-  pinAgent,
-  progressOf,
-  sendAllPins,
-  sendReadiness,
-  setPinListOpen,
-  startMovingPin,
-  usePinState,
-  type PinState,
-  type SendBlock,
-  type SendReadiness,
-} from './pinStore';
+import { pinRunning } from './pinModel';
+import { pinAgent, progressOf, sendAllPins, sendReadiness, setPinListOpen, startMovingPin, usePinState, type PinState, type SendReadiness } from './pinStore';
 import './pins.css';
 
 const CommentGlyph = centralIcon(centralBubbleText);
 const CloseGlyph = centralIcon(centralClose);
 
-const BLOCKS = {
-  'too-many-pins': 'ai.pins.send.tooManyPins',
-  'too-many-images': 'ai.pins.send.tooManyImages',
-  busy: 'ai.pins.send.busy',
-  running: 'ai.pins.send.running',
-  'not-ready': 'ai.pins.send.notReady',
-} as const satisfies Record<SendBlock, MessageKey>;
-
-/** What the count says: how many saved pins there are, or, once every one is sent, how they stand. */
+/** What the count says: how many saved pins there are, or, once every one is sent, how many need the person or are at work. */
 function countLabel(pins: PinState, translate: ReturnType<typeof useTranslate>): string {
   const saved = pins.board.pins.filter((pin) => pin.savedAt !== undefined);
   if (saved.length === 0 || saved.some((pin) => pin.delivery.kind === 'draft')) {
     return translate('ai.pins.list', { count: saved.length });
   }
-  const needing = saved.filter((pin) => progressOf(pin).kind === 'attention').length;
-  return needing > 0 ? translate('ai.pins.listAttention', { count: needing }) : translate('ai.pins.listWorking', { count: saved.length });
+  const standing = saved.map(progressOf);
+  const needing = standing.filter((progress) => progress.kind === 'attention').length;
+  if (needing > 0) {
+    return translate('ai.pins.listAttention', { count: needing });
+  }
+  // Only pins really at work are counted as working: one that stopped or did not finish is just a pin on the board.
+  const working = standing.filter(pinRunning).length;
+  return working > 0 ? translate('ai.pins.listWorking', { count: working }) : translate('ai.pins.list', { count: saved.length });
 }
 
 // Its own component so its tooltip's state ends with the button: once the pins are sent there is no Send.
 function SendButton({ readiness }: { readonly readiness: Exclude<SendReadiness, { readonly kind: 'empty' }> }) {
   const translate = useTranslate();
   const sendTip = useDelayedTooltip();
-  const [sending, setSending] = useState(false);
   const tip =
     readiness.kind === 'blocked'
-      ? translate(BLOCKS[readiness.reason], { count: readiness.count })
+      ? translate('ai.pins.send.notReady')
       : readiness.mode === 'single'
         ? translate('ai.pins.send.oneByOne')
         : translate('ai.pins.send.subagents');
@@ -77,17 +64,16 @@ function SendButton({ readiness }: { readonly readiness: Exclude<SendReadiness, 
       <button
         type="button"
         className={readiness.kind === 'ready' ? 'primary ai-pin-send' : 'ai-pin-bar-button ai-pin-send-waiting'}
-        aria-disabled={readiness.kind !== 'ready' || sending}
+        aria-disabled={readiness.kind !== 'ready'}
         aria-label={`${sendLabel}. ${tip}`}
         onMouseEnter={sendTip.show}
         onMouseLeave={sendTip.hide}
         onBlur={sendTip.hide}
         onClick={() => {
-          if (readiness.kind !== 'ready' || sending) {
-            return;
+          if (readiness.kind === 'ready') {
+            // The store takes the pins at once, so a second press finds nothing of theirs to send.
+            void sendAllPins(translate);
           }
-          setSending(true);
-          void sendAllPins(translate).finally(() => setSending(false));
         }}
       >
         {sendLabel}
@@ -124,7 +110,8 @@ export function PinBar() {
     </TipButton>
   );
   return (
-    <div className="ai-pin-bar-slot">
+    // Out of the picture while a pin's crop is taken, so no crop ever shows the bar.
+    <div className={`ai-pin-bar-slot${pins.capturing ? ' is-capturing' : ''}`}>
       <div className={`ai-pin-bar${empty ? ' is-empty' : ''}`} role="toolbar" aria-label={translate('ai.pins.mode')}>
         <span className="ai-pin-bar-mode" onMouseEnter={modeTip.show} onMouseLeave={modeTip.hide}>
           <CommentGlyph size={16} />
@@ -162,7 +149,7 @@ export function PinBar() {
           )}
         {pins.listOpen && <PinList anchor={listButton.current ?? undefined} />}
       </div>
-      {/* Pins start work with the panel out of view, so the warning about its billing stands here too. */}
+      {/* Pins start work with the panel out of view, so the warning about its billing stands here too, over the bar. */}
       {warning !== undefined && <BillingWarning kind={warning} />}
     </div>
   );

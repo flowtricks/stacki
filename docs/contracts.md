@@ -2838,7 +2838,7 @@ in jsdom).
 ## Comment pins
 
 Comment mode (a button in the AI panel's header, `src/features/ai/panelModes.ts`) turns canvas clicks into numbered
-pins, each a small message of its own, and "Send all" sends the included ones to the chat open in the panel. Desktop
+pins, each a small message of its own, and "Send all" sends the included ones at once, whatever else is running. Desktop
 only: the shell's host (`src/app/shell/DesktopPins.tsx`) registers the mode, so Studio and the demo never offer it.
 
 **Mode buttons.** `registerPanelMode({ id, order, label, icon, isActive, setActive, subscribe })` adds a mode and
@@ -2862,8 +2862,11 @@ in order with every other change, restoring its words, chips, images, model and 
 its work finished is not recorded; a press elsewhere, another pin, leaving the mode or the page save a box with content and
 let an empty one go. A draft's marker drags onto another element (anchor, place and crop renewed; words, changes and
 number kept; Undo in a toast); a sent pin does not move. While comment mode takes the canvas, the frame's forwarded edit
-keys (`avb:shortcut`, except Escape and ⌥P) are dropped (`canvasClicksIntercepted`). Bounds `PIN_LIMITS`: 40 pins, 4,000 characters a comment, 4 images a pin, the board's images within
-`attachmentsImageCharsMax`, 16 pins a send, 4 subagents at once. `parsePinBoard` is total (a damaged pin is left out
+keys (`avb:shortcut`, except Escape and ⌥P) are dropped (`canvasClicksIntercepted`). Bounds `PIN_LIMITS`: 40 pins, 4,000
+characters a comment, 4 images a pin, the board's images within `boardImageCharsMax` (40 crops of 1.5 million
+characters). The board is the only bound on running pins: one send holds all 40 and their 160 images
+(`pinsPerSendMax`, `sendImagesMax`; `ai:prompt` allows past an ordinary message's attachment bounds only for a
+`subagents` pins message). `parsePinBoard` is total (a damaged pin is left out
 alone); `parsePinBoardStrict` (what a writer sends) refuses the whole board.
 
 **Mentions.** The box takes `@` as the chat does. `comment` is always the words' plain text, each chip as the reference
@@ -2879,8 +2882,8 @@ project refuses the send, as in the chat.
 that stops naming it). Never in the project. Unlike a composer draft, a pin's images are stored: the crop of what it
 points at is the point. Channels `ai:pinsRead` (`{ projectPath }`, answers the board and the images still on disk; a
 missing image leaves its pin) and `ai:pinsWrite` (`{ projectPath, board, images }`, the images not stored yet;
-`invalid` when the board's images would pass the bound, nothing changed). A pin left waiting in a run the app closed
-on reads back as a draft.
+`invalid` when the board's images would pass the bound, nothing changed). A pin stored as sent with no turn (an older
+Stacki's queue) reads back as a draft.
 
 **Anchoring** (`pins/pinModel.ts` `resolveAnchor`). The stored path holds while the open file's element there has the
 pin's tag (and words, when both have some); otherwise the one rendered element with that tag and words is the
@@ -2893,30 +2896,55 @@ same measurements as the outlines (`extraTrackPaths`), so they follow scrolling,
 words, component, width, image indexes). The renderer sends the pins' images as the attachments, each with the note
 `Pin 2, image 1: …`, and plain `text` ("Comments on 3 pins" and one line per pin). The host
 (`promptBlocks.ts`, `pinInstructions.ts`) puts a `<comment-pins>` text block first and records the user event with
-`text` and a `pins` sent part (number, comment, page and element names, thumbnail index) only: never the instructions,
+`text`, each pin's first picture only, and a `pins` sent part (number, comment, page and element names, thumbnail index): never the instructions,
 a path or a locator. A pin naming an image the message lacks is `invalid`; pins never steer (`ai.error.pinsSteer`).
+
+**Where a send goes** (`pinStore.ts` `sendAllPins`). A send never waits for what is running. It goes to the open chat
+while that chat is idle (no reply running, nothing queued; a new chat, opened, when none is open). While the open chat
+answers, the pins get a chat of their own, made and sent to in the background (`aiStore.ts` `newBackgroundChat`): the
+open chat stays open, is neither steered nor stopped, and a toast says where they went, with "Show chat". The new chat
+starts with the open chat's settings, except a mode that skips every permission. A chat that turns out to be answering
+(`busy`) is left alone and the pins go to a chat of their own. The pins of a send are taken before anything is awaited
+(`sending`, read as "Waiting"), so no pin is ever in two sends; a pin at work (`pinRunning`) has no Reopen, and an Undo
+never replaces it with an older draft. Each send is its own chat's reply: its permission cards, questions, changes,
+sign-in check, billing watch and Stop are its own. Transcripts of running chats and of chats sent pins name stay in
+memory past the usual 16 (`holdChatViews`). A chat that only ever held sends of pins in this run lets its adapter
+session go (`session/close`) when each reply ends, which frees that session's CLI process; a later message resumes it
+(`agentHost.ts` `closeFinishedPinSession`). Permission cards waiting at once are bounded at 128 and requests to one
+adapter at 128 (`aiLimits.ts`).
+
+**Replies that overlap** (`electron/handlers/ai/parallelWrites.ts`). Each reply's ledger snapshots the whole tree, so
+while replies of one project overlap, each hears which files the others' edit calls write. Its changes card then leaves
+out a file only another reply wrote, and refuses to undo (`ai.error.sharedChange`) a file both wrote, or one none of
+its own calls named (a shell command's work cannot be told apart). A reply that ran alone is tracked as before.
 
 **Pictures for subagents** (`electron/handlers/ai/pinPictures.ts`). A subagent gets only the words of the Agent
 tool's prompt, never the message's images. So for a `subagents` send the host also writes each pin's pictures to
 `userData/ai/pin-pictures/<project>/<chat>/pin-<n>-image-<k>.<ext>` (owner-only, never in the project), lists each
 pin's own paths in its lines of the instructions, and asks the main agent to pass them on for the subagent to open
-with its Read tool; the images still travel inline too. Every Claude session of the project gets one added permission
+with its Read tool. The message itself carries no image blocks: a full board's would be far more than one message may
+hold. Every Claude session of the project gets one added permission
 rule, `Read(//<that project's folder>/**)`, in its flag settings, so those reads do not ask. A chat's pictures are
 removed when the turn ends, unless a pin asked a question, and in any case at its next pin send, when the chat is
 deleted and when the agents stop; folders a day old (a crash's) are swept when the host starts. A picture that cannot
 be written refuses the send. A managed policy that ignores added rules would make the read ask on a permission card.
 
 **Per provider** (`agentPresentation.ts` `pinSends`). Claude (`subagents`): one message; the instructions ask for one
-Agent call per pin titled `Pin <n>: …`, in the waves `pinWaves` computed: pins start together in number order, at most
-`PIN_LIMITS.concurrencyMax` (4) at once, all calls of a wave in one message; the rest read "Waiting". Pins that change
-one file run together. What keeps their edits: the subagents are one Claude Code process, whose edit tools replace an
-exact passage in the file as it is and refuse a file changed since the agent read it; the instructions forbid whole-file
-rewrites, writing files with shell commands and project-wide rewrites. That safety is the CLI's, asked for in words:
-Stacki does not see or gate those writes. The reply's changes card and its undo cover all the pins together. Codex
-(`single`) cannot run pins at the same time: a chat's session takes one turn at a time, and Codex's own subagents send
-the panel nothing but their start, so Stacki sends one message per pin; the next goes after the turn before ended
-`end_turn`, a turn that ended otherwise holds the run ("Continue" or "Stop sending" in the pin list). One pin cannot be
-stopped on its own with either agent: Stop is the chat's own and stops the reply and every pin in it.
+Agent call per pin titled `Pin <n>: …`, every call in one single message, so all start at once, shared files included.
+Claude Code 2.1.332 refuses the 21st subagent running at once in a session ("Concurrent subagent limit reached… Do not
+retry"), so Stacki starts Claude's adapter with its documented `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS` at 60
+(`subagentsAtOnceMax`), keeping a value the person set (`agentHost.ts` `pinsEnvironment`). Checked with the shipped
+adapter and a local fake API: 24 ran at once, and a reply in a second session finished while they ran; the CLI alone
+ran 40 and 250. Whether the model puts every call in one message is the model's doing, and rate limits are the
+account's. What keeps edits apart, across subagents and sessions: the CLI's edit tools replace an exact passage in the
+file as it is, so another's change made meanwhile survives (checked across two sessions); the instructions forbid
+whole-file rewrites, writing files with shell commands and project-wide rewrites. That safety is the CLI's, asked for
+in words: Stacki does not see or gate those writes, and the person's own chat reply is not given these rules. Codex
+(`single`): Codex's own subagents send the panel nothing but their start, so each pin is a message in a chat of its
+own, all sent at once through the one adapter's sessions (one pin to an idle chat uses that chat). This relies on the
+adapter taking several sessions' turns at once, as ACP allows and the panel already does for two chats; it was not
+run against a real Codex adapter. One pin of a Claude send cannot be stopped on its own: Stop is its chat's and stops
+that send, never another.
 
 **A pin's model.** A draft's box has a model dropdown (`PinModelPicker.tsx`) of model names, one row per model
 (`pinModelRows`). An untouched pin follows the chat's model, whose row is the checked one; picking that row makes a pin
@@ -2924,8 +2952,8 @@ follow the chat again, and a pin that had chosen that same model keeps its choic
 choices, or has no known name ("Chat model"), gets its own row, first. The choice is the pin's `model` (`{ agent, value, name }`, parsed with the board; absent on older pins).
 A subagent takes only `SUBAGENT_MODELS` (`opus`, `sonnet`, `haiku`, `fable`), so Claude lists only those; its brief and
 sent pin carry `model` and `modelName`, the instructions ask for it as the Agent call's `model`, and the sent card
-names what the call really asked for when it differs. For one message per pin Stacki sets the chat's model option
-before each pin's message and puts the chat's own back when the run ends or is held. A model no longer available runs
+names what the call really asked for when it differs. For one message per pin, a pin with a model goes to a chat made
+with that model: no chat's model is switched. A model no longer available runs
 on the chat's, said in a toast. Effort is not per pin: it stays the chat's setting.
 
 **How a sent pin stands** (`pinModel.ts` `pinProgress`). In order: an open question about it; a permission card its
@@ -2936,7 +2964,8 @@ choices listed under it (`pinQuestionsOf`; the instructions ask for it): neither
 (Claude's question tool is off for a client without ACP `elicitation`). Words that ask without that form are not
 detected. The pin shows the question, its choices as buttons and Reply. A reply opens with the pin's quoted words
 (`pinReplyLead`) and answers that pin; a message opening with no pin's words answers every question before it. A pin
-not done reads "Didn't finish", "Stopped" or "Not started"; a pin waiting in a held run reads "On hold".
+not done reads "Didn't finish", "Stopped" or "Not started"; "Waiting" is a pin on its way, or one whose subagent has
+not started yet.
 
 **When an agent has finished** (`subagents.ts`). A call that returned its result finished. A call that returned the
 background launch note did not: Claude's adapter reports a background agent's end only to JetBrains clients, but for
@@ -2947,6 +2976,17 @@ finished; any other end means it did not. A follow-up that wakes an agent moves 
 error end (`closeInterruptedTurns`). Chunks of different ACP `messageId`s are separate messages. The strip, the cards,
 the Running panel and pin badges all read the same `deriveSubagentWork`; each state has its own mark shape, and the
 strip's head counts each apart, saying "finished" only when all are done. Proofs: `test/renderer/ai/pinLifecycle.test.js`.
+
+**The bar and the list.** The pins' bar stands at the bottom centre of the canvas (16 px up), clear of the page's own
+navigation, and stacks upward (the billing warning over it). It has no drag and no saved place. Toasts and the
+refused-save notice start above it; while a pin's crop is taken the bar and toasts are hidden; in Design mode, which
+has its own bar and canvas, it is not shown. A pin's box ends above it. The list opens upward, centred on the bar and
+kept in the window (`PinList.tsx` `listPosition`), at most 520 px high with its own scroll, with the bar's edge and no
+shadow; it stays open through the chat's own scrolling, and toasts wait under it. A sent pin's row has a one-line live
+status (`PinLiveLine.tsx`): the AI panel's agents-list mark, words (`statusLine`, `activityText`; a search or fetch
+reads "Searching" or "Fetching") and clock for that pin's own subagent (`pinModel.ts` `pinWork`); the reply's own
+newest step only when the reply works on that pin alone; "Starting" with no clock before then; "Waiting", or the end's
+word with no clock.
 
 **Finished pins are deleted** (`pinModel.ts` `pinFinished`, `pinStore.ts` `deleteFinishedPins`). A sent pin that reads
 done leaves the board by itself (marker, open box, list row, and its images with the save). Failed, stopped, not
