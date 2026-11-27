@@ -47,6 +47,60 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.21
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.21.
+- **Features**
+  - design: offer Design mode on Windows and Linux
+  - mcp: sign in to MCP servers from Stacki, without a terminal
+  - design: resize a frame's width like an artboard
+  - canvas: lay out each level alone and default to This component
+  - ai: add selected code to chat and keep every chip once sent
+  - git: mark changed files in Files and list them under commit
+  - ai: run every comment pin at once, beside anything running
+  - files: give each file type its own Central icon and colour
+- **Fixes**
+  - terminal: built xterm no longer freezes on a mode query
+  - canvas: show direction arrows for the Layout choices
+  - ai: true pin and agent status, parallel pins, a model per pin
+  - ai: no false sign-out; read shell sign-in settings for agents
+  - preview: hide column guides while a component is open
+  - ui: close a tooltip when its control is removed
+  - ai: remove a pin quietly and let Undo bring it back
+  - ai: make voice input in a pin's box work as the chat's does
+  - ai: keep @ mentions as chips in comment pins
+  - ai: never sign Claude in with an API key in the AI panel
+  - canvas: a theme set on the canvas html shows at once
+  - ai: keep a pin's picture when the canvas sits on half a pixel
+  - ai: give each parallel pin's subagent its own pictures
+  - design: picture frames with the page finished, as scrolled through
+  - style: keep the breakpoint on Base while Inline styles is picked
+  - ai: run Claude on a subscription only and warn when billed
+  - design: picking Inline styles never resizes a frame
+  - ai: show only model names in a pin's model dropdown
+  - canvas: a class on the canvas html can always be removed
+  - assets: give Compress an icon in the asset tile menu
+  - audits: list broken links where fixed and outline the exact one
+  - canvas: keep the canvas file readable by Stacki 1.4.20
+  - canvas: undo instant class changes before each new render
+  - canvas: box a lone frame that sits beside group boxes
+  - preview: a thumbnail frame can no longer blank the canvas's image
+  - canvas: one Apply to, and it reaches every frame it names
+  - style: never select a class chip beside Inline styles
+  - canvas: keep a patched canvas matching a fresh load
+  - ai: "Add selected" adds the element's full code, like Add to chat
+  - canvas: name the root setting type without a quoted key
+  - canvas: assert saved and read canvas files keep every component
+  - ui: stop the built app crashing blank on the file icon table
+  - design: bound the delete of a held sandbox copy
+- **Changes under the hood**
+  - design: keep the Inline styles canvas gate with the chip
+  - studio: fold two small shared modules into their users
+- **Maintenance**
+  - ai: give the comment pins pill a faded edge
+  - apps: rebuild the app UI kit with the tooltip fix
+  - canvas: edge Frame settings and toggle it from its whole header
+
 ## 1.4.20
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.20.
