@@ -58,6 +58,25 @@ export const INLINE_NONE: InlineStyle = { kind: 'none' };
 // the spacing box's centre, a section's clear. Far above any real gesture.
 const INLINE_WRITE_PROPERTIES_MAX = 64;
 
+/**
+ * Where the panel's edits go: the style attribute, or a rule. One value, so the attribute's chip and a rule's
+ * can never both be selected. `selector` is empty while no rule is picked; `picked` says a selector was chosen
+ * by name rather than composed from the element's tokens.
+ */
+export type EditTarget = { readonly kind: 'attribute' } | { readonly kind: 'rule'; readonly selector: string; readonly picked: boolean };
+
+/** The target now. The attribute, while it is the target, outranks whatever the rule picks still say. */
+export function editTargetOf(input: {
+  readonly attributeActive: boolean;
+  readonly pickedSelector: string | undefined;
+  readonly composedSelector: string;
+}): EditTarget {
+  if (input.attributeActive) {
+    return { kind: 'attribute' };
+  }
+  return { kind: 'rule', selector: input.pickedSelector ?? input.composedSelector, picked: input.pickedSelector !== undefined };
+}
+
 /** The selected node's `style` attribute, read. */
 export function inlineStyleOf(node: Pick<HostNode, 'props'> | undefined): InlineStyle {
   const attribute = node?.props?.['style'];
