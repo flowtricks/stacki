@@ -2,6 +2,7 @@
 // Files panel and the Git panel's list of changes share.
 import { centralIcon, centralIconSize } from './central/CentralIcon';
 import {
+  braces as centralBraces,
   bulletList as centralBulletList,
   code as centralCode,
   headingOne as centralH1,
@@ -14,6 +15,7 @@ import {
   input as centralInput,
   info as centralInfo,
   link as centralLink,
+  lock as centralLock,
   search as centralSearch,
   select as centralSelect,
   slot as centralSlot,
@@ -96,7 +98,9 @@ import { assert } from '../../shared/core/assert';
 import type { HTML_TAGS } from '../editor/elementSchemas';
 import { type IconProps, I } from './IconBase';
 import { mediaKindOf, type ExplorerEntryKind } from '../../shared/ipc/fileExplorer';
-import { AstroIcon, BracesIcon, CodeIcon, ExternalIcon, FolderIcon, FolderOpenIcon, LockIcon, UnlinkIcon } from './Icons';
+// Icons.tsx re-exports this module's icons, so the two import each other: what comes from it is only ever read while
+// drawing, never while this module loads (test/renderer/app/builtRendererBoots.test.js starts the built app).
+import { AstroIcon, ExternalIcon, FolderIcon, FolderOpenIcon, UnlinkIcon } from './Icons';
 import { elementHeading4IconPath1, elementHeading5IconPath1, elementHeading6IconPath1 } from './iconPaths';
 
 // Astro components keep their cube so they stand apart from HTML elements.
@@ -416,14 +420,14 @@ const FILE_GLYPHS = {
   vue: centralIcon(centralVue),
   archive: centralIcon(centralFileZip),
   audio: centralIcon(centralAudio),
-  braces: BracesIcon,
-  code: CodeIcon,
+  braces: centralIcon(centralBraces),
+  code: centralIcon(centralCode),
   file: centralIcon(centralFile),
   font: centralIcon(centralFontStyle),
   image: centralIcon(centralImage),
   info: centralIcon(centralInfo),
   license: centralIcon(centralLaw),
-  lock: LockIcon,
+  lock: centralIcon(centralLock),
   markdown: centralIcon(centralMarkdown),
   pdf: centralIcon(centralFilePdf),
   table: centralIcon(centralTable),
