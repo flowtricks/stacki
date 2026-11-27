@@ -7,7 +7,7 @@
 // image into its own model request; without it the Read was refused.
 //
 // Bounds and privacy: the files are Stacki's own, under userData and never in the project; readable by this person
-// only; at most one send's pictures per chat (a message's attachment bound). A chat's pictures go when the turn that
+// only; at most one send's pictures per chat (`PIN_LIMITS.sendImagesMax`). A chat's pictures go when the turn that
 // carried them ends, unless a pin asked the person a question (the answer may start that pin again), and in any case
 // at the chat's next pin send, when the chat is deleted and when the agents stop. What a crash leaves behind is
 // removed once it is a day old; younger folders may be another running Stacki's.
@@ -17,9 +17,8 @@ import path from 'node:path';
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import type { AiFailure, PromptAttachment } from '../../../shared/ipc/aiChat';
-import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import type { ChatId } from '../../../shared/properties/ai/chatModel';
-import type { PinBrief } from '../../../shared/properties/ai/commentPinBrief';
+import { PIN_LIMITS, type PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import { described } from './aiMessages';
 
 export const PIN_PICTURE_LIMITS = {
@@ -61,7 +60,7 @@ export class PinPictures {
 
   /** Writes each pin's pictures, replacing the chat's earlier ones. */
   keep(root: string, chat: ChatId, brief: PinBrief, attachments: readonly PromptAttachment[]): Result<PinPictureFiles, AiFailure> {
-    assert(attachments.length <= AI_LIMITS.attachmentsMax, 'PinPictures.keep: a message’s pictures are bounded');
+    assert(attachments.length <= PIN_LIMITS.sendImagesMax, 'PinPictures.keep: a send’s pictures are bounded');
     this.drop(root, chat);
     const files = new Map<number, readonly PinPictureFile[]>();
     try {

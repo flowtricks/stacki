@@ -107,6 +107,14 @@ body:has(.dm-bar) .view-as-chip {
 body:has(.dm-bar) .toast-stack {
   bottom: 72px;
 }
+/* The mode has its own bar at the bottom and its own canvas over the page, so the comment pins' bar steps aside, and
+   toasts keep the height set above whatever that bar would ask for. */
+body:has(.dm-bar) .ai-pin-bar-slot {
+  display: none;
+}
+body:has(.dm-bar):has(.ai-pin-bar-slot):has(.ai-pin-bar) .toast-stack {
+  bottom: 72px;
+}
 .dm-badge {
   display: inline-flex;
   align-items: center;

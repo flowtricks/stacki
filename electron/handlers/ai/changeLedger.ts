@@ -28,6 +28,7 @@ import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { toTurnId, type ChatFileChange, type FileChangeKind, type ReviewState, type TurnId } from '../../../shared/properties/ai/chatModel';
 import { mergeInline, renderResolved, threeWay, type ConflictPart } from '../../git/conflicts';
 import { described } from './aiMessages';
+import type { TurnWrites } from './parallelWrites';
 import type { TreeSnapshots } from './treeSnapshot';
 
 export interface LedgerEntry {
@@ -38,6 +39,8 @@ export interface LedgerEntry {
   /** Undefined: the turn deleted the file. */
   readonly after: string | undefined;
   readonly review: ReviewState;
+  /** Another reply changed this file while this one ran, or may have: undoing would undo that work too (parallelWrites.ts). */
+  readonly shared?: true;
 }
 
 export interface LedgerTurn {
@@ -80,6 +83,8 @@ interface OpenTurn {
   readonly unavailable: boolean;
   readonly snapshotBeforeMs: number | undefined;
   readonly captured: Map<string, string | undefined>;
+  /** This reply's writes and those of the replies running beside it; absent where no one keeps them. */
+  readonly writes: TurnWrites | undefined;
   edited: boolean;
 }
 
@@ -123,10 +128,10 @@ export class ChangeLedger {
   }
 
   /** Opens `turn`. With `mode` off nothing is snapshotted, now or at the end: the decision lives on the turn. */
-  async begin(turn: TurnId, mode: TrackingMode): Promise<void> {
+  async begin(turn: TurnId, mode: TrackingMode, writes?: TurnWrites): Promise<void> {
     assert(this.open === undefined, 'ChangeLedger.begin: one turn at a time per chat');
     if (mode === 'off') {
-      this.open = { turn, mode, tree: undefined, unavailable: false, snapshotBeforeMs: undefined, captured: new Map(), edited: false };
+      this.open = { turn, mode, tree: undefined, unavailable: false, snapshotBeforeMs: undefined, captured: new Map(), writes, edited: false };
       return;
     }
     const snapshot = await timed(this.snapshotDeadlineMs, () => this.snapshots.snapshot(this.root));
@@ -137,9 +142,15 @@ export class ChangeLedger {
       unavailable: !snapshot.ok,
       snapshotBeforeMs: snapshot.ms,
       captured: new Map(),
+      writes,
       edited: false,
     };
     assert(this.open.captured.size === 0, 'ChangeLedger.begin: a turn starts with nothing captured');
+  }
+
+  /** The project-relative form of a file inside the project; undefined for any other. */
+  pathOf(file: string): string | undefined {
+    return this.relative(file);
   }
 
   /** The agent announced an edit, deletion or move: kept so an untracked turn can say so. */
@@ -202,8 +213,9 @@ export class ChangeLedger {
         continue;
       }
       bytes += (original?.length ?? 0) + (current?.length ?? 0);
-      if (current !== original && bytes <= AI_LIMITS.ledgerBytesMax) {
-        entries.push({ path: relative, before: original, after: current, review: 'pending' });
+      const owner = ownerOf(open.writes, relative);
+      if (current !== original && owner !== 'other' && bytes <= AI_LIMITS.ledgerBytesMax) {
+        entries.push({ path: relative, before: original, after: current, review: 'pending', ...(owner === 'shared' ? { shared: true } : {}) });
       }
     }
     const kept: LedgerTurn = { turn, entries };
@@ -239,6 +251,9 @@ export class ChangeLedger {
     }
     if (entry.review !== 'pending') {
       return { tag: 'failed', ...(entry.review === 'kept' ? described('ai.error.alreadyKept') : described('ai.error.alreadyUndone')) };
+    }
+    if (entry.shared === true && action.kind !== 'keep') {
+      return { tag: 'failed', ...described('ai.error.sharedChange', { path: entry.path }) };
     }
     switch (action.kind) {
       case 'keep':
@@ -385,6 +400,18 @@ function isPicks(resolution: MergeResolution): resolution is readonly MergePick[
   return Array.isArray(resolution);
 }
 
+// Whose a changed file is, as far as the replies' tool calls say: this reply's alone, another's alone, or not to be
+// told apart. A reply that ran alone owns everything that changed under it.
+function ownerOf(writes: TurnWrites | undefined, path: string): 'own' | 'other' | 'shared' {
+  if (writes === undefined || !writes.overlapped) {
+    return 'own';
+  }
+  if (writes.written.has(path)) {
+    return writes.foreign.has(path) ? 'shared' : 'own';
+  }
+  return writes.foreign.has(path) ? 'other' : 'shared';
+}
+
 function changeKind(entry: LedgerEntry): FileChangeKind {
   if (entry.before === undefined) {
     return 'created';
@@ -443,7 +470,7 @@ function parseEntry(input: unknown): readonly LedgerEntry[] {
   if ((before !== undefined && typeof before !== 'string') || (after !== undefined && typeof after !== 'string')) {
     return [];
   }
-  return [{ path: entry['path'], before, after, review }];
+  return [{ path: entry['path'], before, after, review, ...(entry['shared'] === true ? { shared: true as const } : {}) }];
 }
 
 export function serializeLedger(turns: readonly LedgerTurn[]): string {

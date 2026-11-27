@@ -34,7 +34,7 @@ import type { AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import type { SentPart } from '../../../shared/properties/ai/chatModel';
 import { codeAgentText, isProjectRelativePath, promptBoundProblem, type PromptPart } from '../../../shared/properties/ai/mentions';
-import { sentPinsOf, type PinBrief } from '../../../shared/properties/ai/commentPinBrief';
+import { PIN_LIMITS, sentPinsOf, type PinBrief } from '../../../shared/properties/ai/commentPinBrief';
 import { pinInstructions } from './pinInstructions';
 import type { PinPictureFiles } from './pinPictures';
 
@@ -65,6 +65,8 @@ export interface PromptContent {
 
 export interface BuiltPrompt {
   readonly blocks: readonly unknown[];
+  /** The attachments the transcript keeps, when they are not all of the message's: a send of pins keeps one picture a pin. */
+  readonly shown?: readonly PromptAttachment[] | undefined;
   /** What the transcript keeps of the parts; absent when the message had none. */
   readonly sent: readonly SentPart[] | undefined;
 }
@@ -73,7 +75,10 @@ export interface BuiltPrompt {
 const TEXT_HASH_CHARS = 16;
 
 export function buildPrompt(source: PromptSource, content: PromptContent): Result<BuiltPrompt, AiFailure> {
-  const built = buildPartsPrompt(source, content);
+  // Pins that run each in a subagent get their pictures as files (a subagent never sees the message's images), so the
+  // message carries none: a full board of them would be far more images than one message may hold.
+  const asFiles = content.pins !== undefined && content.pinPictures !== undefined;
+  const built = buildPartsPrompt(source, asFiles ? { ...content, attachments: [] } : content);
   const pins = content.pins;
   if (pins === undefined || !built.ok) {
     return built;
@@ -84,15 +89,25 @@ export function buildPrompt(source: PromptSource, content: PromptContent): Resul
 // Comment pins come before everything else the message holds: their instructions are the message, and the
 // images after them are theirs. The transcript keeps the pins as one part, after the message's own.
 function withPins(built: BuiltPrompt, pins: PinBrief, { attachments, pinPictures }: PromptContent): Result<BuiltPrompt, AiFailure> {
-  const images = attachments.filter((attachment) => attachment.kind === 'image').length;
   if (pins.pins.some((pin) => pin.images.some((index) => index >= attachments.length || attachments[index]?.kind !== 'image'))) {
     return err(invalid('A pin names an image the message does not carry.'));
   }
-  assert(images <= AI_LIMITS.attachmentsMax, 'withPins: the attachments are bounded');
-  const sent: SentPart[] = [...(built.sent ?? []), { kind: 'pins', mode: pins.mode, pins: sentPinsOf(pins) }];
+  assert(attachments.length <= PIN_LIMITS.sendImagesMax, 'withPins: the attachments are bounded');
+  // The transcript draws one picture a pin, its first: those are kept, and each pin names its place among them.
+  const shown: PromptAttachment[] = [];
+  const cards = sentPinsOf(pins).map((pin) => {
+    const first = pin.image === undefined ? undefined : attachments[pin.image];
+    if (first === undefined) {
+      return { ...pin, image: undefined };
+    }
+    shown.push(first);
+    return { ...pin, image: shown.length - 1 };
+  });
+  assert(shown.length <= pins.pins.length, 'withPins: at most one picture a pin is kept');
+  const sent: SentPart[] = [...(built.sent ?? []), { kind: 'pins', mode: pins.mode, pins: cards }];
   const blocks = [{ type: 'text', text: pinInstructions(pins, pinPictures) }, ...built.blocks];
   assert(blocks.length === built.blocks.length + 1, 'withPins: one block of instructions');
-  return ok({ blocks, sent });
+  return ok({ blocks, sent, shown });
 }
 
 function buildPartsPrompt(source: PromptSource, content: PromptContent): Result<BuiltPrompt, AiFailure> {

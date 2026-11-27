@@ -1,10 +1,11 @@
 // Every pin on the board, on every page: its number and crop, its words (or that it has none yet), where it is,
-// and how it stands. A row takes the person to the pin (its page, its width, its element, its popover open); a
+// and how it stands (a pin sent shows its work live on a line of its own, PinLiveLine.tsx). The list opens upward
+// from the pins' bar, centred on it. A row takes the person to the pin (its page, its width, its element, its popover open); a
 // draft's switch includes it in or leaves it out of the next "Send all"; the end of each row deletes it (asking
 // first only when it holds words or added images). A pin whose work finished well is deleted by itself (pinStore.ts),
 // so the list holds only pins still to send or still at work. Deleting a row keeps the list open while a pin remains,
-// with the keyboard on the next row's delete; the foot appears only to continue or end a held run.
-import type { CSSProperties } from 'react';
+// with the keyboard on the next row's delete.
+import { useEffect, useState, type CSSProperties } from 'react';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { trashCanSimple as centralTrash } from '../../../ui/central/centralGeometry';
@@ -16,8 +17,11 @@ import { TipButton } from '../sessions/TipButton';
 import { ChipWords } from '../mentions/ChipWords';
 import { commentLine, hasContentToLose, workingCopy } from './pinModel';
 import { PinBadge } from './PinBadge';
+import { PinLiveLine } from './PinLiveLine';
+import { useAiState } from '../aiStore';
+import type { ChatView } from '../chatReducer';
 import { DetachedPill, UnsavedPill } from './PinProgressPill';
-import { cancelRun, continueRun, deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
+import { deletePin, jumpToPin, progressOf, setPinIncluded, setPinListOpen, usePinState } from './pinStore';
 import type { CommentPin } from '../../../../shared/properties/ai/commentPins';
 import type { Translator } from '../../../lib/i18n/localeContext';
 
@@ -29,8 +33,10 @@ const ROW_COMMENT_CHARS_MAX = 90;
 export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }) {
   const translate = useTranslate();
   const pins = usePinState();
+  // The rows show live work read from the chats.
+  const ai = useAiState();
   const ordered = [...pins.board.pins].sort((left, right) => left.number - right.number);
-  const box = anchor?.getBoundingClientRect();
+  const position = useAboveBar(anchor);
   return (
     <Popup
       mode="popover"
@@ -38,7 +44,9 @@ export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }
       role="dialog"
       label={translate('ai.pins.listLabel')}
       className="ai-pin-list"
-      style={listPosition(box)}
+      style={position}
+      // The chat scrolls by itself while agents work, and the list stays up through it.
+      keepOnScroll
       onClose={() => setPinListOpen('closed')}
     >
       {ordered.length === 0 ? (
@@ -52,20 +60,11 @@ export function PinList({ anchor }: { readonly anchor: HTMLElement | undefined }
               index={ordered.indexOf(pin)}
               image={firstImage(pin, pins.images)}
               detached={pins.detached.has(pin.id)}
+              view={pin.delivery.kind === 'sent' ? ai.views.get(pin.delivery.chat) : undefined}
               translate={translate}
             />
           ))}
         </ul>
-      )}
-      {pins.run?.held === 'paused' && (
-        <div className="ai-pin-list-foot">
-          <button type="button" className="ai-pin-bar-button" onClick={() => void continueRun(translate)}>
-            {translate('ai.pins.continue')}
-          </button>
-          <button type="button" className="ai-pin-bar-button" onClick={cancelRun}>
-            {translate('ai.pins.cancelRun')}
-          </button>
-        </div>
       )}
     </Popup>
   );
@@ -76,6 +75,7 @@ function PinRow({
   index,
   image,
   detached,
+  view,
   translate,
 }: {
   readonly pin: CommentPin;
@@ -83,9 +83,13 @@ function PinRow({
   readonly index: number;
   readonly image: string | undefined;
   readonly detached: boolean;
+  /** The transcript of the chat the pin was sent to, when it is read here. */
+  readonly view: ChatView | undefined;
   readonly translate: Translator;
 }) {
   const progress = progressOf(pin);
+  // Sent, or on its way: the row says what is happening on a line of its own.
+  const live = progress.kind !== 'draft';
   // A pin never saved shows what its box holds; a saved one what it says.
   const shown = pin.savedAt === undefined ? workingCopy(pin) : pin;
   const words = shown.comment;
@@ -111,7 +115,7 @@ function PinRow({
     }, POPUP_MOTION_MS);
   };
   return (
-    <li className={`ai-pin-row${pin.included || pin.delivery.kind === 'sent' ? '' : ' is-excluded'}`}>
+    <li className={`ai-pin-row${pin.included || pin.delivery.kind === 'sent' ? '' : ' is-excluded'}${live ? ' is-live' : ''}`}>
       <button type="button" className="ai-pin-row-open" onClick={() => jumpToPin(pin.id)} aria-label={translate('ai.pins.jump', { number: pin.number })}>
         <span className={`ai-pin-number is-${progress.kind}`}>{pin.number}</span>
         <span className="ai-pin-row-text">
@@ -125,11 +129,12 @@ function PinRow({
             )}
           </span>
           <span className="ai-pin-row-place">{translate('ai.pins.rowPlace', { page: pin.place.pageLabel, element: pin.place.elementLabel, width })}</span>
+          {live && <PinLiveLine pin={pin} progress={progress} view={view} />}
         </span>
         {image !== undefined && <img className="ai-pin-thumb" src={image} alt="" />}
       </button>
       {detached && <DetachedPill />}
-      {pin.savedAt === undefined ? <UnsavedPill /> : <PinBadge pin={pin} progress={progress} />}
+      {pin.savedAt === undefined ? <UnsavedPill /> : (!live || progress.kind === 'attention') && <PinBadge pin={pin} progress={progress} />}
       {pin.delivery.kind === 'draft' && pin.savedAt !== undefined && (
         <Switch
           label={translate('ai.pins.include', { number: pin.number })}
@@ -144,20 +149,54 @@ function PinRow({
   );
 }
 
-/** The list's width (pins.css `.ai-pin-list`) and its distance from the window's edge. */
+/** The list's width (pins.css `.ai-pin-list`) and tallest height, and the room it keeps from the bar and the window's edge. */
 const LIST_WIDTH_PX = 380;
+const LIST_HEIGHT_PX_MAX = 520;
 const LIST_EDGE_PX = 8;
 
-// Under its button, starting where the button starts (its right edge in a right-to-left interface), kept in the window.
-function listPosition(box: DOMRect | undefined): CSSProperties | undefined {
-  if (box === undefined) {
-    return undefined;
-  }
-  const top = box.bottom + LIST_EDGE_PX;
-  if (document.documentElement.dir === 'rtl') {
-    return { position: 'fixed', top, right: Math.max(LIST_EDGE_PX, window.innerWidth - box.right) };
-  }
-  return { position: 'fixed', top, left: Math.max(LIST_EDGE_PX, Math.min(box.left, window.innerWidth - LIST_WIDTH_PX - LIST_EDGE_PX)) };
+/**
+ * Where the list sits: above the pins' bar, centred on it, opening upward and kept inside the window. Measured again
+ * when the bar changes size, the canvas does, or the window does.
+ */
+function useAboveBar(button: HTMLElement | undefined): CSSProperties | undefined {
+  const bar = button?.closest<HTMLElement>('.ai-pin-bar') ?? undefined;
+  const [, measureAgain] = useState(0);
+  useEffect(() => {
+    if (bar === undefined) {
+      return undefined;
+    }
+    const again = (): void => measureAgain((count) => (count + 1) % Number.MAX_SAFE_INTEGER);
+    const observer = new ResizeObserver(again);
+    observer.observe(bar);
+    const slot = bar.parentElement;
+    if (slot !== null) {
+      observer.observe(slot);
+    }
+    window.addEventListener('resize', again);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', again);
+    };
+  }, [bar]);
+  return bar === undefined ? undefined : listPosition(bar.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
+}
+
+/** The list's fixed place above a bar at `bar`, in a window of `size` (the same in every writing direction: it is centred). */
+export function listPosition(
+  bar: { readonly left: number; readonly top: number; readonly width: number },
+  size: { readonly width: number; readonly height: number },
+): CSSProperties {
+  const width = Math.min(LIST_WIDTH_PX, size.width - LIST_EDGE_PX * 2);
+  const centred = bar.left + bar.width / 2 - width / 2;
+  const left = Math.max(LIST_EDGE_PX, Math.min(centred, size.width - width - LIST_EDGE_PX));
+  const room = bar.top - LIST_EDGE_PX * 2;
+  return {
+    position: 'fixed',
+    left,
+    width,
+    bottom: size.height - bar.top + LIST_EDGE_PX,
+    maxHeight: Math.max(0, Math.min(room, LIST_HEIGHT_PX_MAX)),
+  };
 }
 
 function firstImage(pin: CommentPin, images: ReadonlyMap<string, string>): string | undefined {

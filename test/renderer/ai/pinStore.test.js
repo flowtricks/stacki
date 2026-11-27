@@ -1,9 +1,11 @@
 // Goal: the comment pins store keeps drafts and sends them only when asked. A board is read when a project opens
-// (a pin left waiting in a run the app closed on is a draft again); changes are saved after a pause, with each
+// (a pin stored as sent with no reply of its own is a draft again); changes are saved after a pause, with each
 // image sent once; deleting, including and clearing change only what they say; nothing is ever sent by itself;
-// "Send all" to Claude is one message whose plain words hold no path and whose pins brief names every pin, and the
-// pins are then marked sent with their turn; to Codex it is one message per pin, the next sent only after the turn
-// before ended well, held after one that did not, and continued by the person; a refused send keeps the drafts.
+// "Send all" to Claude is one message whose plain words hold no path and whose pins brief names every pin, however
+// many there are, and the pins are then marked sent with their turn; to Codex it is one chat per pin, all sent at
+// once. A send never waits for what is running: while the open chat answers, the pins get a chat of their own and
+// the open chat is left alone. No pin is ever in two sends at once, and one still at work cannot be reopened. A
+// refused send keeps the drafts.
 // Method: bundle the real stores with esbuild and drive them against a fake preload (window.avb) that records
 // every call; push turn events through the chat store as main would; let the save timer run out on a fake clock.
 const test = require('node:test');
@@ -46,6 +48,8 @@ const { pins, ai, errorNotices } = require(output);
 const PROJECT = '/site';
 const CHAT = `c${'a'.repeat(24)}`;
 const turnId = (number) => `t${String(number).padStart(16, '0')}`;
+/** The chats the fake makes, in order: none is `CHAT`. */
+const chatId = (number) => `c${String(number).padStart(24, '0')}`;
 const translate = (key, params) => (params === undefined ? key : `${key} ${JSON.stringify(params)}`);
 const anchor = (path) => ({ path, occurrence: 0, at: { x: 0.5, y: 0.5 }, tag: 'h1', text: 'Welcome' });
 const place = (file) => ({
@@ -63,6 +67,7 @@ const summary = (agent) => ({ id: CHAT, agent, title: 'New chat', pinned: false,
 function install({ agent = 'claude', board = { version: 1, pins: [] }, images = [], prompt, options = [] } = {}) {
   const calls = [];
   let turns = 0;
+  let made = 0;
   const record = (name, reply) => async (payload) => {
     calls.push({ name, payload });
     return typeof reply === 'function' ? reply(payload) : reply;
@@ -80,6 +85,11 @@ function install({ agent = 'claude', board = { version: 1, pins: [] }, images = 
       aiChats: record('aiChats', () => ({ chats: [summary(agent)], sections: [] })),
       aiChatRead: record('aiChatRead', () => ok({ summary: summary(agent), events: [], full: false })),
       aiChatUpdate: record('aiChatUpdate', () => ok(summary(agent))),
+      aiChatCreate: record('aiChatCreate', () => {
+        made += 1;
+        return ok({ ...summary(agent), id: chatId(made) });
+      }),
+      aiCancel: record('aiCancel', () => ok({ cancelled: true })),
       aiPrompt: record(
         'aiPrompt',
         prompt ??
@@ -144,7 +154,7 @@ function collectToasts() {
   return { toasts, unsubscribe };
 }
 
-test('a board is read when the project opens; a pin left waiting in a closed run is a draft again', async () => {
+test('a board is read when the project opens; a pin sent with no reply of its own is a draft again', async () => {
   const waiting = {
     id: `p${'1'.repeat(16)}`,
     number: 1,
@@ -282,24 +292,43 @@ test('a turn that ends in an error deletes no pin; one finished but holding unsa
   assert.ok(one.length > 0);
 });
 
-test('Codex: each pin is deleted when its own turn ends well, and the run goes on', async () => {
+test('Codex: every pin goes at once, each to a chat of its own, and each is deleted when its own reply ends well', async () => {
   const fake = await start({ agent: 'codex' });
   const stop = pins.followChats();
-  pinned('One', 'src/pages/index.astro', '0.1');
-  pinned('Two', 'src/pages/index.astro', '0.2');
+  const count = 24;
+  for (let number = 1; number <= count; number += 1) {
+    pinned(`Pin ${number}`, 'src/pages/index.astro', `0.${number}`);
+  }
   assert.equal(await pins.sendAllPins(translate), true);
-  push([...opened(turnId(1)), { kind: 'turn-end', turn: turnId(1), stop: 'end_turn', message: undefined, at: 9 }]);
-  await settle();
-  assert.deepEqual(
-    pins.pinState().board.pins.map((pin) => pin.number),
-    [2],
-    'pin 1 went with its turn',
+  const sent = fake.named('aiPrompt');
+  assert.equal(sent.length, count, 'all were sent before any reply ended');
+  assert.equal(new Set(sent.map((call) => call.payload.chat)).size, count, 'each in its own chat');
+  assert.ok(!sent.some((call) => call.payload.chat === CHAT), 'the open chat is left alone');
+  assert.equal(ai.aiState().open, CHAT, 'and stays open');
+  assert.ok(
+    pins.pinState().board.pins.every((pin) => pins.progressOf(pin).kind !== 'queued'),
+    'no pin waits for another',
   );
-  assert.equal(fake.named('aiPrompt').length, 2, 'and pin 2 was sent');
-  push([...opened(turnId(2)), { kind: 'turn-end', turn: turnId(2), stop: 'end_turn', message: undefined, at: 9 }]);
+  const boardPin = (number) => pins.pinState().board.pins.find((pin) => pin.number === number);
+  const of = (number) => boardPin(number).delivery;
+  const end = (delivery, stopReason) =>
+    ai.receiveEvents({
+      projectPath: PROJECT,
+      chat: delivery.chat,
+      events: [{ kind: 'turn-end', turn: delivery.turn, stop: stopReason, message: undefined, at: 9 }],
+    });
+  for (let number = 1; number <= count; number += 1) {
+    ai.receiveEvents({ projectPath: PROJECT, chat: of(number).chat, events: opened(of(number).turn) });
+  }
+  // The first one's chat too: its transcript was kept although more chats than usual are in play.
+  end(of(count), 'end_turn');
+  end(of(1), 'cancelled');
+  end(of(2), 'end_turn');
   await settle();
-  assert.equal(pins.pinState().board.pins.length, 0);
-  assert.equal(pins.pinState().run, undefined, 'the run ended with its last pin');
+  assert.equal(boardPin(count), undefined);
+  assert.equal(boardPin(2), undefined);
+  assert.deepEqual(pins.progressOf(boardPin(1)), { kind: 'unfinished', reason: 'stopped' }, 'stopping one chat stops its pin alone');
+  assert.equal(pins.pinState().board.pins.filter((pin) => pins.progressOf(pin).kind === 'working').length, count - 3, 'the rest go on');
   stop();
 });
 
@@ -368,45 +397,139 @@ test('Send all to Claude: one message, the brief naming every included pin, then
 });
 
 test('a refused send keeps the drafts', async () => {
-  await start({ prompt: () => ({ ok: false, error: { code: 'busy', message: 'busy' } }) });
+  const fake = await start({ prompt: () => ({ ok: false, error: { code: 'busy', message: 'busy' } }) });
   pinned('Bigger');
   assert.equal(await pins.sendAllPins(translate), false);
   assert.equal(pins.pinState().board.pins[0].delivery.kind, 'draft');
+  assert.equal(pins.pinState().sending.size, 0, 'the pin can be sent again');
+  assert.equal(fake.named('aiPrompt').length, 2, 'a taken chat was tried once more in a chat of the pins’ own');
 });
 
-test('Send all to Codex: one message per pin, the next after a turn that ended well, held after one that did not', async () => {
-  const fake = await start({ agent: 'codex' });
-  const stop = pins.followChats();
-  pinned('One', 'src/pages/index.astro', '0.1');
-  pinned('Two', 'src/pages/index.astro', '0.2');
-  pinned('Three', 'src/pages/index.astro', '0.3');
+test('a full board goes in one message to Claude: every pin and every picture, with no smaller limit', async () => {
+  const fake = await start({ agent: 'claude' });
+  for (let number = 1; number <= 40; number += 1) {
+    const id = drop('src/pages/index.astro', `0.${number}`);
+    pins.setPinComment(id, `Pin ${number}`);
+    pins.addImagesToPin(id, [{ kind: 'added', name: `${number}.png`, mimeType: 'image/png', data: 'aGVsbG8=' }], translate);
+    pins.savePinBox();
+  }
+  assert.deepEqual(pins.sendReadiness(pins.pinState(), ai.aiState()), { kind: 'ready', mode: 'subagents', count: 40 });
   assert.equal(await pins.sendAllPins(translate), true);
-  assert.equal(fake.named('aiPrompt').length, 1, 'one pin at a time');
-  assert.equal(fake.named('aiPrompt')[0].payload.pins.mode, 'single');
-  const end = (turn, stopReason) =>
-    ai.receiveEvents({ projectPath: PROJECT, chat: CHAT, events: [{ kind: 'turn-end', turn, stop: stopReason, message: undefined, at: 9 }] });
-  const begin = (turn) =>
-    ai.receiveEvents({
-      projectPath: PROJECT,
-      chat: CHAT,
-      events: [
-        { kind: 'turn-start', turn, at: 1 },
-        { kind: 'user', turn, text: 'Pin', attachments: [], at: 1 },
-      ],
-    });
-  begin(turnId(1));
-  end(turnId(1), 'end_turn');
-  await settle();
-  assert.equal(fake.named('aiPrompt').length, 2, 'the second pin went after the first turn ended well');
-  begin(turnId(2));
-  end(turnId(2), 'error');
-  await settle();
-  assert.equal(fake.named('aiPrompt').length, 2, 'held after a turn that did not end well');
-  assert.equal(pins.pinState().run.held, 'paused');
-  const third = pins.pinState().board.pins.find((pin) => pin.number === 3);
-  assert.deepEqual(pins.progressOf(third), { kind: 'held' }, 'a pin not sent yet waits; nothing asks the person about it');
-  assert.equal(await pins.continueRun(translate), true);
-  assert.equal(fake.named('aiPrompt').length, 3);
+  const sent = fake.named('aiPrompt');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.pins.pins.length, 40);
+  assert.equal(sent[0].payload.attachments.length, 40);
+  assert.deepEqual(
+    sent[0].payload.pins.pins.map((pin) => pin.images),
+    Array.from({ length: 40 }, (_, index) => [index]),
+  );
+});
+
+const runningIn = (chat, turn) => ai.receiveEvents({ projectPath: PROJECT, chat, events: opened(turn) });
+const openOptions = [
+  { id: 'mode', name: 'Mode', category: 'mode', currentValue: 'acceptEdits', choices: [{ value: 'acceptEdits', name: 'Accept edits' }] },
+  { id: 'model', name: 'Model', category: 'model', currentValue: 'opus', choices: [{ value: 'opus', name: 'Opus' }] },
+];
+
+test('while the open chat is answering, pins start at once in a chat of their own and the reply is left alone', async () => {
+  const fake = await start({ agent: 'claude', options: openOptions });
+  const { toasts, unsubscribe } = collectToasts();
+  const stop = pins.followChats();
+  runningIn(CHAT, turnId(90));
+  const id = pinned('Bigger');
+  assert.equal(pins.sendReadiness(pins.pinState(), ai.aiState()).kind, 'ready', 'a running reply never holds Send back');
+  assert.equal(await pins.sendAllPins(translate), true);
+  const sent = fake.named('aiPrompt');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.chat, chatId(1));
+  assert.equal(pinOf(id).delivery.chat, chatId(1));
+  assert.equal(ai.aiState().open, CHAT, 'the person stays in their chat');
+  assert.equal(fake.named('aiSteer').length + fake.named('aiCancel').length, 0, 'the reply is neither steered nor stopped');
+  assert.deepEqual(
+    fake.named('aiChatCreate')[0].payload.settings,
+    [
+      { option: 'mode', value: 'acceptEdits' },
+      { option: 'model', value: 'opus' },
+    ],
+    'the new chat works as the open one does',
+  );
+  assert.ok(toasts.some((toast) => String(toast.message).includes('ai.pins.ownChats')));
+  runningIn(chatId(1), turnId(1));
+  assert.equal(pins.progressOf(pinOf(id)).kind, 'working');
+  // A second send while the first still runs gets a chat of its own too, and carries only the new pin.
+  pinned('Smaller', 'src/pages/about.astro', '0.2');
+  assert.equal(await pins.sendAllPins(translate), true);
+  const second = fake.named('aiPrompt')[1].payload;
+  assert.equal(second.chat, chatId(2));
+  assert.deepEqual(
+    second.pins.pins.map((pin) => pin.number),
+    [2],
+    'a pin at work is never sent again',
+  );
+  unsubscribe();
+  stop();
+});
+
+test('a mode that skips every permission is not carried into a chat made for pins', async () => {
+  const fake = await start({
+    agent: 'claude',
+    options: [{ id: 'mode', name: 'Mode', category: 'mode', currentValue: 'bypassPermissions', choices: [{ value: 'bypassPermissions', name: 'Bypass' }] }],
+  });
+  runningIn(CHAT, turnId(90));
+  pinned('Bigger');
+  assert.equal(await pins.sendAllPins(translate), true);
+  assert.equal(fake.named('aiChatCreate')[0].payload.settings, undefined);
+});
+
+test('two presses of Send at once send each pin once', async () => {
+  const fake = await start({ agent: 'claude' });
+  const id = pinned('Bigger');
+  const first = pins.sendAllPins(translate);
+  assert.deepEqual(pins.progressOf(pinOf(id)), { kind: 'queued' }, 'it reads Waiting while it is on its way');
+  assert.equal(pins.sendReadiness(pins.pinState(), ai.aiState()).kind, 'empty');
+  assert.equal(pins.movePin(id, { anchor: anchor('0.7'), place: place('src/pages/index.astro') }, translate), false);
+  const second = pins.sendAllPins(translate);
+  assert.deepEqual(await Promise.all([first, second]), [true, false]);
+  assert.equal(fake.named('aiPrompt').length, 1);
+});
+
+test('a chat that began a reply in the same moment keeps it: the pins go to a chat of their own', async () => {
+  let asked = 0;
+  const fake = await start({
+    agent: 'claude',
+    prompt: () => {
+      asked += 1;
+      return asked === 1 ? { ok: false, error: { code: 'busy', message: 'busy' } } : { ok: true, value: { turn: turnId(1) } };
+    },
+  });
+  const id = pinned('Bigger');
+  assert.equal(await pins.sendAllPins(translate), true);
+  assert.deepEqual(
+    fake.named('aiPrompt').map((call) => call.payload.chat),
+    [CHAT, chatId(1)],
+  );
+  assert.equal(pinOf(id).delivery.chat, chatId(1));
+});
+
+test('a pin at work cannot be reopened, nor put back as a draft by an Undo; once stopped it can', async () => {
+  await start({ agent: 'claude' });
+  const { toasts, unsubscribe } = collectToasts();
+  const stop = pins.followChats();
+  const id = pinned('Bigger');
+  pins.openPin(id, translate);
+  pins.setPinComment(id, 'Changed, then discarded');
+  pins.closePinBox('discard', translate);
+  const undo = toasts.at(-1).recovery[0];
+  assert.equal(await pins.sendAllPins(translate), true);
+  push([...opened(turnId(1)), agentEvent(turnId(1), 'a1', 1, 'in_progress')]);
+  pins.reopenSentPin(id);
+  assert.equal(pinOf(id).delivery.kind, 'sent', 'still at work: not reopened');
+  await errorNotices.runToastRecovery(undo);
+  assert.equal(pinOf(id).delivery.kind, 'sent', 'an older draft of it does not replace it either');
+  push([{ kind: 'turn-end', turn: turnId(1), stop: 'cancelled', message: undefined, at: 9 }]);
+  pins.reopenSentPin(id);
+  assert.equal(pinOf(id).delivery.kind, 'draft');
+  unsubscribe();
   stop();
 });
 
@@ -503,51 +626,23 @@ test('a pin’s model goes with a one-message send; one not available falls back
   unsubscribe();
 });
 
-test('one message per pin: each runs on its own model, and the chat’s model comes back afterwards', async () => {
+test('one message per pin: a pin with its own model gets a chat made with it; no chat’s model is switched', async () => {
   const fake = await start({ agent: 'codex', options: modelOptions(['base', 'small']) });
-  const stop = pins.followChats();
   const one = pinned('One', 'src/pages/index.astro', '0.1');
-  pinned('Two', 'src/pages/index.astro', '0.2');
   choose(one, 'codex', 'small');
   assert.equal(await pins.sendAllPins(translate), true);
-  const order = () =>
-    fake.calls
-      .filter((call) => call.name === 'aiSetOption' || call.name === 'aiPrompt')
-      .map((call) => (call.name === 'aiSetOption' ? call.payload.value : `send:${call.payload.pins.pins[0].model ?? 'chat'}`));
-  assert.deepEqual(order(), ['small', 'send:small'], 'the model is set before that pin goes');
-  deliver([...startOfTurn(turnId(1)), ...endOfTurn(turnId(1))]);
-  await settle();
-  assert.deepEqual(order(), ['small', 'send:small', 'base', 'send:chat'], 'the pin without a choice runs on the chat’s model');
-  deliver([...startOfTurn(turnId(2)), ...endOfTurn(turnId(2))]);
-  await settle();
-  assert.equal(pins.pinState().run, undefined);
-  assert.equal(order().length, 4, 'already back on the chat’s model: not set again');
-  stop();
+  assert.deepEqual(fake.named('aiChatCreate')[0].payload.settings, [{ option: 'model', value: 'small' }]);
+  assert.equal(fake.named('aiPrompt')[0].payload.chat, chatId(1));
+  assert.equal(fake.named('aiPrompt')[0].payload.pins.pins[0].model, 'small');
+  assert.equal(fake.named('aiSetOption').length, 0);
 });
 
-test('a pin that asks does not hold the pins behind it, and its question keeps it on the board', async () => {
+test('one pin to an idle Codex chat goes into that chat', async () => {
   const fake = await start({ agent: 'codex' });
-  const stop = pins.followChats();
-  const one = pinned('One', 'src/pages/index.astro', '0.1');
-  pinned('Two', 'src/pages/index.astro', '0.2');
+  pinned('One');
   assert.equal(await pins.sendAllPins(translate), true);
-  deliver([
-    { kind: 'turn-start', turn: turnId(1), at: 1 },
-    {
-      kind: 'user',
-      turn: turnId(1),
-      text: 'Pin',
-      attachments: [],
-      at: 1,
-      parts: [{ kind: 'pins', mode: 'single', pins: [{ number: 1, comment: 'One', pageLabel: 'Home', elementLabel: 'Heading', image: undefined }] }],
-    },
-    { kind: 'text', turn: turnId(1), role: 'agent', text: 'Question for pin 1: Which?\n- A\n- B', at: 2 },
-    ...endOfTurn(turnId(1)),
-  ]);
-  await settle();
-  assert.equal(fake.named('aiPrompt').length, 2, 'the next pin went');
-  assert.equal(pins.progressOf(pinOf(one)).kind, 'attention');
-  stop();
+  assert.equal(fake.named('aiPrompt')[0].payload.chat, CHAT);
+  assert.equal(fake.named('aiChatCreate').length, 0);
 });
 
 test('a pin deleted from the list comes back by Undo with its words, images, model and number', async () => {

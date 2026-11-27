@@ -2,7 +2,7 @@
 // each a small message of its own with words and images, sent to the open chat together with "Send all".
 // This file is the contract every side reads (docs/contracts.md, "Comment pins"): the board the renderer
 // keeps and the main process stores, the brief a send carries on `ai:prompt`, what the transcript keeps of
-// it, and the pure rules that decide which pins may run at the same time.
+// it.
 //
 // Why the board lives outside the project: pins are one person's working notes, like chats, so they are kept
 // under userData (electron/handlers/ai/pinBoardStore.ts) and never committed. Images are part of a pin (the

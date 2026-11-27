@@ -203,7 +203,7 @@ test('what a subagent is doing: a file it reads or edits, a command, a tool’s 
   });
   const long = doing(tool(TURN, 'k', { parent: 'a', toolKind: 'execute', title: 'x'.repeat(500) }));
   assert.equal(long.command.length, 120, 'a command is cut to one short line');
-  assert.deepEqual(doing(tool(TURN, 'k', { parent: 'a', toolKind: 'search', title: 'grep "Hero"' })), { kind: 'tool', title: 'grep "Hero"' });
+  assert.deepEqual(doing(tool(TURN, 'k', { parent: 'a', toolKind: 'search', title: 'grep "Hero"' })), { kind: 'phase', phase: 'searching' });
   assert.deepEqual(doing(said(TURN, 'hm', { role: 'thought', parent: 'a' })), { kind: 'thinking' });
   assert.deepEqual(doing(said(TURN, 'Found it', { parent: 'a' })), { kind: 'writing' });
   assert.deepEqual(doing(said(TURN, 'mine')), { kind: 'starting' }, 'the agent’s own words are not the subagent’s');

@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
 import type { PermissionRequestId } from '../../../../shared/properties/ai/chatModel';
 
 export const PERMISSION_ATTENTION_LIMITS = {
-  permissionsPendingMax: 16,
+  permissionsPendingMax: 128,
 } as const satisfies Record<string, number>;
 
 export interface PermissionAttention {

@@ -6,8 +6,11 @@
 export const AI_LIMITS = {
   /** One JSON-RPC line from an adapter. A diff of a large file arrives whole in one line. */
   lineBytesMax: 8 * 1024 * 1024,
-  /** Requests Stacki has sent to one adapter and not yet heard back about. */
-  pendingRequestsMax: 64,
+  /**
+   * Requests Stacki has sent to one adapter and not yet heard back about. Each running reply is one. 128: every pin of
+   * a full board (40) may run in a chat of its own beside the person's chats, with room for control requests.
+   */
+  pendingRequestsMax: 128,
   /** How long an adapter may take to answer a control request (initialize, session/new, set_mode). */
   requestMsMax: 60_000,
   /** How long one prompt turn may run before Stacki cancels it. */
@@ -66,8 +69,11 @@ export const AI_LIMITS = {
   configChoicesMax: 256,
   /** Permission choices offered for one request. */
   permissionOptionsMax: 16,
-  /** Permission requests waiting on the person at once, across chats. */
-  permissionsPendingMax: 32,
+  /**
+   * Permission requests waiting on the person at once, across chats. One past the bound is answered "no" unseen, so it
+   * is far above what a full board of pins asking at the same moment (40) needs.
+   */
+  permissionsPendingMax: 128,
   /** Chats per project. */
   chatsMax: 500,
   /** Events stored per chat; a chat past it is read only. */

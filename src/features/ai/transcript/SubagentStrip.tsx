@@ -339,6 +339,8 @@ export function activityText(activity: SubagentActivity, translate: Translator):
     case 'command':
       // The command's name in words ("Running Tests", "Running Dev server"), never its command line.
       return translate('ai.subagents.doing.command', { command: commandName(commandStep(activity.command), translate) });
+    case 'phase':
+      return translate(activity.phase === 'searching' ? 'ai.status.phase.searching' : 'ai.status.phase.fetching');
     case 'tool':
       return toolTitleText(activity.title, undefined, translate);
     case 'thinking':

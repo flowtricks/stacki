@@ -13,7 +13,6 @@ import {
   pinImageNote,
   pinNumberOfTitle,
   pinQuestionsOf,
-  pinWaves,
   sentPinsOf,
   withoutPinNumber,
 } from '#dist/shared/properties/ai/commentPinBrief.js';
@@ -110,8 +109,9 @@ test('images: base64 only, unique, bounded each and together', () => {
   );
   const big = 'A'.repeat(8 * 1024 * 1024);
   assert.throws(() => parsePinImages([{ id: imageId('a'), data: `${big}A` }]), 'one image past the prompt image bound');
-  const four = ['a', 'b', 'c', 'd'].map((digit) => ({ id: imageId(digit), data: big }));
-  assert.throws(() => parsePinImages(four), 'images past the board bound together');
+  const eight = ['a', 'b', 'c', 'd', 'e', 'f', '1', '2'].map((digit) => ({ id: imageId(digit), data: big }));
+  assert.ok(8 * big.length > PIN_LIMITS.boardImageCharsMax);
+  assert.throws(() => parsePinImages(eight), 'images past the board bound together');
   assert.deepEqual(parsePinBoardRead({ board: board(pin('a', 1)), images: [] }).images, []);
 });
 
@@ -148,7 +148,7 @@ test('a brief: bounded, numbers and images unique, one pin for a single send', (
     { mode: 'single', pins: [entry(1), entry(2)] },
     { mode: 'subagents', pins: [entry(1), entry(1, { images: [5] })] },
     { mode: 'subagents', pins: [entry(1, { images: [0] }), entry(2, { images: [0] })] },
-    { mode: 'subagents', pins: [entry(1, { images: [16] })] },
+    { mode: 'subagents', pins: [entry(1, { images: [PIN_LIMITS.sendImagesMax] })] },
     { mode: 'subagents', pins: [entry(1, { file: '/abs/file.astro' })] },
     { mode: 'subagents', pins: [entry(1, { locator: 'zero' })] },
     { mode: 'subagents', pins: [entry(1, { comment: 'x'.repeat(PIN_LIMITS.commentCharsMax + 1) })] },
@@ -221,37 +221,35 @@ test('an image note names its pin on one line within the note bound', () => {
   assert.ok(note.length <= 500);
 });
 
-test('waves: every pin starts at once up to the bound, in number order, shared files included; the rest wait', () => {
-  assert.deepEqual(pinWaves([3, 1, 4, 2]), [[1, 2, 3, 4]], 'the four pins of a review all start together');
-  assert.deepEqual(pinWaves([1, 2, 3, 4, 5, 6]), [
-    [1, 2, 3, 4],
-    [5, 6],
-  ]);
+test('one send carries a full board of pins and every picture it can hold, and nothing past them', () => {
+  assert.equal(PIN_LIMITS.pinsPerSendMax, PIN_LIMITS.pinsMax, 'the board is the only limit on a send');
+  assert.equal(PIN_LIMITS.sendImagesMax, PIN_LIMITS.pinsMax * PIN_LIMITS.imagesPerPinMax);
+  assert.ok(PIN_LIMITS.subagentsAtOnceMax > PIN_LIMITS.pinsMax, 'every pin of a send can have its subagent running at once');
+  assert.ok(PIN_LIMITS.questionsPerTextMax >= PIN_LIMITS.pinsMax, 'every pin of a send can ask in one answer');
+  const each = PIN_LIMITS.imagesPerPinMax;
+  const entries = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      number: index + 1,
+      comment: 'Bigger',
+      pageLabel: 'Home',
+      page: 'src/pages/index.astro',
+      elementLabel: 'Heading',
+      file: 'src/pages/index.astro',
+      locator: '0.1',
+      tag: 'h1',
+      images: Array.from({ length: each }, (_unused, at) => index * each + at),
+    }));
+  const full = parsePinBrief({ mode: 'subagents', pins: entries(PIN_LIMITS.pinsMax) });
+  assert.equal(full.pins.length, PIN_LIMITS.pinsMax);
+  assert.equal(sentPinsOf(full).length, PIN_LIMITS.pinsMax);
+  assert.throws(() => parsePinBrief({ mode: 'subagents', pins: entries(PIN_LIMITS.pinsMax + 1) }));
+  const past = entries(1).map((pin) => ({ ...pin, images: [PIN_LIMITS.sendImagesMax] }));
+  assert.throws(() => parsePinBrief({ mode: 'subagents', pins: past }));
 });
 
-function xorshift(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    return (state >>> 0) / 4_294_967_296;
-  };
-}
-
-test('waves hold their properties over random sends', () => {
-  for (let seed = 1; seed <= 400; seed += 1) {
-    const random = xorshift(seed);
-    const count = 1 + Math.floor(random() * PIN_LIMITS.pinsPerSendMax);
-    const numbers = Array.from({ length: count }, (_, index) => index + 1);
-    const concurrency = 1 + Math.floor(random() * 4);
-    const waves = pinWaves([...numbers].reverse(), concurrency);
-    assert.deepEqual(waves.flat(), numbers, `seed ${seed}: every pin runs once, in number order`);
-    waves.forEach((wave, index) => {
-      assert.ok(wave.length >= 1 && wave.length <= concurrency, `seed ${seed}: a wave holds 1 to ${concurrency}`);
-      assert.ok(index === waves.length - 1 || wave.length === concurrency, `seed ${seed}: a pin waits only when a wave is full`);
-    });
-  }
+test('every pin of a full board can ask its question in one answer', () => {
+  const answer = Array.from({ length: PIN_LIMITS.pinsMax }, (_, index) => `Question for pin ${index + 1}: Which one?\n- This\n- That`).join('\n');
+  assert.equal(pinQuestionsOf(answer).length, PIN_LIMITS.pinsMax);
 });
 
 test('a pin’s model is read whole or the pin is refused; a pin stored before models has none', () => {

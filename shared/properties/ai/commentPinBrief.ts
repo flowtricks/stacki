@@ -1,25 +1,38 @@
 // What a "Send all" of comment pins carries to the agent (`ai:prompt`'s `pins`), what the transcript keeps of it,
-// how a pin's agent asks the person a question, and the pure rules that decide which pins start together (docs/contracts.md, "Comment pins"). The
-// board the pins are kept on is commentPins.ts; this file is the layer under it and under the chat model, so
-// both can read it without importing each other.
+// and how a pin's agent asks the person a question (docs/contracts.md, "Comment pins"). The board the pins are kept
+// on is commentPins.ts; this file is the layer under it and under the chat model, so both can read it without
+// importing each other.
 import { assert } from '../../core/assert';
 import { toArray, toRecord } from '../../core/record';
-import { AI_LIMITS } from './aiLimits';
 import { isProjectRelativePath, parseDraftSegments, plainTextOf, type ComposerSegments } from './mentions';
+
+// Pins on one project's board, and the images one pin holds. Named apart so the bounds of a send are made from them:
+// whatever the board can hold, one send can carry and Claude can run at once, so none of those is ever met first.
+const PINS_MAX = 40;
+const IMAGES_PER_PIN_MAX = 4;
 
 export const PIN_LIMITS = {
   /** Pins on one project's board, sent or not. Why: a page review rarely needs more, and the list stays a glance. */
-  pinsMax: 40,
+  pinsMax: PINS_MAX,
   /** A pin's comment: a long paragraph, far under a prompt's bound even with every pin of a send. */
   commentCharsMax: 4_000,
   /** Images one pin holds: the crop of what it points at and a few more. */
-  imagesPerPinMax: 4,
-  /** Base64 characters of all the board's images together: the bound of one composer draft's images. */
-  boardImageCharsMax: AI_LIMITS.attachmentsImageCharsMax,
-  /** Pins one send carries: each brings at least its crop, and a message holds `attachmentsMax` images. */
-  pinsPerSendMax: AI_LIMITS.attachmentsMax,
-  /** Subagents that run at once for one send. Why: each is a model session, and more than a few at once only queue at the provider. */
-  concurrencyMax: 4,
+  imagesPerPinMax: IMAGES_PER_PIN_MAX,
+  /**
+   * Base64 characters of all the board's images together: every pin of a full board holding a crop at the size a
+   * screenshot aims under (1.5 million characters), so a crop is not refused because the board has many pins.
+   */
+  boardImageCharsMax: PINS_MAX * 1_500_000,
+  /** Pins one send carries: the whole board. Every pin of a send starts at once; there is no smaller limit. */
+  pinsPerSendMax: PINS_MAX,
+  /** Images one send of pins carries: every image a full board can hold, past an ordinary message's `attachmentsMax`. */
+  sendImagesMax: PINS_MAX * IMAGES_PER_PIN_MAX,
+  /**
+   * Subagents Claude may have running in one session: a full board, and 20 more (the CLI's own default) for what the
+   * chat itself has running. Why Stacki sets it: Claude Code 2.1.332 refuses the 21st subagent running at once
+   * ("Concurrent subagent limit reached… Do not retry"), so pins past 20 would be dropped (agentHost.ts).
+   */
+  subagentsAtOnceMax: PINS_MAX + 20,
   /** Names shown for a page or an element ("Home", "Heading “Welcome”"). */
   labelCharsMax: 120,
   /** A canvas path (`src/components/Card.astro|0.2`), the frame's own bound. */
@@ -43,9 +56,9 @@ export const PIN_LIMITS = {
   choicesMax: 6,
   choiceCharsMax: 160,
   /** Characters of one message read for questions (the newest ones: a report ends with its question). */
-  questionScanCharsMax: 40_000,
+  questionScanCharsMax: 80_000,
   /** Questions read from one message: one for each pin a send can hold. */
-  questionsPerTextMax: 16,
+  questionsPerTextMax: PINS_MAX,
 } as const satisfies Record<string, number>;
 
 /**
@@ -149,10 +162,12 @@ export function parsePinBrief(input: unknown): PinBrief {
     throw new Error('brief.pins: an image belongs to one pin');
   }
   assert(
-    images.every((index) => index < AI_LIMITS.attachmentsMax),
+    images.every((index) => index < PIN_LIMITS.sendImagesMax),
     'parsePinBrief: images index the attachments',
   );
   assert(pins.length <= PIN_LIMITS.pinsPerSendMax, 'parsePinBrief: a send is bounded');
+  assert(images.length <= PIN_LIMITS.sendImagesMax, 'parsePinBrief: a send holds no more pictures than a full board');
+  assert(PIN_LIMITS.subagentsAtOnceMax > pins.length, 'parsePinBrief: every pin of the send can run at once');
   return { mode, pins };
 }
 
@@ -174,7 +189,7 @@ function parseBriefEntry(input: unknown): PinBriefEntry {
     componentFile: value['componentFile'] === undefined ? undefined : projectFile(value['componentFile'], 'brief.pin.componentFile'),
     breakpointPx: breakpoint === undefined ? undefined : positive(breakpoint, PIN_LIMITS.breakpointPxMax, 'brief.pin.breakpointPx'),
     images: list(value['images'], PIN_LIMITS.imagesPerPinMax, 'brief.pin.images').map((index) =>
-      bounded(count(index, 'brief.pin.image'), AI_LIMITS.attachmentsMax - 1, 'brief.pin.image'),
+      bounded(count(index, 'brief.pin.image'), PIN_LIMITS.sendImagesMax - 1, 'brief.pin.image'),
     ),
     ...modelFields(value, 'brief.pin'),
   };
@@ -221,7 +236,7 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
       ...pinSegmentsField(value['segments'], comment),
       pageLabel: nonEmpty(value['pageLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.pageLabel'),
       elementLabel: nonEmpty(value['elementLabel'], PIN_LIMITS.labelCharsMax, 'sentPin.elementLabel'),
-      image: image === undefined ? undefined : bounded(count(image, 'sentPin.image'), AI_LIMITS.attachmentsMax - 1, 'sentPin.image'),
+      image: image === undefined ? undefined : bounded(count(image, 'sentPin.image'), PIN_LIMITS.sendImagesMax - 1, 'sentPin.image'),
       ...modelFields(value, 'sentPin'),
     };
   });
@@ -230,34 +245,6 @@ export function parseSentPins(input: unknown): readonly SentPin[] {
   }
   assert(pins.length <= PIN_LIMITS.pinsPerSendMax, 'parseSentPins: a send is bounded');
   return pins;
-}
-
-// ---------------------------------------------------------------------------
-// Which pins start together
-// ---------------------------------------------------------------------------
-
-/**
- * The waves a `subagents` send runs in: every pin of a wave starts at once, at most `concurrencyMax` of them, in
- * number order; the rest wait for the next wave. Pins that change the same file run together too. Why that is
- * safe: all subagents of a send are one Claude Code process, whose edit tools replace an exact passage in the file
- * as it is at that moment and refuse a file that changed since the agent read it, so one pin's edit never
- * overwrites another's. The instructions (pinInstructions.ts) forbid the ways around that: rewriting a whole file
- * and writing files with shell commands.
- */
-export function pinWaves(numbers: readonly number[], concurrencyMax: number = PIN_LIMITS.concurrencyMax): readonly (readonly number[])[] {
-  assert(concurrencyMax >= 1, 'pinWaves: at least one pin runs at a time');
-  assert(numbers.length <= PIN_LIMITS.pinsPerSendMax, 'pinWaves: a send is bounded');
-  const ordered = [...numbers].sort((left, right) => left - right);
-  const waves: number[][] = [];
-  for (let from = 0; from < ordered.length; from += concurrencyMax) {
-    waves.push(ordered.slice(from, from + concurrencyMax));
-  }
-  assert(waves.reduce((sum, wave) => sum + wave.length, 0) === numbers.length, 'pinWaves: every pin runs once');
-  assert(
-    waves.every((wave) => wave.length >= 1),
-    'pinWaves: no wave is empty',
-  );
-  return waves;
 }
 
 // ---------------------------------------------------------------------------

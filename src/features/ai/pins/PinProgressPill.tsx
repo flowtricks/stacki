@@ -1,10 +1,9 @@
-// How a pin stands, as a small filled pill: Draft, Queued, Working, Done, Needs you, Didn't finish, Stopped, Not
-// started, On hold, Started, Sent. The app's tooltip says more (why a pin needs the person or was not done), never
+// How a pin stands, as a small filled pill: Draft, Waiting, Working, Done, Needs you, Didn't finish, Stopped, Not
+// started, Started, Sent. The app's tooltip says more (why a pin needs the person or was not done), never
 // a line of text under it. "Needs you" always has something to answer (pinAnswer.ts).
 import { createPortal } from 'react-dom';
 import type { MessageKey, Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { PIN_LIMITS } from '../../../../shared/properties/ai/commentPinBrief';
 import FittedTooltip from '../../../ui/FittedTooltip';
 import { CheckIcon, CloseIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import { tooltipHost, useDelayedTooltip } from '../../../ui/delayedTooltip';
@@ -17,7 +16,6 @@ const LABELS = {
   done: 'ai.pins.progress.done',
   attention: 'ai.pins.progress.attention',
   sent: 'ai.pins.progress.sent',
-  held: 'ai.pins.progress.held',
   unreported: 'ai.pins.progress.started',
 } as const satisfies Record<Exclude<PinProgress['kind'], 'unfinished'>, MessageKey>;
 
@@ -38,7 +36,6 @@ const TIPS = {
   working: 'ai.pins.progress.workingTip',
   done: 'ai.pins.progress.doneTip',
   sent: 'ai.pins.progress.sentTip',
-  held: 'ai.pins.attention.paused',
   unreported: 'ai.subagents.status.unreportedTip',
 } as const satisfies Record<Exclude<PinProgress['kind'], 'attention' | 'unfinished'>, MessageKey>;
 
@@ -54,9 +51,6 @@ export function progressTip(progress: PinProgress, translate: Translator): strin
   }
   if (progress.kind === 'unfinished') {
     return translate(UNFINISHED[progress.reason].tip);
-  }
-  if (progress.kind === 'queued') {
-    return translate(TIPS.queued, { count: PIN_LIMITS.concurrencyMax });
   }
   return progress.kind === 'working' && progress.end === 'reply' ? translate('ai.subagents.status.backgroundTip') : translate(TIPS[progress.kind]);
 }

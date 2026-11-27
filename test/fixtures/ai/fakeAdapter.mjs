@@ -13,11 +13,13 @@
 //   hold          keeps the turn open until a steering message or a cancel arrives
 //   unauthorized  an internal error carrying an HTTP 401, as Claude reports an expired login
 //   /compact      compaction_update in_progress then completed ("/compact fail": failed)
-//   <comment-pins> acts as Claude's coordinator for a "Send all" of comment pins: reads the waves the
-//                 instructions give, starts one Agent call per pin titled "Pin <n>: …" (each reading a file
-//                 as its own child, `parentToolUseId`), finishes a wave before starting the next, and says how
-//                 many images and image notes it was given. A wave's subagents run at the same time and edit their
-//                 pins' files (runPins). A pin saying "in the background" is one background agent (runBackgroundPin)
+//   <comment-pins> acts as Claude's coordinator for a "Send all" of comment pins: starts one Agent call per pin
+//                 titled "Pin <n>: …" (each reading a file as its own child, `parentToolUseId`), all of them before
+//                 any finishes, and says how many images and image notes the message carried. The subagents run at
+//                 the same time and edit their pins' files (runPins). A pin saying "in the background" is one
+//                 background agent (runBackgroundPin)
+// Sessions are independent, as the real adapter's are: each holds its own turn and hears its own cancel, so a test
+// can run several replies at once. `session/close` is answered and `session/resume` reopens a closed session.
 // Other methods: `_session/steering` (accepted while a turn is held, `promptRequired` when idle,
 // an error when the text says "refuse"), `session/fork` (answers `fork-of-<source>` with the
 // source's modes), `session/set_mode`.
@@ -27,6 +29,10 @@
 // compaction_update, and FAKE_COMPACTION=silent reports nothing at all; FAKE_LEGACY_MODES=1 offers modes as session modes only (no `mode` option);
 // FAKE_BYPASS=1 starts every new session in the "bypassPermissions" mode; FAKE_TRACE_FILE=<path> logs every method called;
 // FAKE_COMMANDS=1 announces a slash command after each new session;
+// FAKE_PIN_GATE=<folder> keeps every pin's subagent, and every held reply, at work until the folder holds a file
+// that releases it: `pin-<n>` or `pins` for a subagent, `chat` for a held reply;
+// FAKE_CLOSE=1 advertises `session/close` and `session/resume`;
+// FAKE_PIN_ACTIVITY=1 gives each subagent a newest step of its own (an edit, a command, a search, a read);
 // FAKE_NEW_FAILS_FILE=<path> fails every new session while that file exists.
 import fs from 'node:fs';
 import readline from 'node:readline';
@@ -70,14 +76,43 @@ const options = (mode) => [
 ];
 const modesOf = (mode) => (legacyModes ? { modes: { currentModeId: mode, availableModes: MODES } } : {});
 let clientCapabilities;
-let cancelled = false;
-// The prompt a "hold" turn left open: answered when a steering message arrives or the turn is cancelled.
-let held;
+// Sessions whose running turn was told to stop.
+const cancelled = new Set();
+// The prompts "hold" turns left open, by session: answered when a steering message arrives or the turn is cancelled.
+const held = new Map();
+const gate = process.env.FAKE_PIN_GATE;
 
-const finishHeld = (stopReason) => {
-  if (held !== undefined) {
-    send({ id: held.id, result: { stopReason } });
-    held = undefined;
+const finishHeld = (sessionId, stopReason) => {
+  const turn = held.get(sessionId);
+  if (turn !== undefined) {
+    held.delete(sessionId);
+    clearInterval(turn.timer);
+    send({ id: turn.id, result: { stopReason } });
+  }
+};
+
+const holdTurn = (sessionId, id) => {
+  // With a gate, the folder's `chat` file ends the reply; without one only a steer or a cancel does.
+  const timer =
+    gate === undefined
+      ? undefined
+      : setInterval(() => {
+          if (fs.existsSync(`${gate}/chat`)) {
+            update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' and finished.' } });
+            finishHeld(sessionId, 'end_turn');
+          }
+        }, 50);
+  held.set(sessionId, { id, timer });
+};
+
+// Waits until the gate releases pin `number` or its session is told to stop; at once without a gate.
+const released = async (sessionId, number) => {
+  // A bound, so a forgotten gate ends the fake rather than hanging it: ten minutes of 50 ms looks.
+  for (let look = 0; gate !== undefined && look < 12_000; look += 1) {
+    if (cancelled.has(sessionId) || fs.existsSync(`${gate}/pins`) || fs.existsSync(`${gate}/pin-${number}`)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
 };
 
@@ -100,7 +135,11 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       result: {
         protocolVersion: 1,
         agentInfo: { name: 'fake', version: '1' },
-        agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, ...(plain ? {} : { sessionCapabilities: { fork: {} } }) },
+        agentCapabilities: {
+          loadSession: false,
+          promptCapabilities: { image: true, embeddedContext: true },
+          ...(plain ? {} : { sessionCapabilities: { fork: {}, ...(process.env.FAKE_CLOSE === '1' ? { close: {}, resume: {} } : {}) } }),
+        },
         ...(plain ? {} : { _meta: { steering: { supported: true } } }),
       },
     });
@@ -116,8 +155,10 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     if (process.env.FAKE_COMMANDS === '1') {
       update(sessionId, { sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'review', description: 'Review the change' }] });
     }
-  } else if (method === 'session/delete') {
+  } else if (method === 'session/delete' || method === 'session/close') {
     send({ id, result: {} });
+  } else if (method === 'session/resume') {
+    send({ id, result: { sessionId: params.sessionId, configOptions: options(lastMode), ...modesOf(lastMode) } });
   } else if (method === 'session/fork') {
     send({ id, result: { sessionId: `fork-of-${params.sessionId}`, configOptions: options('bypassPermissions'), ...modesOf('bypassPermissions') } });
   } else if (method === 'session/set_config_option') {
@@ -142,16 +183,16 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     } else if (text.includes('garbled')) {
       // Accepted, but answered in a shape Stacki cannot read; the turn stays held.
       send({ id, result: { outcome: 'bogus' } });
-    } else if (held === undefined) {
+    } else if (!held.has(params.sessionId)) {
       send({ id, result: { outcome: 'promptRequired', reason: 'noRunningTurn' } });
     } else {
       send({ id, result: { outcome: 'injected' } }); // What the real Claude adapter answers (acp-agent.js `steer`).
-      update(held.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Steered: ${text}` } });
-      finishHeld('end_turn');
+      update(params.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Steered: ${text}` } });
+      finishHeld(params.sessionId, 'end_turn');
     }
   } else if (method === 'session/cancel') {
-    cancelled = true;
-    finishHeld('cancelled');
+    cancelled.add(params.sessionId);
+    finishHeld(params.sessionId, 'cancelled');
   } else if (method === 'session/prompt') {
     const text = params.prompt.find((block) => block.type === 'text')?.text ?? '';
     const sessionId = params.sessionId;
@@ -166,7 +207,24 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     if (text.includes('crash')) {
       process.exit(3);
     }
-    cancelled = false;
+    cancelled.delete(sessionId);
+    if (text.includes('<comment-pins>') && /\n {2}Comment: [^\n]*in the background/.test(text)) {
+      await runBackgroundPin(sessionId, id, text.includes('then dies'));
+      return;
+    }
+    if (text.includes('<comment-pins>')) {
+      await runPins(sessionId, params.prompt);
+      if (cancelled.has(sessionId)) {
+        send({ id, result: { stopReason: 'cancelled' } });
+        return;
+      }
+      // A pin comment of "ask which blue" ends the coordinator's answer with that pin's question.
+      for (const word of text.includes('ask which blue') ? ['Question for pin 1: Which blue?'] : ['All', ' pins', ' done.']) {
+        update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
+      }
+      send({ id, result: { stopReason: 'end_turn' } });
+      return;
+    }
     if (text.startsWith('/compact')) {
       runCompaction(id, sessionId, text);
       return;
@@ -175,25 +233,12 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       // Claude's own start-of-turn message, as the adapter passes it on for a session that asked for it; the turn
       // then stays held until the host cancels it.
       send({ method: '_claude/sdkMessage', params: { sessionId, message: { type: 'system', subtype: 'init', apiKeySource: 'ANTHROPIC_API_KEY' } } });
-      held = { id, sessionId };
+      holdTurn(sessionId, id);
       return;
     }
     if (text.includes('hold')) {
       update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Working' } });
-      held = { id, sessionId };
-      return;
-    }
-    if (text.includes('<comment-pins>') && text.includes('in the background')) {
-      await runBackgroundPin(sessionId, id, text.includes('then dies'));
-      return;
-    }
-    if (text.includes('<comment-pins>')) {
-      await runPins(sessionId, params.prompt);
-      // A pin comment of "ask which blue" ends the coordinator's answer with that pin's question.
-      for (const word of text.includes('ask which blue') ? ['Question for pin 1: Which blue?'] : ['All', ' pins', ' done.']) {
-        update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
-      }
-      send({ id, result: { stopReason: 'end_turn' } });
+      holdTurn(sessionId, id);
       return;
     }
     const file = text.match(/edit (\S+)/)?.[1];
@@ -255,7 +300,7 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
     }
     update(sessionId, { sessionUpdate: 'usage_update', used: text.includes('usage') ? 41250 : 10, size: text.includes('usage') ? 1_000_000 : 100 });
-    send({ id, result: { stopReason: cancelled ? 'cancelled' : 'end_turn' } });
+    send({ id, result: { stopReason: cancelled.has(sessionId) ? 'cancelled' : 'end_turn' } });
   } else {
     send({ id, error: { code: -32601, message: 'Method not found' } });
   }
@@ -285,10 +330,9 @@ function runCompaction(id, sessionId, text) {
   send({ id, result: { stopReason: 'end_turn' } });
 }
 
-// Claude's coordinator for comment pins, as the instructions ask: one Agent call per pin, a wave's calls all started
-// before any finishes, the next wave after them. Each stand-in subagent works at the same time as the others of its
-// wave and changes its pin's file on disk when that file holds the pin's "slot <n>" line: it reads the file, waits
-// until every subagent of the wave has read it (so their reads really overlap), then edits the way Claude Code's
+// Claude's coordinator for comment pins, as the instructions ask: one Agent call per pin, all of them started before
+// any finishes. Each stand-in subagent works at the same time as the others and changes its pin's file on disk when that file holds the pin's "slot <n>" line: it reads the file, waits
+// until every subagent has read it (so their reads really overlap), then edits the way Claude Code's
 // edit tool does: an edit of a file that changed since the agent read it is refused, and the agent reads it again
 // and replaces its own passage only. A refused edit is reported as the pin's child call "stale<n>".
 async function runPins(sessionId, prompt) {
@@ -302,60 +346,112 @@ async function runPins(sessionId, prompt) {
       { file: /written in (\S+) at child path/.exec(part)?.[1], model: /\n {2}Model: (\S+)/.exec(part)?.[1] },
     ]),
   );
-  const waves = [...text.matchAll(/Wave \d+: ([^\n]+)/g)].map((match) => [...match[1].matchAll(/pin (\d+)/g)].map((pin) => Number(pin[1])));
-  for (const wave of waves) {
-    for (const number of wave) {
-      const model = briefs.get(number)?.model;
+  const numbers = [...briefs.keys()];
+  // A message for one pin whose agent makes the change itself (Codex): its steps are the reply's own, with no subagent.
+  if (!text.includes('Start one subagent per pin')) {
+    await runOwnPin(sessionId, numbers[0]);
+    return;
+  }
+  for (const number of numbers) {
+    const model = briefs.get(number)?.model;
+    update(sessionId, {
+      sessionUpdate: 'tool_call',
+      toolCallId: `agent${number}`,
+      title: `Pin ${number}: Make the change`,
+      kind: 'think',
+      status: 'in_progress',
+      rawInput: { description: `Pin ${number}: Make the change`, subagent_type: 'general-purpose', ...(model === undefined ? {} : { model }) },
+      _meta: { claudeCode: { toolName: 'Agent' } },
+    });
+    update(sessionId, {
+      sessionUpdate: 'tool_call',
+      toolCallId: `read${number}`,
+      title: 'Read src/pages/index.astro',
+      kind: 'read',
+      status: 'completed',
+      _meta: { claudeCode: { toolName: 'Read', parentToolUseId: `agent${number}` } },
+    });
+  }
+  if (process.env.FAKE_PIN_ACTIVITY === '1') {
+    const steps = [
+      (number) => ({ title: 'Edit Hero.astro', kind: 'edit', locations: [{ path: 'src/components/Hero.astro' }], _meta: { claudeCode: { toolName: 'Edit' } } }),
+      (number) => ({ title: 'npm test', kind: 'execute', rawInput: { command: 'npm test' }, _meta: { claudeCode: { toolName: 'Bash' } } }),
+      (number) => ({ title: 'Read base.css', kind: 'read', locations: [{ path: 'src/styles/base.css' }], _meta: { claudeCode: { toolName: 'Read' } } }),
+      (number) => ({ title: 'grep "button" src', kind: 'search', rawInput: { pattern: 'button' }, _meta: { claudeCode: { toolName: 'Grep' } } }),
+    ];
+    for (const number of numbers) {
+      const step = steps[(number - 1) % steps.length](number);
       update(sessionId, {
         sessionUpdate: 'tool_call',
-        toolCallId: `agent${number}`,
-        title: `Pin ${number}: Make the change`,
-        kind: 'think',
+        toolCallId: `step${sessionId}-${number}`,
         status: 'in_progress',
-        rawInput: { description: `Pin ${number}: Make the change`, subagent_type: 'general-purpose', ...(model === undefined ? {} : { model }) },
-        _meta: { claudeCode: { toolName: 'Agent' } },
-      });
-      update(sessionId, {
-        sessionUpdate: 'tool_call',
-        toolCallId: `read${number}`,
-        title: 'Read src/pages/index.astro',
-        kind: 'read',
-        status: 'completed',
-        _meta: { claudeCode: { toolName: 'Read', parentToolUseId: `agent${number}` } },
+        ...step,
+        _meta: { claudeCode: { ...step._meta.claudeCode, parentToolUseId: `agent${number}` } },
       });
     }
-    let arrived = 0;
-    let release;
-    const allRead = new Promise((resolve) => (release = resolve));
-    await Promise.all(
-      wave.map(async (number) => {
-        const file = briefs.get(number)?.file;
-        const readFile = () => (file !== undefined && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined);
-        let seen = readFile();
-        arrived += 1;
-        if (arrived === wave.length) {
-          release();
+  }
+  let arrived = 0;
+  let release;
+  const allRead = new Promise((resolve) => (release = resolve));
+  await Promise.all(
+    numbers.map(async (number) => {
+      const file = briefs.get(number)?.file;
+      const readFile = () => (file !== undefined && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined);
+      let seen = readFile();
+      arrived += 1;
+      if (arrived === numbers.length) {
+        release();
+      }
+      await allRead;
+      await released(sessionId, number);
+      if (cancelled.has(sessionId)) {
+        return;
+      }
+      // Finish out of order, as real subagents do.
+      await new Promise((resolve) => setTimeout(resolve, (numbers.length - numbers.indexOf(number)) * 5));
+      if (seen?.includes(`slot ${number}\n`)) {
+        // The edit is announced before it is made, naming its file, as the real adapter's tool calls are.
+        update(sessionId, {
+          sessionUpdate: 'tool_call',
+          toolCallId: `edit${sessionId}-${number}`,
+          title: `Edit ${file}`,
+          kind: 'edit',
+          status: 'pending',
+          locations: [{ path: file }],
+          _meta: { claudeCode: { toolName: 'Edit', parentToolUseId: `agent${number}` } },
+        });
+        // After the host has heard the call, so its ledger has read the file as it was.
+        await new Promise((resolve) => setTimeout(resolve, 25));
+        if (readFile() !== seen) {
+          update(sessionId, {
+            sessionUpdate: 'tool_call',
+            toolCallId: `stale${number}`,
+            title: 'Edit refused: the file changed since it was read',
+            kind: 'edit',
+            status: 'failed',
+            _meta: { claudeCode: { toolName: 'Edit', parentToolUseId: `agent${number}` } },
+          });
+          seen = readFile();
         }
-        await allRead;
-        // Finish out of order, as real subagents do.
-        await new Promise((resolve) => setTimeout(resolve, (wave.length - wave.indexOf(number)) * 5));
-        if (seen?.includes(`slot ${number}\n`)) {
-          if (readFile() !== seen) {
-            update(sessionId, {
-              sessionUpdate: 'tool_call',
-              toolCallId: `stale${number}`,
-              title: 'Edit refused: the file changed since it was read',
-              kind: 'edit',
-              status: 'failed',
-              _meta: { claudeCode: { toolName: 'Edit', parentToolUseId: `agent${number}` } },
-            });
-            seen = readFile();
-          }
-          fs.writeFileSync(file, seen.replace(`slot ${number}\n`, `done ${number}\n`));
-        }
-        update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `agent${number}`, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `Pin ${number} changed.` } }] });
-      }),
-    );
+        const now = readFile();
+        fs.writeFileSync(file, now.replace(`slot ${number}\n`, `done ${number}\n`));
+        update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `edit${sessionId}-${number}`, status: 'completed' });
+      }
+      update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `agent${number}`, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `Pin ${number} changed.` } }] });
+    }),
+  );
+}
+
+async function runOwnPin(sessionId, number) {
+  const steps = [
+    { title: 'Edit Hero.astro', kind: 'edit', locations: [{ path: 'src/components/Hero.astro' }] },
+    { title: 'npm test', kind: 'execute', rawInput: { command: 'npm test' } },
+    { title: 'Read base.css', kind: 'read', locations: [{ path: 'src/styles/base.css' }] },
+  ];
+  update(sessionId, { sessionUpdate: 'tool_call', toolCallId: `own${sessionId}`, status: 'in_progress', ...steps[(number - 1) % steps.length] });
+  await released(sessionId, number);
+  if (!cancelled.has(sessionId)) {
+    update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: `own${sessionId}`, status: 'completed' });
   }
 }
 

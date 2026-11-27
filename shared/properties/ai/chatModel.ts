@@ -13,7 +13,7 @@ import type { Brand } from '../../core/brand';
 import { toArray, toRecord } from '../../core/record';
 import { parseAgentId, type AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
-import { PIN_SEND_MODES, parseSentPins, type PinSendMode, type SentPin } from './commentPinBrief';
+import { PIN_LIMITS, PIN_SEND_MODES, parseSentPins, type PinSendMode, type SentPin } from './commentPinBrief';
 import {
   BUILTIN_CHIP_IDS,
   SKILL_SOURCES,
@@ -449,7 +449,8 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
         kind,
         turn: turnOf(value),
         text: text(value['text'], AI_LIMITS.promptCharsMax, 'user.text'),
-        attachments: list(value['attachments'], AI_LIMITS.attachmentsMax, 'user.attachments').map((entry) => {
+        // A send of pins keeps one picture for each pin, so a stored message holds up to a full board of them.
+        attachments: list(value['attachments'], Math.max(AI_LIMITS.attachmentsMax, PIN_LIMITS.pinsMax), 'user.attachments').map((entry) => {
           const attachment = object(entry, 'attachment');
           const kind = oneOf(attachment['kind'], ['image', 'file'] as const, 'attachment.kind');
           const name = label(attachment['name']);

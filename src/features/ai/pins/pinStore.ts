@@ -7,13 +7,14 @@
 // `capturePinCrop` with what the canvas measured. Comment mode registers its button in the AI panel's header
 // (panelModes.ts) only while that host is mounted, so a surface without it (Studio) never offers the mode.
 //
-// "Send all" goes to the chat open in the panel (a new one when none is). For an agent whose subagents the panel can
-// follow (Claude) it is one message; each pin becomes its own subagent there and shows its progress. Otherwise
-// (Codex) it is one message per pin, sent one after another: the next goes when the turn before ended well, and
-// a turn that did not holds the rest until the person continues.
+// "Send all" always starts at once, whatever else is running. It goes to the chat open in the panel (a new one when
+// none is) while that chat is idle; while it is answering, the pins get a chat of their own in the background, so the
+// reply goes on untouched. For an agent whose subagents the panel can follow (Claude) a send is one message and each
+// pin becomes its own subagent there. Otherwise (Codex) each pin is a message in a chat of its own, all sent at once.
+// Each send is its own chat's reply: stopping or answering one leaves the others alone.
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../../shared/core/assert';
-import { pinSendMode } from '../../../../shared/properties/ai/agentPresentation';
+import { isDangerousMode, pinSendMode } from '../../../../shared/properties/ai/agentPresentation';
 import { PIN_LIMITS, type PinSendMode } from '../../../../shared/properties/ai/commentPinBrief';
 import {
   EMPTY_PIN_BOARD,
@@ -40,7 +41,19 @@ import type { Translator } from '../../../lib/i18n/localeContext';
 import { reportActionToast, reportErrorToast } from '../../../ui/errorNotices';
 import { aiPinsRead, aiPinsWrite, aiScreenshot } from '../aiBridge';
 import type { ComposerSegments } from '../../../../shared/properties/ai/mentions';
-import { aiState, loadChatView, newChat, openChat, preferredAgent, sendPinMessage, setChatOption, subscribeAiState } from '../aiStore';
+import {
+  aiState,
+  holdChatViews,
+  isChatIdle,
+  loadChatView,
+  newBackgroundChat,
+  newChat,
+  openChat,
+  preferredAgent,
+  sendPinMessage,
+  subscribeAiState,
+} from '../aiStore';
+import type { ChatSetting } from '../../../../shared/ipc/aiChat';
 import {
   addPin,
   addPinImages,
@@ -65,29 +78,15 @@ import {
   resolvePinModel,
   removePin,
   reopenPin,
-  sendRefusal,
-  turnEnd,
+  pinRunning,
   unusedImages,
   type ImageOutcome,
   type PinModelChoice,
   type PinProgress,
-  type SendRefusal,
 } from './pinModel';
 
 /** How long typing pauses before the board is saved. */
 const SAVE_PAUSE_MS = 400;
-
-/** A `single` send running one pin per message: the pins still to go, in order, and whether it is held. */
-export interface SequentialRun {
-  readonly chat: ChatId;
-  readonly pins: readonly PinId[];
-  readonly held: 'paused' | 'running';
-  /**
-   * The chat's own model, put back after pins that chose another one; undefined when no pin of the run chose a
-   * model (the chat's setting is never touched then). `applied` is the one the run last set.
-   */
-  readonly models?: { readonly option: string; readonly base: string; readonly applied: string };
-}
 
 export interface PinState {
   readonly projectPath: string | undefined;
@@ -103,7 +102,8 @@ export interface PinState {
   readonly listOpen: boolean;
   /** A crop is being taken: the popover steps aside for the frame of the capture. */
   readonly capturing: boolean;
-  readonly run: SequentialRun | undefined;
+  /** Pins on their way out: sent for, their reply not started yet. No second send takes them. */
+  readonly sending: ReadonlySet<PinId>;
   /** A marker being dragged to another element. */
   readonly dragging: PinId | undefined;
   /** Pins of the page shown whose element is gone from it (the shell resolves them, pinModel.ts resolveAnchor). */
@@ -120,7 +120,7 @@ const INITIAL: PinState = {
   moving: undefined,
   listOpen: false,
   capturing: false,
-  run: undefined,
+  sending: new Set(),
   dragging: undefined,
   detached: new Set(),
 };
@@ -160,7 +160,7 @@ function update(change: (current: PinState) => PinState): void {
 // Loading and saving
 // ---------------------------------------------------------------------------
 
-/** Reads the project's board. A pin left waiting in a run the app closed on was never sent: it is a draft again. */
+/** Reads the project's board. A pin stored as sent with no reply of its own (an older Stacki's queue) is a draft again. */
 export async function loadPins(projectPath: string): Promise<void> {
   assert(projectPath.length > 0, 'loadPins: a project is named');
   if (state.projectPath === projectPath && state.loaded) {
@@ -319,7 +319,7 @@ export function closePinBox(how: 'keep' | 'discard', translate?: Translator): vo
 export function savePinBox(): void {
   const id = state.open;
   const pin = id === undefined ? undefined : state.board.pins.find((candidate) => candidate.id === id);
-  if (pin === undefined || pin.delivery.kind === 'sent' || !hasPersonContent(workingCopy(pin))) {
+  if (pin === undefined || pin.delivery.kind === 'sent' || state.sending.has(pin.id) || !hasPersonContent(workingCopy(pin))) {
     return;
   }
   const at = Date.now();
@@ -397,7 +397,11 @@ function recordRemoval(removed: PinSnapshot, translate: Translator): void {
 // Puts a pin back as the snapshot has it: in place of what is on the board under its id, or added again.
 function restorePin(snapshot: PinSnapshot): 'restored' | 'full' {
   const before = snapshot.pin;
-  const present = state.board.pins.some((pin) => pin.id === before.id);
+  const now = state.board.pins.find((pin) => pin.id === before.id);
+  if (now !== undefined && (state.sending.has(now.id) || pinRunning(progressOf(now)))) {
+    return 'restored'; // It was sent meanwhile and is at work: an older draft of it would let it run twice.
+  }
+  const present = now !== undefined;
   const others = state.board.pins.filter((pin) => pin.id !== before.id);
   if (!present && others.length >= PIN_LIMITS.pinsMax) {
     return 'full';
@@ -410,17 +414,16 @@ function restorePin(snapshot: PinSnapshot): 'restored' | 'full' {
       images.set(id, data);
       stored.delete(id); // The save that dropped it may have removed its file: it is written again.
     }
-    const restored = { ...stillWaiting(before, current.run), number };
+    const restored = { ...withoutWaiting(before), number };
     const pins = present ? current.board.pins.map((pin) => (pin.id === before.id ? restored : pin)) : [...current.board.pins, restored];
     return { ...current, images, board: { ...current.board, pins } };
   });
   return 'restored';
 }
 
-// A pin removed while it waited for its turn in a one-per-message run that has since ended is a draft again.
-function stillWaiting(pin: CommentPin, run: SequentialRun | undefined): CommentPin {
-  const waiting = pin.delivery.kind === 'sent' && pin.delivery.turn === undefined;
-  return waiting && run?.pins.includes(pin.id) !== true ? { ...pin, delivery: { kind: 'draft' } } : pin;
+// A pin stored as sent with no reply of its own is a draft again.
+function withoutWaiting(pin: CommentPin): CommentPin {
+  return pin.delivery.kind === 'sent' && pin.delivery.turn === undefined ? { ...pin, delivery: { kind: 'draft' } } : pin;
 }
 
 export function setPinListOpen(open: 'open' | 'closed'): void {
@@ -443,7 +446,7 @@ export function setDraggingPin(id: PinId | undefined): void {
  */
 export function movePin(id: PinId, target: { readonly anchor: PinAnchor; readonly place: PinPlace }, translate: Translator): boolean {
   const pin = state.board.pins.find((candidate) => candidate.id === id);
-  if (pin === undefined || pin.delivery.kind === 'sent') {
+  if (pin === undefined || pin.delivery.kind === 'sent' || state.sending.has(id)) {
     return false;
   }
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), (old) => movePinAnchor(old, target)), moving: undefined }));
@@ -538,8 +541,12 @@ function takePin(id: PinId): void {
   });
 }
 
-/** A sent pin back to a draft, to change and send again. */
+/** A sent pin back to a draft, to change and send again. Not while it is at work: a pin never runs twice at once. */
 export function reopenSentPin(id: PinId): void {
+  const pin = state.board.pins.find((candidate) => candidate.id === id);
+  if (pin === undefined || pinRunning(progressOf(pin))) {
+    return;
+  }
   update((current) => ({ ...current, board: changePin(current.board, id, Date.now(), reopenPin), open: id }));
 }
 
@@ -747,103 +754,182 @@ export function sentPinOf(chat: ChatId, turn: TurnId, number: number): CommentPi
 // Send all
 // ---------------------------------------------------------------------------
 
-/** Where "Send all" stands for the chat it would go to: nothing to send (there is no Send), ready (and how), or why not. */
+/** Where "Send all" stands: nothing to send (there is no Send), ready (and how), or why not. */
 export type SendReadiness =
   | { readonly kind: 'empty'; readonly count: 0 }
   | { readonly kind: 'ready'; readonly mode: PinSendMode; readonly count: number }
-  | { readonly kind: 'blocked'; readonly reason: SendBlock; readonly count: number };
+  | { readonly kind: 'blocked'; readonly reason: 'not-ready'; readonly count: number };
 
-export type SendBlock = Exclude<SendRefusal, 'none'> | 'busy' | 'running' | 'not-ready';
-
-/** Whether "Send all" can go now: something to send, within one message's bounds, the chat idle and its agent ready. */
-export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): SendReadiness {
-  const chosen = pinsToSend(pins.board);
-  const chat = ai.open === undefined ? undefined : ai.chats.find((candidate) => candidate.id === ai.open);
-  const agent = chat?.agent ?? preferredAgent();
-  const mode = pinSendMode(agent);
-  const count = chosen.length;
-  const refusal = sendRefusal(chosen, mode);
-  if (refusal === 'none') {
-    return { kind: 'empty', count: 0 };
-  }
-  if (refusal !== undefined) {
-    return { kind: 'blocked', reason: refusal, count };
-  }
-  if (pins.run !== undefined) {
-    return { kind: 'blocked', reason: 'running', count };
-  }
-  if (!ai.trusted || ai.agents.find((entry) => entry.agent === agent)?.state !== 'ready') {
-    return { kind: 'blocked', reason: 'not-ready', count };
-  }
-  if (chat !== undefined && ai.views.get(chat.id)?.running !== undefined) {
-    return { kind: 'blocked', reason: 'busy', count };
-  }
-  return { kind: 'ready', mode, count };
+/** The saved, included drafts no send has taken yet. */
+function pinsWaiting(pins: PinState): readonly CommentPin[] {
+  return pinsToSend(pins.board).filter((pin) => !pins.sending.has(pin.id));
 }
 
 /**
- * Sends every included draft to the chat open in the panel (a new chat with the preferred agent when none is).
- * Never runs by itself: only the person's "Send all" calls it. True when the pins went (or, one per message,
- * when the first went).
+ * Whether "Send all" can go now: something to send and its agent ready. What is already running, in the open chat or
+ * any other, never holds a send back.
+ */
+export function sendReadiness(pins: PinState, ai: ReturnType<typeof aiState>): SendReadiness {
+  const count = pinsWaiting(pins).length;
+  if (count === 0) {
+    return { kind: 'empty', count: 0 };
+  }
+  const agent = pinAgent(ai);
+  if (!ai.trusted || ai.agents.find((entry) => entry.agent === agent)?.state !== 'ready') {
+    return { kind: 'blocked', reason: 'not-ready', count };
+  }
+  return { kind: 'ready', mode: pinSendMode(agent), count };
+}
+
+/** Chats made for messages still on their way: no sent pin names them yet, and their transcripts must be kept. */
+const posting = new Set<ChatId>();
+
+/** Where one message of a send goes: a chat that exists, or a chat still to be made for it. */
+type SendTarget = { readonly kind: 'chat'; readonly chat: ChatId } | { readonly kind: 'own' };
+
+/** What every message of one send shares. */
+interface Send {
+  readonly agent: AgentId;
+  readonly mode: PinSendMode;
+  /** The chat open when the send began: its settings are what a chat made for the send starts with. */
+  readonly from: ChatId | undefined;
+  readonly translate: Translator;
+}
+
+/** One message of a send as it ended: the chat its reply runs in, and whether that chat was made for it in the background. */
+type Sent = { readonly kind: 'sent'; readonly chat: ChatId; readonly where: 'open' | 'own' } | { readonly kind: 'refused' };
+
+/**
+ * Sends every included draft, now. One message for all of them where the agent's subagents can be followed, else one
+ * message a pin, all at once. A message goes to the open chat when that chat is idle (a new one, opened, when none
+ * is open), else to a chat of its own in the background. Never runs by itself: only the person's "Send all" calls it.
+ * The pins are taken before anything is waited for, so a second press cannot send them again. True when any went.
  */
 export async function sendAllPins(translate: Translator): Promise<boolean> {
   const readiness = sendReadiness(state, aiState());
   if (readiness.kind !== 'ready') {
     return false;
   }
-  const chat = aiState().open ?? (await newChat(preferredAgent()));
-  if (chat === undefined) {
-    return false;
-  }
-  const pins = pinsToSend(state.board);
-  const summary = (sent: readonly CommentPin[]): string => pinSummaryText(sent, translate);
-  const agent = aiState().chats.find((candidate) => candidate.id === chat)?.agent ?? preferredAgent();
-  if (readiness.mode === 'subagents') {
-    const modelOf = modelsFor(pins, agent, chat, translate);
-    const message = pinMessage(pins, 'subagents', (id) => state.images.get(id), summary, modelOf);
-    const turn = await sendPinMessage(chat, pinPrompt(message));
-    if (turn === undefined) {
+  const pins = pinsWaiting(state);
+  const projectPath = state.projectPath;
+  take(pins, 'take');
+  try {
+    const send: Send = { agent: pinAgent(aiState()), mode: readiness.mode, from: aiState().open, translate };
+    const messages = send.mode === 'subagents' ? [pins] : pins.map((pin) => [pin]);
+    const first = await firstTarget(send, messages);
+    if (first === undefined) {
       return false;
     }
-    markSent(pins, { chat, turn, mode: 'subagents' });
+    const sent = await Promise.all(messages.map((message, index) => sendMessage(send, message, index === 0 ? first : { kind: 'own' })));
+    if (state.projectPath === projectPath) {
+      announce(sent, translate);
+    }
+    return sent.some((outcome) => outcome.kind === 'sent');
+  } finally {
+    take(pins, 'release');
+  }
+}
+
+// Where the first message goes. With no chat open, a new one is made and opened, as the composer's first message
+// would. The open chat takes a message only while it is idle, and a chat is never switched to another model for a pin:
+// one pin of its own with a chosen model goes to a chat made with that model.
+async function firstTarget(send: Send, messages: readonly (readonly CommentPin[])[]): Promise<SendTarget | undefined> {
+  if (send.from === undefined) {
+    const alone = messages.length === 1 && !(send.mode === 'single' && messages[0]?.[0]?.model !== undefined);
+    if (!alone) {
+      return { kind: 'own' };
+    }
+    const chat = await newChat(send.agent);
+    return chat === undefined ? undefined : { kind: 'chat', chat };
+  }
+  const switches = send.mode === 'single' && messages[0]?.[0]?.model !== undefined;
+  const several = messages.length > 1;
+  return isChatIdle(send.from) && !switches && !several ? { kind: 'chat', chat: send.from } : { kind: 'own' };
+}
+
+// Sends one message of a send. A chat that turns out to be taken (a reply began there in the same moment) is left to
+// it: the pins go to a chat of their own.
+async function sendMessage(send: Send, pins: readonly CommentPin[], target: SendTarget): Promise<Sent> {
+  if (target.kind === 'chat') {
+    const outcome = await post(send, pins, target.chat);
+    if (outcome !== 'taken') {
+      const opened = send.from === undefined || target.chat === send.from;
+      return outcome === 'sent' ? { kind: 'sent', chat: target.chat, where: opened ? 'open' : 'own' } : { kind: 'refused' };
+    }
+  }
+  // Held from the moment it is made: other chats of the same send arrive while this one's message is on its way.
+  const chat = await newBackgroundChat(send.agent, ownChatSettings(send, pins), (made) => posting.add(made));
+  if (chat === undefined) {
+    return { kind: 'refused' };
+  }
+  const outcome = await post(send, pins, chat);
+  posting.delete(chat);
+  if (outcome === 'taken') {
+    reportErrorToast(send.translate('ai.error.stillAnswering'));
+  }
+  return outcome === 'sent' ? { kind: 'sent', chat, where: 'own' } : { kind: 'refused' };
+}
+
+async function post(send: Send, pins: readonly CommentPin[], chat: ChatId): Promise<'sent' | 'taken' | 'refused'> {
+  const summary = (sent: readonly CommentPin[]): string => pinSummaryText(sent, send.translate);
+  // A one-pin message runs on its chat's model, which was set when the chat was made: the card names what ran.
+  const modelOf = modelsFor(pins, send.agent, send.from ?? chat, send.translate);
+  const message = pinMessage(pins, send.mode, (id) => state.images.get(id), summary, modelOf);
+  const outcome = await sendPinMessage(chat, pinPrompt(message));
+  if (outcome.kind !== 'sent') {
+    return outcome.kind;
+  }
+  markSent(pins, { chat, turn: outcome.turn, mode: send.mode });
+  if (aiState().open === chat) {
     void openChat(chat);
-    return true;
   }
-  markSent(pins, { chat, turn: undefined, mode: 'single' });
-  const models = runModels(pins, agent, chat);
-  update((current) => ({ ...current, run: { chat, pins: pins.map((pin) => pin.id), held: 'running', ...(models === undefined ? {} : { models }) } }));
-  void openChat(chat);
-  return sendNextInRun(translate);
+  return 'sent';
 }
 
-/** Continues a held one-pin-per-message run with its next pin. */
-export function continueRun(translate: Translator): Promise<boolean> {
-  const run = state.run;
-  if (run === undefined) {
-    return Promise.resolve(false);
+/**
+ * The settings a chat made for a send starts with: those of the chat that was open (its model, effort and mode), and
+ * a one-pin message's chosen model. A mode that skips every permission is never carried into another chat.
+ */
+function ownChatSettings(send: Send, pins: readonly CommentPin[]): readonly ChatSetting[] {
+  const open = aiState().chats.find((candidate) => candidate.id === send.from);
+  const options = pinAgentOptions(aiState(), send.agent, send.from);
+  const carried = open?.agent === send.agent ? options : [];
+  const settings = carried
+    .filter((option) => !((option.category === 'mode' || option.id === 'mode') && isDangerousMode(send.agent, option.currentValue)))
+    .map((option) => ({ option: option.id, value: option.currentValue }));
+  const model = options.find((option) => option.id === 'model' || option.category === 'model');
+  const chosen = send.mode === 'single' ? pins[0]?.model : undefined;
+  if (model === undefined || chosen === undefined || resolvePinModel({ model: chosen }, send.agent, options).kind !== 'chosen') {
+    return settings;
   }
-  update((current) => ({ ...current, run: { ...run, held: 'running' } }));
-  return sendNextInRun(translate);
+  return [...settings.filter((setting) => setting.option !== model.id), { option: model.id, value: chosen.value }];
 }
 
-/** Ends a held run: the pins it had not sent yet are drafts again. */
-export function cancelRun(): void {
-  const run = state.run;
-  if (run === undefined) {
+// Pins that went to chats of their own are said once, with the way there: the person's own chat did not change.
+function announce(sent: readonly Sent[], translate: Translator): void {
+  const own = sent.flatMap((outcome) => (outcome.kind === 'sent' && outcome.where === 'own' ? [outcome.chat] : []));
+  const first = own[0];
+  if (first === undefined) {
     return;
   }
-  void restoreRunModel(run);
-  const waiting = new Set(run.pins);
-  update((current) => ({
-    ...current,
-    run: undefined,
-    board: {
-      ...current.board,
-      pins: current.board.pins.map((pin) =>
-        waiting.has(pin.id) && pin.delivery.kind === 'sent' && pin.delivery.turn === undefined ? { ...pin, delivery: { kind: 'draft' } } : pin,
-      ),
-    },
-  }));
+  const message = translate('ai.pins.ownChats', { count: own.length });
+  reportActionToast(message, 'info', [{ label: translate('ai.pins.showChat'), run: () => void openChat(first) }]);
+}
+
+// Marks pins as on their way, or gives them back.
+function take(pins: readonly CommentPin[], how: 'take' | 'release'): void {
+  update((current) => {
+    const sending = new Set(current.sending);
+    for (const pin of pins) {
+      if (how === 'take') {
+        sending.add(pin.id);
+      } else {
+        sending.delete(pin.id);
+      }
+    }
+    assert(sending.size <= PIN_LIMITS.pinsMax * 2, 'take: pins on their way are bounded by the board');
+    return { ...current, sending };
+  });
 }
 
 function pinPrompt({ brief, ...message }: PinMessage): Parameters<typeof sendPinMessage>[1] {
@@ -877,115 +963,8 @@ function markSent(pins: readonly CommentPin[], target: { readonly chat: ChatId; 
   }));
 }
 
-let runTranslate: Translator | undefined;
-
-// The next pin of a run, as its own message. A refused send holds the run, so nothing sends itself after a failure.
-async function sendNextInRun(translate: Translator): Promise<boolean> {
-  runTranslate = translate;
-  if (runSending) {
-    return false; // A send is on its way: the store's next change asks again once its turn is known.
-  }
-  runSending = true;
-  try {
-    return await sendNextInRunNow(translate);
-  } finally {
-    runSending = false;
-  }
-}
-
-/** Whether a run's next message is on its way, so a second change of the chat store cannot send the same pin twice. */
-let runSending = false;
-
-async function sendNextInRunNow(translate: Translator): Promise<boolean> {
-  const run = state.run;
-  if (run === undefined || run.held === 'paused') {
-    return false;
-  }
-  const next = run.pins
-    .map((id) => state.board.pins.find((pin) => pin.id === id))
-    .find((pin) => pin?.delivery.kind === 'sent' && pin.delivery.turn === undefined);
-  if (next === undefined) {
-    await restoreRunModel(run);
-    update((current) => ({ ...current, run: undefined }));
-    return true;
-  }
-  const agent = aiState().chats.find((candidate) => candidate.id === run.chat)?.agent ?? preferredAgent();
-  const model = await applyRunModel(next, agent, translate);
-  const message = pinMessage(
-    [next],
-    'single',
-    (id) => state.images.get(id),
-    (sent) => pinSummaryText(sent, translate),
-    () => model,
-  );
-  const turn = await sendPinMessage(run.chat, pinPrompt(message));
-  if (turn === undefined) {
-    holdRun();
-    return false;
-  }
-  update((current) => ({
-    ...current,
-    board: changePin(current.board, next.id, Date.now(), (pin) => (pin.delivery.kind === 'sent' ? { ...pin, delivery: { ...pin.delivery, turn } } : pin)),
-  }));
-  return true;
-}
-
-// A run's note of the chat's model, kept only when a pin of it chose one.
-function runModels(pins: readonly CommentPin[], agent: AgentId, chat: ChatId): SequentialRun['models'] {
-  const option = pinAgentOptions(aiState(), agent, chat).find((candidate) => candidate.id === 'model' || candidate.category === 'model');
-  if (option === undefined || !pins.some((pin) => pin.model !== undefined)) {
-    return undefined;
-  }
-  return { option: option.id, base: option.currentValue, applied: option.currentValue };
-}
-
-// Switches the chat to the model `pin` runs on (its own choice, else the chat's) before its message goes. The
-// model the message will really run on when the pin chose one, so the sent card never names another.
-async function applyRunModel(pin: CommentPin, agent: AgentId, translate: Translator): Promise<PinModelChoice | undefined> {
-  const run = state.run;
-  if (run === undefined) {
-    return undefined;
-  }
-  const chosen = modelsFor([pin], agent, run.chat, translate)(pin);
-  const models = run.models;
-  if (models === undefined) {
-    return undefined;
-  }
-  const wanted = chosen?.value ?? models.base;
-  if (wanted !== models.applied) {
-    if (!(await setChatOption(run.chat, models.option, wanted))) {
-      return undefined; // The refusal was shown; the pin runs on the model the chat still has.
-    }
-    update((current) => ({ ...current, run: current.run?.models === undefined ? current.run : { ...current.run, models: { ...models, applied: wanted } } }));
-  }
-  return chosen;
-}
-
-// Puts the chat's own model back once a run ends or is held.
-async function restoreRunModel(run: SequentialRun): Promise<void> {
-  const models = state.run?.models ?? run.models;
-  if (models === undefined || models.applied === models.base) {
-    return;
-  }
-  update((current) => ({
-    ...current,
-    run: current.run?.models === undefined ? current.run : { ...current.run, models: { ...models, applied: models.base } },
-  }));
-  await setChatOption(run.chat, models.option, models.base);
-}
-
-function holdRun(): void {
-  const run = state.run;
-  if (run === undefined) {
-    return;
-  }
-  update((current) => ({ ...current, run: current.run === undefined ? undefined : { ...current.run, held: 'paused' } }));
-  void restoreRunModel(run);
-}
-
-// Every change of the chats: a run moves on, then pins whose work finished well are deleted.
+// Every change of the chats: pins whose work finished well are deleted.
 function followChatsChange(): void {
-  followRun();
   readSentChats();
   deleteFinishedPins();
 }
@@ -1039,46 +1018,13 @@ function readSentChats(): void {
   assert(chatsAsked.size <= PIN_LIMITS.pinsMax * 2, 'readSentChats: one read per chat a pin went to');
 }
 
-// A run follows its chat: when the turn of the pin it sent last ends well, the next pin goes; when it ends any
-// other way, the run is held until the person continues it.
-function followRun(): void {
-  const run = state.run;
-  if (run === undefined || run.held === 'paused') {
-    return;
-  }
-  // A reply waiting to go (an answer to a pin's question) goes first; the run moves on after it.
-  const queued = aiState().queue.get(run.chat)?.length ?? 0;
-  if (queued > 0 && !aiState().queuePaused.has(run.chat)) {
-    return;
-  }
-  const view = aiState().views.get(run.chat);
-  const sentTurns = run.pins.flatMap((id) => {
-    const pin = state.board.pins.find((candidate) => candidate.id === id);
-    return pin?.delivery.kind === 'sent' && pin.delivery.turn !== undefined ? [pin.delivery.turn] : [];
-  });
-  const last = sentTurns[sentTurns.length - 1];
-  if (view === undefined || last === undefined) {
-    return;
-  }
-  const ended = turnEnd(view, last);
-  if (ended === undefined || view.running !== undefined) {
-    return;
-  }
-  if (ended !== 'end_turn') {
-    holdRun();
-    return;
-  }
-  const translate = runTranslate;
-  if (translate !== undefined) {
-    void sendNextInRun(translate);
-  }
-}
-
 let following: (() => void) | undefined;
 
-/** Starts following the chats for runs; returns the stop. Called by the host while it is mounted. */
+/** Starts following the chats for pins' progress; returns the stop. Called by the host while it is mounted. */
 export function followChats(): () => void {
   following?.();
+  // A sent pin's chat stays readable however many other chats there are: how the pin stands is read from it.
+  holdChatViews(() => new Set([...posting, ...state.board.pins.flatMap((pin) => (pin.delivery.kind === 'sent' ? [pin.delivery.chat] : []))]));
   const stop = subscribeAiState(followChatsChange);
   following = stop;
   followChatsChange();
@@ -1094,8 +1040,8 @@ export function followChats(): () => void {
 export function progressOf(pin: CommentPin): PinProgress {
   const delivery = pin.delivery;
   const view = delivery.kind === 'sent' ? aiState().views.get(delivery.chat) : undefined;
-  const held = state.run !== undefined && state.run.held === 'paused' && state.run.pins.includes(pin.id) ? 'paused' : 'running';
-  return pinProgress(pin, view, held);
+  // Taken by a send whose reply has not started: waiting, for the moment that takes.
+  return delivery.kind === 'draft' && state.sending.has(pin.id) ? { kind: 'queued' } : pinProgress(pin, view);
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,8 +1077,7 @@ export function resetPinStore(): void {
   stored = new Set();
   following?.();
   following = undefined;
-  runTranslate = undefined;
-  runSending = false;
+  posting.clear();
   chatsAsked = new Set();
   navigator = undefined;
   mover = undefined;

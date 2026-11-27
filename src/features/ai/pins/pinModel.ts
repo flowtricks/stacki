@@ -36,7 +36,15 @@ import {
 import type { ChatOption, PermissionRequestId, TurnId } from '../../../../shared/properties/ai/chatModel';
 import type { PromptAttachment } from '../../../../shared/ipc/aiChat';
 import type { ChatView, TranscriptItem } from '../chatReducer';
-import { deriveSubagentWork, sessionModelName, type SubagentStatus, type SubagentWork } from '../subagents';
+import {
+  deriveSubagentWork,
+  replyActivity,
+  sessionModelName,
+  type Subagent,
+  type SubagentActivity,
+  type SubagentStatus,
+  type SubagentWork,
+} from '../subagents';
 
 // ---------------------------------------------------------------------------
 // The board
@@ -266,7 +274,7 @@ export type UnfinishedReason = 'failed' | 'stopped' | 'not-started';
 
 export type PinProgress =
   | { readonly kind: 'draft' }
-  /** Not started: waiting for a place in its wave (subagents) or for its turn (one pin per message). */
+  /** Not started yet: its send is on its way, or the reply has not started its subagent. */
   | { readonly kind: 'queued' }
   /** `end` `reply`: the agent runs in the background, so its end shows only when the whole reply ends. */
   | { readonly kind: 'working'; readonly end: 'own' | 'reply' }
@@ -276,8 +284,6 @@ export type PinProgress =
   | { readonly kind: 'attention'; readonly reason: 'question'; readonly question: PinQuestion }
   /** Ended without being done. Nothing waits on the person: the pin can be reopened and sent again. */
   | { readonly kind: 'unfinished'; readonly reason: UnfinishedReason }
-  /** Waiting in a one-pin-per-message run that is held; the pin list continues or ends it. */
-  | { readonly kind: 'held' }
   /** Its agent was started and nothing says how it went (Codex's own subagents). */
   | { readonly kind: 'unreported' }
   /** Sent, but its chat's transcript is not open in this window, so how it stands is not known here. */
@@ -299,22 +305,21 @@ function workOf(view: ChatView): SubagentWork {
 }
 
 /**
- * How a pin stands, read from its chat's transcript (`view`, undefined when not open here). `paused` says a
- * one-pin-per-message run was held after a reply that did not end well.
+ * How a pin stands, read from its chat's transcript (`view`, undefined when not open here).
  *
  * In order: an open question about the pin; a permission card its work waits on; its subagent (the newest titled
  * "Pin <number>", in the send's reply or any later one, since a person can have the agent resume or restart a pin);
  * else the reply it is in: the send's, or the one that answered its question. "Needs you" is only ever one of the
  * first two, so there is always something to answer.
  */
-export function pinProgress(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView | undefined, paused: 'paused' | 'running'): PinProgress {
+export function pinProgress(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView | undefined): PinProgress {
   const delivery = pin.delivery;
   if (delivery.kind === 'draft') {
     return { kind: 'draft' };
   }
   const turn = delivery.turn;
   if (turn === undefined) {
-    return paused === 'paused' ? { kind: 'held' } : { kind: 'queued' };
+    return { kind: 'queued' };
   }
   const span = view === undefined ? undefined : pinSpan(view, turn, pin.number);
   if (view === undefined || span === undefined) {
@@ -351,7 +356,56 @@ export function pinFinished(pin: Pick<CommentPin, 'number' | 'delivery'>, view: 
   if (delivery.kind !== 'sent' || delivery.turn === undefined || view === undefined) {
     return false;
   }
-  return pinProgress(pin, view, 'running').kind === 'done';
+  return pinProgress(pin, view).kind === 'done';
+}
+
+/**
+ * Whether work on the pin is under way: it cannot be sent again until that ends. A pin waiting for a permission is at
+ * work; one that asked a question waits for an answer, and can be reopened instead of answered.
+ */
+export function pinRunning(progress: PinProgress): boolean {
+  return progress.kind === 'queued' || progress.kind === 'working' || (progress.kind === 'attention' && progress.reason === 'permission');
+}
+
+/** The work that is one pin's own, to show live: its subagent, or the reply when the reply works on it alone. */
+export type PinWork =
+  | { readonly kind: 'subagent'; readonly agent: Subagent }
+  /** `startedAt`: when the reply began, undefined when this window did not see it begin. */
+  | { readonly kind: 'reply'; readonly activity: SubagentActivity; readonly startedAt: number | undefined }
+  /** Nothing yet is the pin's own: what the reply does meanwhile is for all its pins, and is shown for none. */
+  | { readonly kind: 'none' };
+
+/**
+ * Which work in `view` is pin `pin`'s. Its subagent, picked as pinProgress picks it. Without one, the reply's own
+ * work counts only when the reply is about this pin alone: one message a pin, a send of one pin whose agent made the
+ * change itself, or the reply that took up an answer to its question. Never another pin's.
+ */
+export function pinWork(pin: Pick<CommentPin, 'number' | 'delivery'>, view: ChatView): PinWork {
+  const delivery = pin.delivery;
+  const turn = delivery.kind === 'sent' ? delivery.turn : undefined;
+  const span = turn === undefined ? undefined : pinSpan(view, turn, pin.number);
+  if (delivery.kind !== 'sent' || turn === undefined || span === undefined) {
+    return { kind: 'none' };
+  }
+  const asked = pinQuestion(view, span, pin.number);
+  const answer = asked.kind === 'answered' ? asked : undefined;
+  const unit = pinUnit(view, span, pin.number);
+  if (unit !== undefined && (answer === undefined || unit.lastIndex > answer.index)) {
+    const agent = workOf(view).units.get(unit.call)?.agent;
+    assert(agent !== undefined, 'pinWork: a pin’s unit is among the chat’s');
+    return { kind: 'subagent', agent };
+  }
+  const sent = view.items.slice(span.from, span.to).flatMap(sentPinsIn);
+  const alone = delivery.mode === 'single' || answer !== undefined || (sent.length === 1 && !hasPinUnits(view, span));
+  if (!alone) {
+    return { kind: 'none' };
+  }
+  const replyTurn = answer?.turn ?? turn;
+  return {
+    kind: 'reply',
+    activity: replyActivity(view, replyTurn),
+    startedAt: view.running === replyTurn ? view.turnStartedAt : undefined,
+  };
 }
 
 /** The call of the subagent working on pin `number` of the send in `turn`, to open its transcript. */
@@ -583,23 +637,6 @@ export function pinsToSend(board: PinBoard): readonly CommentPin[] {
     .sort((left, right) => left.number - right.number);
 }
 
-export type SendRefusal = 'none' | 'too-many-pins' | 'too-many-images';
-
-/** Why the pins cannot go in one message, or undefined when they can: a message holds `pinsPerSendMax` pins and `attachmentsMax` images. */
-export function sendRefusal(pins: readonly Pick<CommentPin, 'images'>[], mode: PinSendMode): SendRefusal | undefined {
-  if (pins.length === 0) {
-    return 'none';
-  }
-  if (mode === 'single') {
-    return undefined; // One message per pin: each pin's images are within `imagesPerPinMax`.
-  }
-  if (pins.length > PIN_LIMITS.pinsPerSendMax) {
-    return 'too-many-pins';
-  }
-  const images = pins.reduce((sum, pin) => sum + pin.images.length, 0);
-  return images > AI_LIMITS.attachmentsMax ? 'too-many-images' : undefined;
-}
-
 /** A model a pin can be sent with: a value and name of the agent's model option. */
 export interface PinModelChoice {
   readonly value: string;
@@ -723,7 +760,7 @@ export function pinMessage(
     let position = 0;
     for (const image of pin.images) {
       const data = imageData(image.id);
-      if (data !== undefined && attachments.length < AI_LIMITS.attachmentsMax) {
+      if (data !== undefined) {
         position += 1;
         indexes.push(attachments.length);
         attachments.push({
@@ -739,6 +776,7 @@ export function pinMessage(
     entries.push({ ...briefEntry(pin, indexes), ...(model === undefined ? {} : { model: model.value, modelName: model.name }) });
   }
   assert(entries.length === pins.length, 'pinMessage: one entry per pin');
+  assert(attachments.length <= PIN_LIMITS.sendImagesMax, 'pinMessage: no picture is left behind');
   const mentions = pinExpandedMentions(pins, AI_LIMITS.mentionsMax);
   return {
     text: summary(pins),

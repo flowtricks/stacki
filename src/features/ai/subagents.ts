@@ -67,6 +67,8 @@ export type SubagentStatus =
 export type SubagentActivity =
   | { readonly kind: 'file'; readonly verb: 'reading' | 'editing'; readonly file: string }
   | { readonly kind: 'command'; readonly command: string }
+  /** A search or a fetch, in a word: its call's title is the search pattern or an address, which says nothing to a designer. */
+  | { readonly kind: 'phase'; readonly phase: 'searching' | 'fetching' }
   | { readonly kind: 'tool'; readonly title: string }
   | { readonly kind: 'thinking' }
   | { readonly kind: 'writing' }
@@ -161,6 +163,25 @@ export function tallyOf(list: SubagentList): SubagentTally {
   };
   assert(Object.values(tally).reduce((sum, value) => sum + value, 0) === list.agents.length + list.omitted, 'tallyOf: every agent is counted once');
   return tally;
+}
+
+/**
+ * What the reply of `turn` itself did last, in the same terms as a subagent's activity: its newest call, thought or
+ * words that belong to no subagent. `starting` while it has done nothing yet.
+ */
+export function replyActivity(view: ChatView, turn: TurnId): SubagentActivity {
+  for (let index = view.items.length - 1; index >= 0; index -= 1) {
+    const item = view.items[index];
+    if (item?.kind === 'user' && item.turn === turn) {
+      break; // Back at what was asked: nothing done since.
+    }
+    if ((item?.kind === 'tool' || item?.kind === 'text') && item.turn === turn && item.parent === undefined) {
+      if (item.kind === 'text' || !isUnitCall(item)) {
+        return activityOf(item);
+      }
+    }
+  }
+  return { kind: 'starting' };
 }
 
 /** Claude nests its subagent calls under `Task` (or `Agent`); Codex titles them "Start subagent …" (the reducer's rule). */
@@ -695,6 +716,9 @@ function toolActivity(item: ToolItem): SubagentActivity {
     if (command !== '') {
       return { kind: 'command', command: command.slice(0, ACTIVITY_COMMAND_CHARS_MAX) };
     }
+  }
+  if (item.toolKind === 'search' || item.toolKind === 'fetch') {
+    return { kind: 'phase', phase: item.toolKind === 'search' ? 'searching' : 'fetching' };
   }
   return { kind: 'tool', title: (item.title.split('\n')[0] ?? item.title).trim() };
 }
