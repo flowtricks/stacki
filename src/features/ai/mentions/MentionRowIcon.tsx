@@ -6,13 +6,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { sourceCandidates } from '../../../ui/AssetThumb';
 import { useThumbnail } from '../../../ui/assetThumbnails';
-import { AssetManagerIcon, LayoutIcon, PagePanelIcon, PlayIcon, TextIcon } from '../../../ui/Icons';
-import { CHIP_STYLE_ICONS, type RowLook } from './mentionChips';
+import { FileTypeIcon } from '../../../ui/ElementIcons';
+import { AssetManagerIcon, LayoutIcon, PagePanelIcon } from '../../../ui/Icons';
+import type { MentionChip } from '../../../../shared/properties/ai/mentions';
+import { CHIP_STYLE_ICONS, chipFilePath, chipStyleOf, type RowLook } from './mentionChips';
 import './mentions.css';
 
 const ICON_PX = 16;
 
-export function MentionRowIcon({ look }: { readonly look: RowLook }) {
+/** A chip's own icon: a whole file wears its type's, anything else its look's (mentionChips.ts). */
+export function ChipIcon({ chip, size }: { readonly chip: MentionChip; readonly size: number }) {
+  const path = chipFilePath(chip);
+  if (path !== undefined) {
+    return <FileTypeIcon name={path} size={size} />;
+  }
+  const Icon = CHIP_STYLE_ICONS[chipStyleOf(chip)];
+  return <Icon size={size} />;
+}
+
+export function MentionRowIcon({ look, chip }: { readonly look: RowLook; readonly chip: MentionChip }) {
   switch (look.kind) {
     case 'page':
       return <PagePanelIcon size={ICON_PX} />;
@@ -23,9 +35,8 @@ export function MentionRowIcon({ look }: { readonly look: RowLook }) {
       return <Icon size={ICON_PX} />;
     }
     case 'video':
-      return <PlayIcon size={ICON_PX} />;
     case 'font':
-      return <TextIcon size={ICON_PX} />;
+      return <ChipIcon chip={chip} size={ICON_PX} />;
     case 'variable':
       return look.color === undefined ? (
         <VariableSwatchesIcon />

@@ -60,7 +60,8 @@ import {
 } from '../mentions/componentMentions';
 import { MENTION_TABS, mentionRows, readMentionIndex, refreshMentionIndex, relatedItems, type MentionTab } from '../mentions/projectMentions';
 import { RelatedCssPopover } from '../mentions/RelatedCssPopover';
-import { MentionRowIcon } from '../mentions/MentionRowIcon';
+import { ChipIcon, MentionRowIcon } from '../mentions/MentionRowIcon';
+import { fileLookOf } from '../../../ui/ElementIcons';
 import { useChipCard, type ChipCard } from '../mentions/useChipCard';
 import type { ChipSubject } from '../mentions/ChipValue';
 import { chipReadableText } from '../../../../shared/properties/ai/sentMessage';
@@ -71,8 +72,7 @@ import {
   chipsEqual,
   chipLook,
   chipStyleOf,
-  CHIP_STYLE_ICONS,
-  type ChipStyle,
+  chipFilePath,
   hostChipCountOf,
   isFileDrag,
   segmentsEqual,
@@ -156,22 +156,19 @@ const MENTION_TAB_LABELS = {
 // Marks a transaction that applies a draft the caller already holds: it is not reported back, and not undoable.
 const externalDraft = Annotation.define<boolean>();
 
-const iconMarkup = new Map<ChipStyle, string>();
+const iconMarkup = new Map<string, string>();
 
-/** The icon of a chip's look (mentionChips.ts, CHIP_STYLE_ICONS), at the size the pill (12) or the picker (16) draws it. */
-function chipStyleIcon(style: ChipStyle, size: number) {
-  const Icon = CHIP_STYLE_ICONS[style];
-  return <Icon size={size} />;
-}
-
-/** The 12px icon of a chip's look as static markup, drawn once per look. */
-function chipIconMarkup(style: ChipStyle): string {
-  const cached = iconMarkup.get(style);
+/** The 12px icon of a chip (MentionRowIcon.tsx, ChipIcon) as static markup, drawn once per look or file type. */
+function chipIconMarkup(chip: MentionChip): string {
+  const path = chipFilePath(chip);
+  // Files of one type share a drawing, so the cache stays as small as the two tables behind it.
+  const key = path === undefined ? chipStyleOf(chip) : `file:${fileLookOf(path).glyph}:${fileLookOf(path).hue ?? ''}`;
+  const cached = iconMarkup.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const markup = renderToStaticMarkup(chipStyleIcon(style, 12));
-  iconMarkup.set(style, markup);
+  const markup = renderToStaticMarkup(<ChipIcon chip={chip} size={12} />);
+  iconMarkup.set(key, markup);
   return markup;
 }
 
@@ -290,7 +287,7 @@ export function ComposerInput(props: ComposerInputProps) {
         // A prop, value or slot chip means nothing without its component: deleting the component chip deletes them too.
         orphans: orphanMembers,
         decorate: (chip, element) => {
-          element.insertAdjacentHTML('beforeend', chipIconMarkup(chipStyleOf(chip)));
+          element.insertAdjacentHTML('beforeend', chipIconMarkup(chip));
           chipCardEvents(
             element,
             chip,
@@ -903,7 +900,7 @@ function pickerCandidate(row: PickerRow) {
     id: row.id,
     label: row.label,
     group: row.group,
-    icon: row.look === undefined ? chipStyleIcon(chipStyleOf(row.chip), 16) : <MentionRowIcon look={row.look} />,
+    icon: row.look === undefined ? <ChipIcon chip={row.chip} size={16} /> : <MentionRowIcon look={row.look} chip={row.chip} />,
     ...(row.description === undefined ? {} : { description: row.description }),
   };
 }

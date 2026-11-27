@@ -10,7 +10,7 @@
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { BracesIcon, ChevronRightIcon, CloseIcon, CmsIcon, FileIcon, PlusIcon } from '../../ui/Icons';
+import { BracesIcon, ChevronRightIcon, CloseIcon, CmsIcon, PlusIcon } from '../../ui/Icons';
 import { cleanError } from '../../lib/cleanError';
 import { assert } from '../../../shared/core/assert';
 import {
@@ -34,6 +34,7 @@ import type { Described } from '../../../shared/properties/i18n/messageRef';
 import InfoHint from '../../ui/InfoHint';
 import { FolderTitle } from './FolderSettings';
 import { dataFileExports, type DataFileExport } from '../../features/props/projectDataSources';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 /** What the CMS reads now: the content config's collections and the data files the panel found. */
 type Sources =
@@ -280,7 +281,7 @@ export function PickerSources(props: {
               <PickerToggle
                 key={file}
                 text={file}
-                icon={<FileIcon size={14} />}
+                icon={<FileTypeIcon name={file} />}
                 shown={fileShown}
                 busy={props.busy}
                 onToggle={() => toggle({ kind: 'file', file }, { shown: fileShown })}
@@ -342,7 +343,7 @@ function PickerFileGroup(props: {
         <button type="button" className="app-folder-group-disclosure" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
           <ChevronRightIcon size={12} />
           <span className="app-folder-row-icon">
-            <FileIcon size={14} />
+            <FileTypeIcon name={props.file} />
           </span>
           <CodeInline text={props.file} />
           <span className="app-folder-group-summary">{translate('settings.roles.summary.ofTotal', { count: shownCount, total: props.names.length })}</span>

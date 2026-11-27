@@ -19,7 +19,7 @@ import { CHIP_PICKER_ROWS_MAX, ChipPicker, chipPickerOptionId } from '../../../v
 import { createChipEditor } from '../../../vendor/stacki/src/ui/chipEditor/chipEditor';
 import { CHIP_CHARACTER } from '../../../vendor/stacki/src/ui/chipEditor/chipModel';
 import { chipTrigger, pickerKeymap, type ActiveTrigger, type PickerKey } from '../../../vendor/stacki/src/ui/chipEditor/chipTrigger';
-import { FileIcon } from '../../../vendor/stacki/src/ui/Icons';
+import { FileTypeIcon } from '../../../vendor/stacki/src/ui/ElementIcons';
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { baseName, chipCountOf, fileChip, matchFiles, sameDraft } from './mentionFiles';
 import '../../../vendor/stacki/src/features/ai/mentions/mentions.css';
@@ -41,7 +41,6 @@ export interface PromptInputProps {
 
 // Marks a transaction that applies a draft the caller already holds: it is not reported back, and not undoable.
 const externalDraft = Annotation.define<boolean>();
-const FILE_ICON_MARKUP = renderToStaticMarkup(<FileIcon size={12} />);
 
 const promptTheme = EditorView.theme({
   '&': { backgroundColor: 'transparent', color: 'var(--text)', fontSize: '12.5px', maxHeight: '200px' },
@@ -77,7 +76,8 @@ export function PromptInput(props: PromptInputProps) {
     () =>
       createChipEditor<MentionChip>({
         describe: (chip) => (chip.kind === 'file' ? { label: chip.name, title: chip.path, kind: 'file' } : { label: chip.kind, kind: chip.kind }),
-        decorate: (_chip, element) => element.insertAdjacentHTML('beforeend', FILE_ICON_MARKUP),
+        decorate: (chip, element) =>
+          element.insertAdjacentHTML('beforeend', renderToStaticMarkup(<FileTypeIcon name={chip.kind === 'file' ? chip.path : ''} size={12} />)),
         onChipClick: (_chip, element) => {
           // A file chip has nothing to open here; a click puts the caret after it, as a click on text would.
           const view = viewRef.current;
@@ -257,7 +257,7 @@ export function PromptInput(props: PromptInputProps) {
         <ChipPicker
           open
           anchor={trigger.anchor}
-          candidates={rows.map((path) => ({ id: path, label: baseName(path), description: path, icon: <FileIcon size={14} /> }))}
+          candidates={rows.map((path) => ({ id: path, label: baseName(path), description: path, icon: <FileTypeIcon name={path} /> }))}
           activeIndex={active}
           label={translate('ai.studio.mentionLabel')}
           listId={listId}

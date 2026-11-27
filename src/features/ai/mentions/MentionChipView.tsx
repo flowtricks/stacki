@@ -15,7 +15,8 @@ import { chipReadableText } from '../../../../shared/properties/ai/sentMessage';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import '../../../ui/chipEditor/chipEditor.css';
 import { COPIED_LABEL_MS, copyBuiltinChip } from './builtinChips';
-import { CHIP_STYLE_ICONS, chipLook, chipStyleOf } from './mentionChips';
+import { chipLook } from './mentionChips';
+import { ChipIcon } from './MentionRowIcon';
 import { useChipCard } from './useChipCard';
 import './mentions.css';
 
@@ -35,7 +36,6 @@ export function MentionChipView({ chip, onClick, excerpt, focus = 'stop' }: Ment
   useEffect(() => () => clearTimeout(timer.current), []);
   const card = useChipCard();
   const look = chipLook(chip, translate);
-  const Icon = CHIP_STYLE_ICONS[chipStyleOf(chip)];
   const copy = (): void => {
     if (chip.kind !== 'builtin') {
       return;
@@ -68,7 +68,7 @@ export function MentionChipView({ chip, onClick, excerpt, focus = 'stop' }: Ment
   };
   const content = (
     <>
-      <Icon size={12} />
+      <ChipIcon chip={chip} size={12} />
       <span className="chip-editor-chip-label" aria-live="polite">
         {copied ? translate('ai.common.copied') : look.label}
       </span>

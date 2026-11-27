@@ -133,6 +133,23 @@ export function chipStyleOf(chip: MentionChip): ChipStyle {
   return chip.kind;
 }
 
+/**
+ * The file a chip stands for, so it wears that file's type icon (ui/ElementIcons.tsx) wherever it is drawn; undefined
+ * for a chip that is not a whole file: those take their look's icon above.
+ */
+export function chipFilePath(chip: MentionChip): string | undefined {
+  if (chip.kind === 'file') {
+    return chip.path;
+  }
+  if (chip.kind === 'asset') {
+    return chip.path;
+  }
+  if (chip.kind === 'page') {
+    return chip.role === 'file' ? chip.path : undefined;
+  }
+  return undefined;
+}
+
 /** "L116–124" or "L12": the lines of a code chip, as the Code panel's badge writes them. */
 export function codeLinesLabel(chip: Pick<CodeChip, 'startLine' | 'endLine'>): string {
   return chip.startLine === chip.endLine ? `L${chip.startLine}` : `L${chip.startLine}–${chip.endLine}`;
