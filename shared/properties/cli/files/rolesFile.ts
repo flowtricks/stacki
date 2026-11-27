@@ -9,6 +9,7 @@ import { arrayOf, bool, field, literal, mapOf, objectOf, oneOf, text, type FileS
 const APP_ID = '^[a-z0-9][a-z0-9._-]*$';
 const PERMISSION_ID = '^[a-z][a-z0-9-]*$';
 const LOGIN = '^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9]))*$';
+const EDITOR_OPTION = 'An editing option name (a value in editorOff), not a file key.';
 
 // `settings:roles` and `cli:roles` are in ACCESS_FEATURES for callers that ask about it, but the parser refuses it as a grant: only admin edits roles.
 const grantableFeatures = ACCESS_FEATURES.filter((feature) => feature !== 'settings:roles' && feature !== 'cli:roles');
@@ -120,4 +121,11 @@ export const ROLES_FILE: FileSchema = {
     'roles components show',
   ],
   parserSources: ['shared/properties/projectRoles.ts', 'shared/properties/componentAccess.ts'],
+  parserKeyExceptions: {
+    sidePanel: EDITOR_OPTION,
+    navigator: EDITOR_OPTION,
+    text: EDITOR_OPTION,
+    images: EDITOR_OPTION,
+    elements: EDITOR_OPTION,
+  },
 };
