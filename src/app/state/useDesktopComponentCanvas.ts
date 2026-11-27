@@ -17,11 +17,14 @@ import {
   withFrameEdit,
   canvasRoot,
   PROJECT_ROOT,
+  rootOverrides,
   withRootEdit,
   type RootTarget,
   withSplit,
-  withArrangement,
-  arrangementOf,
+  withLevelArrangement,
+  levelArrangement,
+  type CanvasArrangement,
+  CANVAS_LEVEL,
   CANVAS_LIMITS,
   keyPairs,
   resolveFrame,
@@ -41,7 +44,7 @@ import { createDefaultsCanvas, onMetadataWrite, readMetadata, removeDefaultsCanv
 import { assetFileExists, defaultsSnapshot, missingAssetFiles, relativeComponentPath } from '../../features/componentDefaults/defaultsHost';
 import { onAssetEntriesChanged } from '../../ipc/assetBridge';
 import { buildCanvasLayout, type CanvasComponent } from '../../features/preview/componentCanvas/canvasModel';
-import { groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
+import { canvasLevels, groupFrames, type CanvasTreeItem } from '../../features/preview/componentCanvas/canvasGroups';
 import { canvasPageSource, canvasTreeOf, frameDefaults, type CanvasPageItem, type CanvasTree } from '../../features/preview/componentCanvas/canvasPage';
 import { CANVAS_MESSAGE, canvasMessage } from '../../features/preview/componentCanvas/canvasChrome';
 import { frameLabel, prettyComponentName } from '../../features/preview/componentCanvas/frameLabel';
@@ -247,6 +250,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
     [app, saveSettings, translate],
   );
   const update = useCallback((change: (current: CanvasOpen) => CanvasChange | undefined): void => updatePaced('settled', change), [updatePaced]);
+  const tellOverridden = useCallback((setting: 'background' | 'classes') => sayOverridden(stateRef.current, setting, { app, translate }), [app, translate]);
 
   const catalog = useRef<readonly DefaultComponent[]>([]);
   catalog.current = useMemo(() => catalogOf(project, app.scan), [project, app.scan]);
@@ -285,10 +289,17 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
       setScope: (section, scope) => {
         const current = stateRef.current;
         if (current.kind === 'open' && scopeFits(section, scope, current)) {
-          setState({ ...current, scopes: { ...current.scopes, [section]: scope } });
+          // A root scope picked here is the person's choice: it holds until the canvas is closed.
+          const rootScope = scope === PROJECT_SCOPE || scope === COMPONENT_SCOPE ? scope : current.rootScope;
+          setState({ ...current, rootScope, scopes: { ...current.scopes, [section]: scope } });
         }
       },
-      edit: (edit: FrameEdit) => update((current) => frameSettingChange(current, edit)),
+      edit: (edit: FrameEdit) => {
+        update((current) => frameSettingChange(current, edit));
+        if (edit.kind === 'background') {
+          tellOverridden('background');
+        }
+      },
       resetOverrides: (section, setting) =>
         update((current) => {
           const scope = current.scopes[section];
@@ -314,21 +325,16 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
           postToCanvas(current.id, { command: 'targets', frames: frames ?? [] });
         }
       },
-      editRootClasses: (classes) =>
-        update((current) => {
-          const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: current.component.file };
-          return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
-        }),
+      editRootClasses: (classes) => {
+        update((current) => rootClassesChange(current, classes));
+        tellOverridden('classes');
+      },
       setSplit: (split) =>
         update((current) => {
           const component = current.component.file;
           return (file) => withSplit(file, component, split);
         }),
-      setArrangement: (arrange) =>
-        update((current) => {
-          const component = current.component.file;
-          return (file) => withArrangement(file, component, arrange);
-        }),
+      setArrangement: (level, arrange) => update((current) => arrangementChange(current, level, arrange)),
       coverRight,
       showFramePanel: () => {
         const current = stateRef.current;
@@ -358,7 +364,7 @@ export function useDesktopComponentCanvas(app: ShellView): ComponentCanvasContro
         }
       },
     }),
-    [app.project.path, coverRight, finish, open, state, update, updatePaced],
+    [app.project.path, coverRight, finish, open, state, tellOverridden, update, updatePaced],
   );
 }
 
@@ -390,6 +396,34 @@ export function frameSettingChange(current: CanvasOpen, edit: FrameEdit): Canvas
   return edit.kind === 'field' ? (file) => withFrameEdit(file, component, current.scopes.size, edit) : undefined;
 }
 
+/** What the canvas root's class field writes, at the root scope chosen. Exported for its regression test. */
+export function rootClassesChange(current: CanvasOpen, classes: readonly string[] | undefined): CanvasChange {
+  const component = current.component.file;
+  const target = rootTarget(current.scopes.background, current) ?? { kind: 'component' as const, file: component };
+  return (file) => withRootEdit(file, target, { kind: 'classes', value: classes });
+}
+
+/** What a level's Layout control writes, always this component's own. Exported for its regression test. */
+export function arrangementChange(current: CanvasOpen, level: string, arrange: CanvasArrangement | undefined): CanvasChange {
+  const component = current.component.file;
+  const levels = canvasLevels(groupFrames(current.layout.frames), current.layout.frames);
+  return (file) => withLevelArrangement(file, component, level, arrange, levels);
+}
+
+// An All components edit leaves this component's own value in place, so nothing changes in front of the person: say why.
+function sayOverridden(
+  current: CanvasState,
+  setting: 'background' | 'classes',
+  context: { readonly app: Pick<ShellView, 'showToast'>; readonly translate: Translator },
+): void {
+  if (current.kind !== 'open' || current.subject !== 'root' || current.scopes.background !== PROJECT_SCOPE) {
+    return;
+  }
+  if (rootOverrides(current.settings, current.component.file, setting)) {
+    context.app.showToast(context.translate('componentCanvas.panel.overriddenHere'), 'info');
+  }
+}
+
 /** Preview values from the Settings panel, written at `scope` only: narrower values survive, as for sizes. Exported for its test. */
 export function valuesChange(current: CanvasOpen, scope: string, edits: readonly FrameEdit[]): CanvasChange {
   assert(edits.length <= LIMITS.attrsPerNodeMax, 'One write holds a bounded number of values');
@@ -397,8 +431,8 @@ export function valuesChange(current: CanvasOpen, scope: string, edits: readonly
   return (file) => edits.reduce((next, edit) => withFrameEdit(next, component, scope, edit), file);
 }
 
-// The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit.
-function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
+/** The open canvas over new settings: its frames rebuilt, the selection and scopes kept where they still fit. Exported for its test. */
+export function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): CanvasOpen {
   const layout = buildCanvasLayout(current.component, settings.components[current.component.file]);
   const frame = layout.frames.some((candidate) => candidate.key === current.frame) ? current.frame : (layout.frames[0]?.key ?? '');
   return { ...current, settings, layout, frame, scopes: keptScopes(current, frame, layout) };
@@ -408,7 +442,7 @@ function withSettings(current: CanvasOpen, settings: ComponentCanvasFile): Canva
 function keptScopes(current: CanvasOpen, frame: string, layout: CanvasOpen['layout']): CanvasOpen['scopes'] {
   const next = { ...current, frame, layout };
   const keep = (section: CanvasSection, fallback: string): string => (scopeFits(section, current.scopes[section], next) ? current.scopes[section] : fallback);
-  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? PROJECT_SCOPE : frame) };
+  return { props: keep('props', frame), size: keep('size', ''), background: keep('background', current.subject === 'root' ? current.rootScope : frame) };
 }
 
 // A resize let go of, as one change: each side it changed is written where a typed size goes (the size target), or,
@@ -553,6 +587,7 @@ async function openCanvas(
         layout,
         frame: first.key,
         scopes: { props: first.key, size: '', background: first.key },
+        rootScope: COMPONENT_SCOPE,
         scale: 1,
         framePanel: rememberedFramePanel(),
         defaults: frameDefaults(snapshot, file, prettyComponentName(component.name)),
@@ -576,6 +611,10 @@ async function openCanvas(
 function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | 'settings'>, snapshot: DefaultsSnapshot, translate: Translator): string {
   const { id, component, layout } = canvas;
   const root = canvasRoot(canvas.settings, component.file);
+  const tree = groupFrames(layout.frames);
+  const levels = canvasLevels(tree, layout.frames);
+  const own = canvas.settings.components[component.file];
+  const arranged = (level: string): CanvasArrangement => levelArrangement(own, level, levels).value;
   return canvasPageSource({
     id,
     component: component.file,
@@ -584,8 +623,8 @@ function pageSourceOf(canvas: Pick<CanvasOpen, 'id' | 'component' | 'layout' | '
     surface: root.background,
     rootClasses: root.classes,
     snapshot,
-    groups: pageItems(groupFrames(layout.frames), component, translate),
-    arrange: arrangementOf(canvas.settings.components[component.file]),
+    groups: pageItems(tree, { component, translate, arranged }),
+    arrange: arranged(CANVAS_LEVEL),
     frames: layout.frames.map((frame) => ({
       key: frame.key,
       label: frameLabel(frame, component, translate),
@@ -611,9 +650,14 @@ async function withMissingAssets(project: string, snapshot: DefaultsSnapshot, se
   return { ...snapshot, missingAssets: [...new Set(missing)] };
 }
 
-// The frames' boxes with their headers and captions in words.
-function pageItems(items: readonly CanvasTreeItem[], component: CanvasComponent, translate: Translator, depth = 0): readonly CanvasPageItem[] {
+// The frames' boxes with their headers and captions in words, each group with its own layout.
+function pageItems(
+  items: readonly CanvasTreeItem[],
+  words: { readonly component: CanvasComponent; readonly translate: Translator; readonly arranged: (level: string) => CanvasArrangement },
+  depth = 0,
+): readonly CanvasPageItem[] {
   assert(depth <= CANVAS_LIMITS.splitPropsMax, 'Boxes nest no deeper than the split');
+  const { component, translate, arranged } = words;
   return items.map((item) =>
     item.kind === 'frame'
       ? { kind: 'frame', key: item.key, caption: frameLabel({ parts: item.caption }, component, translate) }
@@ -621,7 +665,8 @@ function pageItems(items: readonly CanvasTreeItem[], component: CanvasComponent,
           kind: 'group',
           key: item.key,
           header: frameLabel({ parts: item.header }, component, translate),
-          children: pageItems(item.children, component, translate, depth + 1),
+          arrange: arranged(item.key),
+          children: pageItems(item.children, words, depth + 1),
         },
   );
 }
@@ -1099,8 +1144,8 @@ function followedState(current: CanvasState, followed: string, where: 'page' | '
   }
   if (isCanvasRoot(followed)) {
     // The canvas itself: Frame settings and the Settings panel speak of its root, at a root scope.
-    // Its settings start at every component's canvas, where a theme class or a canvas colour usually belongs.
-    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: PROJECT_SCOPE } };
+    // Its settings start at this component's canvas; every component's is only ever the person's own choice.
+    return current.subject === 'root' ? current : { ...current, subject: 'root', scopes: { ...current.scopes, background: current.rootScope } };
   }
   const box = canvasBoxOf(followed);
   if (box !== undefined) {

@@ -1,7 +1,8 @@
 // The selected frame's settings, in a popover over the canvas's right edge: the frame's size and background. It is
-// always there while a canvas is open, so it can never be lost: its header's button and Escape minimize it to the
-// header alone, and the same button expands it again. It never closes on a press outside, since the canvas is where
-// the next frame is picked. Its header moves it (useFloatingDrag), kept inside the window.
+// always there while a canvas is open, so it can never be lost: a press on its header, and Escape, minimize it to the
+// header alone, and the header expands it again. It never closes on a press outside, since the canvas is where the next
+// frame is picked. The whole header is one button, and dragging it moves the popover (useFloatingDrag), kept inside the
+// window; a drag never toggles.
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import Popup from '../../../ui/Popup';
@@ -53,19 +54,23 @@ export function ComponentCanvasFramePopup({ canvas, state }: { readonly canvas: 
         marginTop: drag.offset.y,
       }}
     >
-      <div className="component-canvas-popup-head" {...{ [FLOATING_DRAG_HANDLE_ATTRIBUTE]: '' }}>
+      <button
+        type="button"
+        className="component-canvas-popup-head"
+        aria-label={toggle}
+        aria-expanded={shown}
+        onClick={(event) => {
+          if (!drag.endedDrag(event)) {
+            (shown ? canvas.hideFramePanel : canvas.showFramePanel)();
+          }
+        }}
+        {...{ [FLOATING_DRAG_HANDLE_ATTRIBUTE]: '' }}
+      >
         <span className="component-canvas-popup-title">{label}</span>
-        <button
-          type="button"
-          className="ghost component-canvas-popup-toggle"
-          aria-label={toggle}
-          aria-expanded={shown}
-          title={toggle}
-          onClick={shown ? canvas.hideFramePanel : canvas.showFramePanel}
-        >
+        <span className="component-canvas-popup-chevron">
           <ChevronDownIcon size={14} />
-        </button>
-      </div>
+        </span>
+      </button>
       {shown && <ComponentCanvasPanel canvas={canvas} state={state} />}
     </Popup>
   );

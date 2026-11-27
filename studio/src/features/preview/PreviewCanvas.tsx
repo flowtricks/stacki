@@ -18,6 +18,7 @@ import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/Pre
 import { StudioAppOverlays } from '../apps/StudioApps';
 import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
 import { useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
+import { studioGuideSubject } from '../../../vendor/stacki/src/features/preview/guideSubject';
 import { outlineInfo, outlineNode } from './outlineInfo';
 import { useMemo, useRef, type CSSProperties } from 'react';
 import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
@@ -84,6 +85,7 @@ export function PreviewCanvas(props: Props) {
     metrics: props.preview.guide,
     available: props.device !== 'canvas' && !props.collection,
     frame: { post: props.preview.send, subscribeLoad: props.preview.subscribeLoad },
+    subject: studioGuideSubject(props.file),
   });
   return (
     <main className="studio-center" data-canvas-interactive={interaction.active}>

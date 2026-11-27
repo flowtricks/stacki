@@ -43,6 +43,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Uno al lado del otro',
   'componentCanvas.panel.layout.wrap': 'Ajustar en filas',
   'componentCanvas.panel.mixed': 'Mixto',
+  'componentCanvas.panel.overriddenHere': 'Este componente tiene su propio valor, así que este cambio no se ve aquí.',
   'componentCanvas.panel.pixels': '{side} en píxeles',
   'componentCanvas.panel.root.about': 'El lienzo situado detrás de todos los marcos: el elemento html de la página. Sus clases están en el panel de ajustes.',
   'componentCanvas.panel.root.title': 'Lienzo',

@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'अगल-बगल',
   'componentCanvas.panel.layout.wrap': 'रैप',
   'componentCanvas.panel.mixed': 'मिश्रित',
+  'componentCanvas.panel.overriddenHere': 'इस कंपोनेंट का अपना मान है, इसलिए यह बदलाव यहाँ नहीं दिखता।',
   'componentCanvas.panel.pixels': '{side} पिक्सेल में',
   'componentCanvas.panel.root.about': 'हर फ़्रेम के पीछे का कैनवास: पेज का html एलिमेंट। इसकी क्लास सेटिंग पैनल में हैं।',
   'componentCanvas.panel.root.title': 'कैनवास',

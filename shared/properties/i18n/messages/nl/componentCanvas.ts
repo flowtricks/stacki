@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Naast elkaar',
   'componentCanvas.panel.layout.wrap': 'Omslaan',
   'componentCanvas.panel.mixed': 'Gemengd',
+  'componentCanvas.panel.overriddenHere': 'Dit component heeft een eigen waarde, dus deze wijziging is hier niet te zien.',
   'componentCanvas.panel.pixels': '{side} in pixels', // same
   'componentCanvas.panel.root.about': 'Het canvas achter alle frames: het html-element van de pagina. De klassen ervan staan in het paneel Instellingen.',
   'componentCanvas.panel.root.title': 'Canvas', // same

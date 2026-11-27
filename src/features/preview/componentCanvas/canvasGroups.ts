@@ -4,7 +4,7 @@
 // captioned with what the boxes around it do not already say. Frames keep the order the split makes them in (each
 // prop's values in the order the component lists them). Pure; the canvas page and the Navigator both draw this tree.
 import { assert } from '../../../../shared/core/assert';
-import { CANVAS_LIMITS, frameKey, type CanvasFrame, type FramePart } from '../../../../shared/properties/componentCanvas';
+import { CANVAS_LIMITS, frameKey, type CanvasFrame, type CanvasLevels, type FramePart } from '../../../../shared/properties/componentCanvas';
 
 export interface CanvasFrameLeaf {
   readonly kind: 'frame';
@@ -31,6 +31,24 @@ export function groupFrames(frames: readonly Grouped[]): readonly CanvasTreeItem
   const tree = level(frames, 0);
   assert(leafCount(tree) === frames.length, 'Every frame is in the tree once');
   return tree;
+}
+
+/** The levels a canvas can lay out (componentCanvas.ts CanvasLevels): its groups, and whether its top level goes down. */
+export function canvasLevels(items: readonly CanvasTreeItem[], frames: readonly { readonly row: number }[]): CanvasLevels {
+  const groups: string[] = [];
+  const pending = [...items];
+  for (let visited = 0; visited < CANVAS_LIMITS.framesMax * (CANVAS_LIMITS.splitPropsMax + 1); visited++) {
+    const next = pending.pop();
+    if (next === undefined) {
+      break;
+    }
+    if (next.kind === 'group') {
+      groups.push(next.key);
+      pending.push(...next.children);
+    }
+  }
+  assert(pending.length === 0, 'Every level is counted');
+  return { groups, stacked: items.some((entry) => entry.kind === 'group') || frames.some((frame) => frame.row > 0) };
 }
 
 // The items of one level: the frames that share the part at `depth`, grouped. The depth is bounded by the split.

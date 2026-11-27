@@ -49,6 +49,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'В ряд',
   'componentCanvas.panel.layout.wrap': 'С переносом',
   'componentCanvas.panel.mixed': 'Разные',
+  'componentCanvas.panel.overriddenHere': 'У этого компонента своё значение, поэтому здесь это изменение не видно.',
   'componentCanvas.panel.pixels': '{side} в пикселях',
   'componentCanvas.panel.root.about': 'Холст позади всех фреймов: элемент html страницы. Его классы находятся на панели настроек.',
   'componentCanvas.panel.root.title': 'Холст',

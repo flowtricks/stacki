@@ -81,6 +81,7 @@ import {
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
+import { desktopGuideSubject } from '../../features/preview/guideSubject';
 import { CanvasSectionHeading } from '../../features/preview/componentCanvas/CanvasScopeControl';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';
@@ -108,9 +109,11 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   const pinPaths = pins.trackPaths;
   const trackPaths = useMemo(() => [...appOverlayPaths, ...pinPaths, ...(dropKey === '' ? [] : dropKey.split('\n'))], [appOverlayPaths, pinPaths, dropKey]);
   const appOverlays = appOverlayLayer(app);
+  const guideSubject = useGuideSubject(app);
   return (
     <>
       <PreviewPane
+        guideSubject={guideSubject}
         extraTrackPaths={trackPaths}
         overlayLayer={(frame) => (
           <>
@@ -175,6 +178,15 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
       {pins.bar}
     </>
   );
+}
+
+function useGuideSubject(app: ShellView) {
+  const componentCanvas = useComponentCanvas();
+  return desktopGuideSubject({
+    openFile: app.currentPage,
+    componentCanvas: componentCanvas?.state.kind,
+    defaultsCanvas: app.defaultsCanvas.state.kind === 'idle' ? 'idle' : 'shown',
+  });
 }
 
 // The image popup's fields: the Properties panel's own editors for the selected node, only the ones named.
@@ -788,8 +800,8 @@ function settingsOf(app: ShellView, translate: Translator, canvasInstance: Canva
       // No class attribute where no class is set: an empty one would mark the label set (blue) with nothing in it.
       node: {
         ...node,
-        props: canvasInstance.classes.length === 0 ? {} : { class: { type: 'string' as const, value: canvasInstance.classes.join(' ') } },
-        attrOrder: canvasInstance.classes.length === 0 ? [] : ['class'],
+        props: canvasInstance.value === undefined ? {} : { class: { type: 'string' as const, value: canvasInstance.value } },
+        attrOrder: canvasInstance.value === undefined ? [] : ['class'],
         children: [],
       },
       // The page's own <html>, never a layout: no layout picker, no tag.

@@ -256,6 +256,13 @@ test('the surface is the canvas setting, else the site page’s own; frames are 
     'a canvas background setting marks the root',
   );
   assert.doesNotMatch(pageOf(layout), /\} data-stacki-surface>/);
+  // Transparent paints nothing of its own: the site page's themed background shows, as with no setting.
+  assert.doesNotMatch(pageOf(layout, { surface: 'transparent' }), /\} data-stacki-surface>|\[data-stacki-surface\] \{ background/);
+  // A theme change edits <html> alone, so the script watches it and paints the page's background again.
+  assert.match(
+    chrome.chromeScript(ID),
+    /\.observe\(root, \{ attributes: true, attributeFilter: \['class', 'data-theme', 'data-stacki-surface', 'data-stacki-arrange'\] \}\)/,
+  );
   const themed = chrome.chromeStyles('dark', 'var(--background)');
   assert.match(themed, /\[data-stacki-surface\] \{ background: var\(--background, #1e1e1e\) !important; \}/, 'a variable the project drops draws the grey');
   assert.match(chrome.chromeStyles('dark', '#fff'), /background: #fff !important;/);
@@ -569,26 +576,36 @@ test('the page draws its boxes as real elements the editor selects, names each b
   session.noteComponentCanvas({ kind: 'idle' });
 });
 
-test('the page is laid out as the component’s arrangement says, and nothing is written for side by side', () => {
+test('each level is laid out on its own element, so none reaches another’s', () => {
   const layout = model.buildCanvasLayout(button, { split: ['variant'] });
-  // On the root, whose attributes the editor's in-place update carries over (it leaves the <body>'s).
+  // The canvas's own on the root, whose attributes the editor's in-place update carries over (it leaves the <body>'s).
   assert.doesNotMatch(pageOf(layout), /<html [^>]*data-stacki-arrange/, 'a canvas nobody arranged is drawn as before');
   assert.doesNotMatch(pageOf(layout, { arrange: 'row' }), /<html [^>]*data-stacki-arrange/);
   assert.match(pageOf(layout, { arrange: 'column' }), /<html [^>]*data-stacki-arrange="column">/);
   assert.match(pageOf(layout, { arrange: 'wrap' }), /<html [^>]*data-stacki-arrange="wrap">/);
   assert.equal(parsePage(pageOf(layout, { arrange: 'wrap' })).editable, true, 'the page still parses');
   assert.throws(() => pageOf(layout, { arrange: 'grid' }), /Assertion failed/);
+  // Grouped, the page goes down by itself: across is the choice it writes. A group carries its own on its element.
+  const [first, second] = layout.frames.map((frame) => frame.key);
+  const frames = [first, second].map((key) => ({ kind: 'frame', key, caption: key }));
+  const rest = layout.frames.slice(2).map((frame) => ({ kind: 'frame', key: frame.key, caption: frame.key }));
+  const group = (arrange) => ({ kind: 'group', key: 'variant=x', header: 'x', ...(arrange === undefined ? {} : { arrange }), children: frames });
+  const grouped = (arrange, own) => pageOf(layout, { groups: [group(own), ...rest], ...(arrange === undefined ? {} : { arrange }) });
+  assert.doesNotMatch(grouped('column'), /<html [^>]*data-stacki-arrange/);
+  assert.match(grouped('row'), /<html [^>]*data-stacki-arrange="row">/);
+  assert.doesNotMatch(grouped('row'), /<stacki-group [^>]*data-arrange/, 'the canvas’s choice leaves every group alone');
+  assert.match(grouped(undefined, 'column'), /<stacki-group [^>]*data-arrange="column">/);
+  assert.doesNotMatch(grouped(undefined, 'column'), /<html [^>]*data-stacki-arrange/, 'a group’s choice leaves the canvas alone');
+  assert.equal(parsePage(grouped('row', 'wrap')).editable, true);
+  assert.throws(() => grouped(undefined, 'grid'), /Assertion failed/);
   const css = chrome.chromeStyles('dark');
-  assert.match(css, /\[data-stacki-arrange="column"\] > body stacki-group \{ flex-direction: column !important; \}/);
-  assert.match(
-    css,
-    new RegExp(
-      `\\[data-stacki-arrange="wrap"\\] > body:not\\(\\[data-flow="column"\\]\\) \\{ flex-wrap: wrap !important; max-width: ${chrome.CHROME_LIMITS.wrapWidthPx}px`,
-    ),
-  );
+  assert.match(css, /html\[data-stacki-ready\] > body stacki-group\[data-arrange="column"\] \{ flex-direction: column !important; \}/);
+  assert.match(css, /html\[data-stacki-ready\]\[data-stacki-arrange="column"\] > body \{ flex-direction: column !important; \}/);
+  assert.doesNotMatch(css, /\[data-stacki-arrange="[a-z]+"\] > body stacki-group/, 'no rule of the canvas’s reaches into a group');
   // Captions keep their size on screen: the script writes their type for the zoom, and hides those that crowd.
   const script = chrome.chromeScript(ID);
   assert.match(script, /function crowd\(scale\)/);
   assert.match(script, /data-crowded/);
+  assert.match(script, /attributeFilter: \[[^\]]*'data-arrange'/, 'a rearranged group is measured again');
   assert.match(css, /\[data-crowded\]::before/);
 });

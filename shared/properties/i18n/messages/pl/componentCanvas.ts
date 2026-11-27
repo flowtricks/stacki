@@ -48,6 +48,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Obok siebie',
   'componentCanvas.panel.layout.wrap': 'Zawijanie',
   'componentCanvas.panel.mixed': 'Różne',
+  'componentCanvas.panel.overriddenHere': 'Ten komponent ma własną wartość, więc ta zmiana nie jest tu widoczna.',
   'componentCanvas.panel.pixels': '{side} w pikselach',
   'componentCanvas.panel.root.about': 'Kanwa za wszystkimi ramkami: element html strony. Jej klasy znajdziesz w panelu Ustawienia.',
   'componentCanvas.panel.root.title': 'Kanwa',

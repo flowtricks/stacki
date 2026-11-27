@@ -28,13 +28,15 @@ const output = path.join(directory, 'component-canvas-follow.cjs');
 buildSync({
   stdin: {
     contents: [
-      "export { useFrameFollowsEditor, frameSettingChange, valuesChange } from './src/app/state/useDesktopComponentCanvas';",
+      "export { useFrameFollowsEditor, frameSettingChange, valuesChange, rootClassesChange, withSettings, arrangementChange } from './src/app/state/useDesktopComponentCanvas';",
+      "export { rootSettings } from './src/app/shell/canvasFrameSettings';",
       "export { ComponentCanvasPanel } from './src/features/preview/componentCanvas/ComponentCanvasPanel';",
       "export { noteComponentCanvas } from './src/features/preview/componentCanvas/componentCanvasSession';",
       "export { buildCanvasLayout } from './src/features/preview/componentCanvas/canvasModel';",
       "export { groupFrames } from './src/features/preview/componentCanvas/canvasGroups';",
       "export { canvasPageSource, canvasTreeOf } from './src/features/preview/componentCanvas/canvasPage';",
       "export { nodeAtPath } from './src/editor/editorTree';",
+      "export { parseComponentCanvasSource, serializeComponentCanvas } from './shared/properties/componentCanvas';",
       "export { toEditorPageState } from './src/editor/pageState';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -53,7 +55,19 @@ buildSync({
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
 global.window = dom.window;
 global.document = dom.window.document;
-for (const name of ['Node', 'Element', 'HTMLElement', 'MutationObserver', 'DOMRect', 'Window', 'KeyboardEvent', 'MouseEvent', 'PointerEvent', 'FocusEvent']) {
+for (const name of [
+  'Node',
+  'Element',
+  'HTMLElement',
+  'HTMLInputElement',
+  'MutationObserver',
+  'DOMRect',
+  'Window',
+  'KeyboardEvent',
+  'MouseEvent',
+  'PointerEvent',
+  'FocusEvent',
+]) {
   global[name] = dom.window[name];
 }
 global.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
@@ -121,6 +135,7 @@ function openCanvas() {
     layout,
     frame: first.key,
     scopes: { props: first.key, size: '', background: first.key },
+    rootScope: '*component',
     scale: 1,
     framePanel: 'shown',
     defaults: {},
@@ -358,4 +373,143 @@ test('a wider edit writes its own scope only: frames and variants keep their own
   assert.equal(labelled.components[BUTTON].frames[''].props.label, 'All');
   // The negative space: a frame without values of its own takes the wider value.
   assert.equal(wide.components[BUTTON].frames[second], undefined, 'nothing is written for a frame that had nothing');
+});
+
+// The canvas root's settings always start at this component; every component's is only ever the person's own pick,
+// which holds while the canvas is open.
+test('the canvas root’s settings start at This component, and a picked All components holds', async (context) => {
+  const { model, tree, state: opened } = openCanvas();
+  const rootPath = tree.root;
+  const rootId = canvas.nodeAtPath(model.nodes, rootPath.split('.').map(Number)).id;
+  const frameId = canvas.nodeAtPath(model.nodes, tree.instances[1].path.split('.').map(Number)).id;
+  const held = {};
+  function Harness({ initial }) {
+    const [selectedId, setSelectedId] = React.useState(undefined);
+    const [state, setState] = React.useState(initial);
+    Object.assign(held, { state, setState, select: setSelectedId });
+    canvas.noteComponentCanvas(state);
+    const pathFor = (id) => (id === rootId ? rootPath : id === frameId ? tree.instances[1].path : undefined);
+    canvas.useFrameFollowsEditor(state, { editStack: [{}], pathFor, selectedId, model, setSelectedId }, setState);
+    return false;
+  }
+  const open = async (settings) => {
+    const root = createRoot(document.createElement('div'));
+    context.after(() => act(async () => root.unmount()));
+    await act(async () => root.render(React.createElement(Harness, { initial: { ...opened, settings } })));
+    await act(async () => held.select(rootId));
+    assert.equal(held.state.subject, 'root', 'the canvas root is the subject');
+  };
+  const project = { version: 1, classes: ['theme-dark'], components: {} };
+  const own = { ...project, components: { [BUTTON]: { root: { classes: ['theme-invert'] } } } };
+  for (const settings of [project, own, { version: 1, components: {} }]) {
+    await open(settings);
+    assert.equal(held.state.scopes.background, '*component');
+  }
+  // Picked by the person, All components comes back after a frame was selected in between.
+  await act(async () => held.setState((state) => ({ ...state, rootScope: '*project', scopes: { ...state.scopes, background: '*project' } })));
+  await act(async () => held.select(frameId));
+  assert.notEqual(held.state.scopes.background, '*project');
+  await act(async () => held.select(rootId));
+  assert.equal(held.state.scopes.background, '*project');
+  canvas.noteComponentCanvas({ kind: 'idle' });
+});
+
+// The class field's writer, the change it makes and the open canvas over the new settings, as the app chains them.
+function rootField(opened) {
+  let state = opened;
+  const field = () => {
+    const control = {
+      editRootClasses: (classes) => {
+        state = canvas.withSettings(state, canvas.rootClassesChange(state, classes)(state.settings));
+      },
+    };
+    return canvas.rootSettings(control, state, (key) => key);
+  };
+  return {
+    // Orange is `inherited`; blue is a value with Reset; plain is neither.
+    shown: () => {
+      const { value } = field();
+      const extra = field().extras('class');
+      const label = extra?.provenance?.tone === 'inherited' ? 'orange' : extra?.reset !== undefined ? 'blue' : 'plain';
+      return { value, label, scope: state.scopes.background };
+    },
+    remove: () => field().onSetProp('class', undefined),
+    type: (text) => field().onSetProp('class', { type: 'string', value: text }),
+    reset: () => field().extras('class').reset(),
+    settings: () => state.settings,
+  };
+}
+
+const atRoot = (settings, scope = '*component') => {
+  const { state } = openCanvas();
+  return { ...state, settings, subject: 'root', rootScope: scope, scopes: { ...state.scopes, background: scope } };
+};
+
+// The owner's reports: a theme-dark on screen that would not come off, under an orange label nobody expected.
+test('at This component every removal shows, stays, and Reset gives back the shared class', () => {
+  const settings = { version: 1, classes: ['theme-dark'], components: { [BUTTON]: { root: { classes: ['theme-invert'] } } } };
+  const field = rootField(atRoot(settings));
+  assert.deepEqual(field.shown(), { value: 'theme-invert', label: 'blue', scope: '*component' });
+  field.remove();
+  assert.deepEqual(field.shown(), { value: '', label: 'blue', scope: '*component' }, 'removed: no class here, and still this component');
+  field.reset();
+  assert.deepEqual(field.shown(), { value: 'theme-dark', label: 'orange', scope: '*component' }, 'Reset brings the shared one back');
+  field.remove();
+  assert.deepEqual(field.shown(), { value: '', label: 'blue', scope: '*component' }, 'a borrowed class comes off, never a no-op');
+  assert.deepEqual(field.settings().classes, ['theme-dark'], 'All components is never changed from here');
+  const saved = canvas.parseComponentCanvasSource(canvas.serializeComponentCanvas(field.settings()));
+  assert.deepEqual(saved.value.components[BUTTON].root.classes, [], 'and it stays removed in the saved file');
+  field.type('u-wide');
+  assert.deepEqual(field.shown(), { value: 'u-wide', label: 'blue', scope: '*component' });
+  field.reset();
+  assert.equal(field.settings().components[BUTTON], undefined, 'nothing of its own is left behind');
+});
+
+test('with nothing shared a class is blue or nothing is plain; All components edits keep a component’s own', () => {
+  const field = rootField(atRoot({ version: 1, components: {} }));
+  assert.deepEqual(field.shown(), { value: undefined, label: 'plain', scope: '*component' });
+  field.type('theme-brand');
+  assert.deepEqual(field.shown(), { value: 'theme-brand', label: 'blue', scope: '*component' });
+  field.remove();
+  assert.deepEqual(field.shown(), { value: undefined, label: 'plain', scope: '*component' });
+  assert.equal(field.settings().components[BUTTON], undefined);
+  const own = { version: 1, classes: ['theme-dark'], components: { [BUTTON]: { root: { classes: ['theme-invert'] } } } };
+  const wide = rootField(atRoot(own, '*project'));
+  assert.deepEqual(wide.shown(), { value: 'theme-dark', label: 'blue', scope: '*project' });
+  wide.remove();
+  assert.equal(wide.settings().classes, undefined);
+  assert.deepEqual(wide.settings().components[BUTTON].root.classes, ['theme-invert'], 'a wider edit drops nothing narrower');
+});
+
+test('a Layout choice is this component’s own, at its level only, whatever the root scope', () => {
+  const state = atRoot({ version: 1, components: {} }, '*project');
+  const [group] = state.boxes.filter((box) => box.kind === 'group').map((box) => box.key);
+  const next = canvas.arrangementChange(state, '*canvas', 'row')(state.settings);
+  assert.deepEqual(next.components[BUTTON].layouts, { '*canvas': 'row' });
+  const both = canvas.arrangementChange({ ...state, settings: next }, group, 'column')(next);
+  assert.deepEqual(both.components[BUTTON].layouts, { '*canvas': 'row', [group]: 'column' });
+  assert.deepEqual(canvas.arrangementChange({ ...state, settings: both }, '*canvas', undefined)(both).components[BUTTON].layouts, { [group]: 'column' });
+});
+
+// A borrowed background is only the empty field's placeholder: Backspace there must remove it here, never do nothing.
+test('Backspace on a borrowed background removes it for this component, and only there', async (context) => {
+  const borrowed = { version: 1, background: '#123456', components: {} };
+  const edits = [];
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  context.after(() => act(async () => root.unmount()));
+  const render = (state) =>
+    act(async () => root.render(React.createElement(canvas.ComponentCanvasPanel, { canvas: { ...control, edit: (edit) => edits.push(edit) }, state })));
+  const press = async () => {
+    const input = host.querySelector('.component-canvas-color input');
+    await act(async () => input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })));
+  };
+  await render(atRoot(borrowed, '*project'));
+  await press();
+  assert.deepEqual(edits, [], 'at All components the field shows its own value: nothing borrowed to remove');
+  await render(atRoot(borrowed));
+  assert.equal(host.querySelector('.component-canvas-inherited').getAttribute('title'), 'All components', 'orange says whose value it is');
+  await press();
+  assert.deepEqual(edits, [{ kind: 'background', value: 'transparent' }]);
 });

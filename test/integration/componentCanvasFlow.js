@@ -230,7 +230,7 @@ function electronEnvironment() {
     // Frame settings minimize to their header, and expand again from it: they are never gone.
     await window.getByRole('button', { name: 'Minimize frame settings' }).click();
     await waitFor(async () => (await window.locator('[data-testid="component-canvas-panel"]').count()) === 0, 'frame settings minimized');
-    const toggle = window.locator('.component-canvas-popup-toggle');
+    const toggle = window.locator('.component-canvas-popup-head');
     results.toggleClosed = await toggle.getAttribute('aria-expanded');
     await shot(window, '03c-frame-settings-minimized.png');
     await window.getByRole('button', { name: 'Expand frame settings' }).click();

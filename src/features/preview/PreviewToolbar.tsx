@@ -53,7 +53,8 @@ interface PreviewToolbarProps {
   readonly activeDevice: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
   readonly sizing?: PreviewSizeControlsProps;
-  readonly guide: GuideMenuProps;
+  /** The column guide's button; absent while a component is open, which has no guide. */
+  readonly guide: GuideMenuProps | undefined;
   readonly interaction?: {
     readonly active: boolean;
     readonly available: boolean;
@@ -93,18 +94,14 @@ function toolbarItems(props: PreviewToolbarProps, translate: Translator): readon
         },
       ]
     : [];
-  return [
-    {
-      id: 'guide',
-      priority: 30,
-      content: <GuideMenu {...props.guide} />,
-      afterPress: 'stay',
-    },
-    ...interactionItems(props.interaction, translate),
-    ...sizing,
-    devices,
-    ...inspectorItems(props.inspector, translate),
-  ];
+  return [...guideItems(props.guide), ...interactionItems(props.interaction, translate), ...sizing, devices, ...inspectorItems(props.inspector, translate)];
+}
+
+function guideItems(guide: GuideMenuProps | undefined): readonly ToolbarItem[] {
+  if (guide === undefined) {
+    return [];
+  }
+  return [{ id: 'guide', priority: 30, content: <GuideMenu {...guide} />, afterPress: 'stay' }];
 }
 
 // Treat the original segmented switch as one overflow item so its shared surface

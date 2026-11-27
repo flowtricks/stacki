@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Lado a lado',
   'componentCanvas.panel.layout.wrap': 'Quebrar linha',
   'componentCanvas.panel.mixed': 'Misto',
+  'componentCanvas.panel.overriddenHere': 'Este componente tem um valor próprio, então esta alteração não aparece aqui.',
   'componentCanvas.panel.pixels': '{side} em pixels',
   'componentCanvas.panel.root.about': 'O canvas atrás de todos os quadros: o elemento html da página. As classes dele ficam no painel de configurações.',
   'componentCanvas.panel.root.title': 'Canvas', // same

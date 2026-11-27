@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Yan yana',
   'componentCanvas.panel.layout.wrap': 'Sarmalı',
   'componentCanvas.panel.mixed': 'Karışık',
+  'componentCanvas.panel.overriddenHere': 'Bu bileşenin kendi değeri var, bu yüzden bu değişiklik burada görünmez.',
   'componentCanvas.panel.pixels': 'Piksel cinsinden {side}',
   'componentCanvas.panel.root.about': 'Tüm çerçevelerin arkasındaki tuval: sayfanın html öğesi. Sınıfları Ayarlar panelindedir.',
   'componentCanvas.panel.root.title': 'Tuval',

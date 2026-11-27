@@ -21,6 +21,7 @@ import {
   type ResolvedGuide,
 } from './guideModel';
 import type { GuideMenuProps } from './GuideMenu';
+import type { GuideSubject } from './guideSubject';
 
 const GUIDE_STORAGE_PREFIX = 'stacki.columnGuide:';
 // A stored record is a handful of short fields; anything longer is not one.
@@ -48,18 +49,24 @@ export interface ShownGuide {
  * The column guide of one canvas, as the desktop preview and Studio both use
  * it: the settings saved under `projectKey`, the variables the frame is told
  * to measure, and what the toolbar's menu and the overlay are drawn from.
+ * While a component is the subject there is no menu, overlay or shortcut.
  */
 export function useColumnGuide(options: {
   readonly projectKey: string | undefined;
   readonly metrics: GuideMetrics | undefined;
   readonly available: boolean;
   readonly frame: GuideFrameLink;
-}): { readonly menu: GuideMenuProps; readonly shown: ShownGuide | undefined } {
+  readonly subject: GuideSubject;
+}): { readonly menu: GuideMenuProps | undefined; readonly shown: ShownGuide | undefined } {
   const { settings, update, persistence } = useProjectGuideSettings(options.projectKey);
-  useGuideShortcut(update);
+  useGuideShortcut(update, options.subject);
   useGuideVariables(guideVariableNames(settings), options.frame);
   const metrics = options.metrics;
   const guide = metrics === undefined ? undefined : resolveGuide(metrics, settings);
+  // Decided in render, not in an effect, so a component is never drawn with the guide for a frame.
+  if (options.subject === 'component') {
+    return { menu: undefined, shown: undefined };
+  }
   const menu = { settings, update, metrics, guide, persistence, available: options.available };
   if (guide === undefined) {
     return { menu, shown: undefined };
@@ -70,7 +77,7 @@ export function useColumnGuide(options: {
 /** The settings for the open project, and the one way to change them. */
 export function useGuideSettings(projectKey: string | undefined): readonly [GuideSettings, GuideUpdate] {
   const { settings, update } = useProjectGuideSettings(projectKey);
-  useGuideShortcut(update);
+  useGuideShortcut(update, 'page');
   return [settings, update] as const;
 }
 
@@ -133,8 +140,11 @@ export function parseGuideColor(input: unknown): string | undefined {
 // ⇧G shows or hides the guide, outside fields. The canvas replays it as the
 // key "G" with no modifier flags (electron/preload/frameDesign.ts), so the
 // capital letter is what says Shift.
-function useGuideShortcut(update: GuideUpdate): void {
+function useGuideShortcut(update: GuideUpdate, subject: GuideSubject): void {
   useEffect(() => {
+    if (subject === 'component') {
+      return undefined;
+    }
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
@@ -153,7 +163,7 @@ function useGuideShortcut(update: GuideUpdate): void {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [update]);
+  }, [update, subject]);
 }
 
 function storageKey(projectKey: string): string {

@@ -23,6 +23,8 @@ export const FLOATING_OFFSET_NONE: FloatingOffset = { x: 0, y: 0 };
 // The gap kept between a dragged editor and the window edge, matching the
 // docked tool windows (windowGeometry.ts), so nothing can be dragged out of reach.
 export const FLOATING_EDGE_PX = 8;
+// How far a press on the header may wander and still be a click, not a drag.
+export const FLOATING_CLICK_SLOP_PX = 4;
 // A press on one of these inside the header is that control's, not a drag:
 // the close button must still close and a field must still take focus.
 export const FLOATING_DRAG_IGNORE_SELECTOR = 'button, input, select, textarea, a, [contenteditable], [role=button]';

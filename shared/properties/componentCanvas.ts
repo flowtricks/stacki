@@ -98,13 +98,23 @@ export interface CanvasRoot {
 }
 
 /**
- * How a canvas lays out the frames (and the groups) that sit together: side by side in one row, stacked in one column,
- * or side by side wrapping into rows at a fixed width. Groups of the first split value always go down the canvas.
+ * How a canvas lays out what sits together at one level: side by side in one row, stacked in one column, or side by
+ * side wrapping into rows at a fixed width. A level is the canvas itself (its <html>, CANVAS_LEVEL: the top-level groups
+ * and frames) or one group (its key: that group's direct children). Each level has its own choice; none is inherited.
+ * Levels nest no deeper than the split (CANVAS_LIMITS.splitPropsMax).
  */
 export const CANVAS_ARRANGEMENTS = ['row', 'column', 'wrap'] as const;
 export type CanvasArrangement = (typeof CANVAS_ARRANGEMENTS)[number];
-/** What a canvas with no arrangement chosen does: side by side, as every canvas did before the choice existed. */
+/** The canvas's own level key. Never a frame key (a group's level is one), and not `` since a file's keys are not empty. */
+export const CANVAS_LEVEL = '*canvas';
+/** What a group nobody arranged does, and the canvas too unless it has groups or rows: side by side. */
 export const DEFAULT_ARRANGEMENT = 'row' as const satisfies CanvasArrangement;
+
+/** The levels a canvas has now: its groups' keys, and whether its top level goes down the page (it has groups or rows). */
+export interface CanvasLevels {
+  readonly groups: readonly string[];
+  readonly stacked: boolean;
+}
 
 export interface ComponentCanvas {
   /** The props that get their own frames, in layout order; absent: the canvas chooses (defaultSplit). */
@@ -112,8 +122,18 @@ export interface ComponentCanvas {
   readonly frames?: Readonly<Record<string, FrameEntry>>;
   /** This component's canvas root, over the project's. */
   readonly root?: CanvasRoot;
-  /** How its frames are laid out; absent: DEFAULT_ARRANGEMENT, which is never stored. */
+  /**
+   * How every level was laid out, as saved before each level had its own choice: read as what each of them shows until
+   * the component has `layouts`. The first layout edit adds those and leaves this as it was, which is what versions
+   * before `layouts` go on drawing.
+   */
   readonly arrange?: Exclude<CanvasArrangement, typeof DEFAULT_ARRANGEMENT>;
+  /**
+   * Each level's own layout, by level key (CANVAS_LEVEL or a group's); absent: the level's default. In the file this is
+   * the top-level `levelLayouts` entry of the component, not a key of the component's own (parseComponentCanvasFile).
+   * Empty only beside `arrange`: every level is then at its default, whatever `arrange` says.
+   */
+  readonly layouts?: Readonly<Record<string, CanvasArrangement>>;
 }
 
 export interface ComponentCanvasFile {
@@ -131,7 +151,9 @@ export interface ComponentCanvasFile {
   readonly later?: Readonly<Record<string, unknown>>;
 }
 
-const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components']);
+// `levelLayouts` is a top-level key so that a version without it keeps the file: 1.4.20 refuses a whole file over an
+// unknown key of a component's, and keeps an unknown top-level key as read (ComponentCanvasFile.later).
+const FILE_FIELDS: ReadonlySet<string> = new Set(['version', 'background', 'classes', 'components', 'levelLayouts']);
 
 export const EMPTY_CANVAS_FILE: ComponentCanvasFile = { version: 1, components: {} };
 
@@ -171,11 +193,12 @@ export function parseComponentCanvasFile(input: unknown): ComponentCanvasFile {
     components[canvasComponentFile(file)] = parseComponentSettings(settings, file);
   }
   assert(Object.keys(components).length === entries.length, 'Component canvas: every component is kept');
+  const laidOut = withLevelLayouts(components, value['levelLayouts']);
   const background = value['background'] === undefined ? undefined : canvasBackground(value['background']);
   assert((background?.length ?? 0) <= CANVAS_LIMITS.backgroundCharsMax, 'Component canvas: the project background is bounded');
   const classes = value['classes'] === undefined ? undefined : canvasRootClasses(value['classes']);
   const later = Object.entries(value).filter(([key]) => !FILE_FIELDS.has(key));
-  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, components);
+  return canvasFileOf({ background, classes, later: later.length === 0 ? undefined : Object.fromEntries(later) }, laidOut);
 }
 
 // The file with its project-level settings, each written only when it is set.
@@ -267,6 +290,43 @@ function parseComponentSettings(input: unknown, file: string): ComponentCanvas {
   };
 }
 
+// Each component's `layouts`, from the top-level key. An entry may name a component with no other settings; one whose
+// component an older version has renamed or deleted since stays under its old name, drawn nowhere.
+function withLevelLayouts(components: Readonly<Record<string, ComponentCanvas>>, input: unknown): Readonly<Record<string, ComponentCanvas>> {
+  if (input === undefined) {
+    return components;
+  }
+  const entries = Object.entries(record(input));
+  if (entries.length > CANVAS_LIMITS.componentsMax) {
+    throw new Error(`Component canvas: more than ${CANVAS_LIMITS.componentsMax} components have layouts`);
+  }
+  const laidOut = entries.map(([name, layouts]): readonly [string, ComponentCanvas] => {
+    const file = canvasComponentFile(name);
+    return [file, { ...components[file], layouts: parseLayouts(layouts, file) }];
+  });
+  const merged = { ...components, ...Object.fromEntries(laidOut) };
+  if (Object.keys(merged).length > CANVAS_LIMITS.componentsMax) {
+    throw new Error(`Component canvas: more than ${CANVAS_LIMITS.componentsMax} components`);
+  }
+  return merged;
+}
+
+function parseLayouts(input: unknown, file: string): Readonly<Record<string, CanvasArrangement>> {
+  const entries = Object.entries(record(input));
+  if (entries.length > CANVAS_LIMITS.entriesMax) {
+    throw new Error(`Component canvas: ${file} lays out more than ${CANVAS_LIMITS.entriesMax} levels`);
+  }
+  return Object.fromEntries(
+    entries.map(([level, value]) => {
+      const arrangement = CANVAS_ARRANGEMENTS.find((candidate) => candidate === value);
+      if (arrangement === undefined) {
+        throw new Error(`Component canvas: ${file} arranges its frames as row, column or wrap`);
+      }
+      return [parseLevel(level), arrangement];
+    }),
+  );
+}
+
 // A stored arrangement: one of the choices. The default is written as no key at all, and read as none if a person
 // wrote it by hand, so the file still says one thing one way.
 function parseArrangement(input: unknown, file: string): ComponentCanvas['arrange'] {
@@ -277,6 +337,16 @@ function parseArrangement(input: unknown, file: string): ComponentCanvas['arrang
     return undefined;
   }
   throw new Error(`Component canvas: ${file} arranges its frames as row, column or wrap`);
+}
+
+function parseLevel(level: string): string {
+  if (level === CANVAS_LEVEL) {
+    return level;
+  }
+  if (level === '') {
+    throw new Error(`Component canvas: the canvas’s own layout is keyed ${CANVAS_LEVEL}`);
+  }
+  return parseFrameKey(level);
 }
 
 function parseSplit(input: unknown, file: string): readonly string[] {
@@ -453,13 +523,22 @@ function decodeKeyValue(text: string): string {
 
 export function serializeComponentCanvas(file: ComponentCanvasFile): string {
   // Sorted, so the same settings are always the same bytes and nothing churns in git.
-  const components = Object.fromEntries(
-    Object.keys(file.components)
-      .sort()
-      .map((name) => [name, sortedSettings(file.components[name] ?? {})]),
-  );
+  const names = Object.keys(file.components).sort();
+  const components: Record<string, ComponentCanvas> = {};
+  const levelLayouts: Record<string, Readonly<Record<string, CanvasArrangement>>> = {};
+  for (const name of names) {
+    const { layouts, ...settings } = file.components[name] ?? {};
+    if (layouts !== undefined) {
+      levelLayouts[name] = Object.fromEntries(Object.entries(layouts).sort(([left], [right]) => (left < right ? -1 : 1)));
+    }
+    // A component whose only settings are its layouts is named there alone.
+    if (layouts === undefined || Object.keys(settings).length > 0) {
+      components[name] = sortedSettings(settings);
+    }
+  }
   const { later, ...known } = canvasFileOf({ background: file.background, classes: file.classes, later: file.later }, components);
-  const text = JSON.stringify({ ...known, ...later }, undefined, 2) + '\n';
+  const layoutsKey = Object.keys(levelLayouts).length === 0 ? {} : { levelLayouts };
+  const text = JSON.stringify({ ...known, ...layoutsKey, ...later }, undefined, 2) + '\n';
   assert(parseComponentCanvasSource(text).ok, 'A serialised canvas file parses');
   return text;
 }
@@ -1038,18 +1117,63 @@ export function withSplit(file: ComponentCanvasFile, component: string, split: r
   return withComponentSettings(file, component, { ...file.components[component], split });
 }
 
-/** The file with how a component's frames are laid out; the default arrangement is no setting. */
-export function withArrangement(file: ComponentCanvasFile, component: string, arrange: CanvasArrangement): ComponentCanvasFile {
-  canvasComponentFile(component);
-  assert(CANVAS_ARRANGEMENTS.includes(arrange), 'An arrangement is one of the canvas’s choices');
-  const next = withComponentSettings(file, component, { ...file.components[component], arrange: arrange === DEFAULT_ARRANGEMENT ? undefined : arrange });
-  assert(arrangementOf(next.components[component]) === arrange, 'The arrangement written is the one read back');
-  return next;
+/** What a level nobody arranged does: the canvas goes down the page when it has groups or rows; else side by side. */
+export function defaultArrangement(level: string, levels: CanvasLevels): CanvasArrangement {
+  return level === CANVAS_LEVEL && levels.stacked ? 'column' : DEFAULT_ARRANGEMENT;
 }
 
-/** How a component's frames are laid out: its stored choice, else the default. */
-export function arrangementOf(settings: ComponentCanvas | undefined): CanvasArrangement {
-  return settings?.arrange ?? DEFAULT_ARRANGEMENT;
+/**
+ * The layouts a component's canvas has chosen, by level. A single `arrange` saved before levels had their own stands for
+ * each level the canvas has now, as it drew them: every group, and the canvas itself, except that wrapping never
+ * reached a top level that goes down the page.
+ */
+export function chosenLayouts(settings: ComponentCanvas | undefined, levels: CanvasLevels): Readonly<Record<string, CanvasArrangement>> {
+  const before = settings?.arrange;
+  if (settings?.layouts !== undefined || before === undefined) {
+    return settings?.layouts ?? {};
+  }
+  assert(levels.groups.length <= CANVAS_LIMITS.entriesMax, 'A canvas has a bounded number of levels');
+  const top = before === 'wrap' && levels.stacked ? [] : [CANVAS_LEVEL];
+  return Object.fromEntries([...top, ...levels.groups].map((level) => [level, before]));
+}
+
+/** How one level is laid out, and whether that is a choice saved for it (else the level's default). */
+export function levelArrangement(
+  settings: ComponentCanvas | undefined,
+  level: string,
+  levels: CanvasLevels,
+): { readonly value: CanvasArrangement; readonly chosen: boolean } {
+  const held = chosenLayouts(settings, levels)[level];
+  return held === undefined ? { value: defaultArrangement(level, levels), chosen: false } : { value: held, chosen: true };
+}
+
+/**
+ * The file with one level laid out as `arrangement`, or back at its default with `undefined`. Choosing the default is
+ * no setting. Every other level keeps what it shows.
+ */
+export function withLevelArrangement(
+  file: ComponentCanvasFile,
+  component: string,
+  level: string,
+  arrangement: CanvasArrangement | undefined,
+  levels: CanvasLevels,
+): ComponentCanvasFile {
+  canvasComponentFile(component);
+  parseLevel(level);
+  const settings = file.components[component];
+  const layouts: Record<string, CanvasArrangement> = { ...chosenLayouts(settings, levels) };
+  if (arrangement === undefined || arrangement === defaultArrangement(level, levels)) {
+    delete layouts[level];
+  } else {
+    layouts[level] = arrangement;
+  }
+  assert(Object.keys(layouts).length <= CANVAS_LIMITS.entriesMax, 'A canvas lays out a bounded number of levels');
+  // Beside an `arrange`, even no choice at all is kept: it says every level is at its default.
+  const kept = Object.keys(layouts).length === 0 && settings?.arrange === undefined ? undefined : layouts;
+  const next = withComponentSettings(file, component, { ...settings, layouts: kept });
+  const shown = levelArrangement(next.components[component], level, levels).value;
+  assert(shown === (arrangement ?? defaultArrangement(level, levels)), 'The arrangement written is the one read back');
+  return next;
 }
 
 // The file with one component's settings replaced. `settings` is everything the component keeps: a writer starts from
@@ -1077,8 +1201,9 @@ function keepsSetting(key: string, value: unknown): boolean {
   if (value === undefined) {
     return false;
   }
-  // A chosen split of no props is a choice (one frame), as is an arrangement; empty frames or an empty root say nothing.
-  if (key === 'split' || key === 'arrange') {
+  // A chosen split of no props is a choice (one frame), as is an arrangement, and layouts of no level beside one
+  // (withLevelArrangement writes none otherwise); empty frames or an empty root say nothing.
+  if (key === 'split' || key === 'arrange' || key === 'layouts') {
     return true;
   }
   return Object.values(value as object).some((held) => held !== undefined);
@@ -1121,6 +1246,11 @@ export function withRootEdit(file: ComponentCanvasFile, target: RootTarget, edit
   const next = withComponentSettings(file, target.file, { ...settings, root: edited(settings.root ?? {}) });
   assert(edit.kind !== 'background' || next.components[target.file]?.root?.background === background, 'The component’s own background is what was set');
   return next;
+}
+
+/** Whether this component's own value of a root setting replaces the project's, so a project edit does not show on it. */
+export function rootOverrides(file: ComponentCanvasFile, component: string, setting: RootEdit['kind']): boolean {
+  return file.components[component]?.root?.[setting] !== undefined;
 }
 
 /** Where a canvas root setting comes from: the component, the project, or nowhere. */

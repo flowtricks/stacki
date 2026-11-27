@@ -42,6 +42,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'Side by side',
   'componentCanvas.panel.layout.wrap': 'Wrap',
   'componentCanvas.panel.mixed': 'Mixed',
+  'componentCanvas.panel.overriddenHere': 'This component has its own value, so this change doesn’t show here.',
   'componentCanvas.panel.pixels': '{side} in pixels',
   'componentCanvas.panel.root.about': 'The canvas behind every frame: the page’s html element. Its classes are in the Settings panel.',
   'componentCanvas.panel.root.title': 'Canvas',

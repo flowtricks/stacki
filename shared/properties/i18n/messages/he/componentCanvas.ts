@@ -45,6 +45,7 @@ export const messages = {
   'componentCanvas.panel.layout.row': 'זו לצד זו',
   'componentCanvas.panel.layout.wrap': 'גלישה',
   'componentCanvas.panel.mixed': 'מעורב',
+  'componentCanvas.panel.overriddenHere': 'לרכיב הזה יש ערך משלו, ולכן השינוי לא מוצג כאן.',
   'componentCanvas.panel.pixels': '{side} בפיקסלים',
   'componentCanvas.panel.root.about': 'הקנבס שמאחורי כל המסגרות: רכיב ה-html של הדף. המחלקות שלו נמצאות בלוח ההגדרות.',
   'componentCanvas.panel.root.title': 'קנבס',
