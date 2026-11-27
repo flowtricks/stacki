@@ -1,8 +1,8 @@
 // The one-time clearing of the HTTP cache after an update.
 //
 // Versions up to this one let the preview's images into the disk cache for a year under names that
-// hold no content hash (previewServer/previewImageCache.ts). The server now asks for them to be
-// checked, but a stored answer carries the old promise and is used without asking, across restarts.
+// hold no content hash (previewServer/previewImageCache.ts). The server now forbids storing
+// them, but a stored answer carries the old promise and is used without asking, across restarts.
 // So the cache is cleared once, before the window loads anything, and settings.json remembers which
 // cleanup has run. Only the HTTP cache goes: cookies, local storage and every other kind of site
 // data stay.

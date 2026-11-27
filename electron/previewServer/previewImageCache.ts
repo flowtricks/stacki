@@ -1,16 +1,25 @@
-// The preview dev server's images are always asked for again.
+// The preview dev server's images are never stored by the browser.
 //
 // Astro's image endpoint (`/_image`, dev) answers with `Cache-Control: public, max-age=31536000`,
 // and its URL carries the source path and the transform, no content hash. An image replaced under
-// the same name (a git pull, an export over the old file) therefore keeps showing the old picture:
-// the browser never asks again, across restarts too, and clearing the HTTP cache does not reach the
+// the same name (a git pull, an export over the old file) therefore kept showing the old picture:
+// the browser never asked again, across restarts too, and clearing the HTTP cache does not reach the
 // copy a running window holds in memory. The one place that works is the response itself, so this
-// Vite plugin sends it with `no-cache`: the browser may keep it, and asks before using it. The ETag
-// Astro sets is left in place.
+// Vite plugin replaces that header.
 //
-// Only the image endpoint is touched. The rest of the dev server already says `no-cache` or
-// `no-store` (public/ files, source files, fonts), and its one long `immutable` answer is a
-// prebundled dependency whose `?v=` changes with its content.
+// It sends `no-store`, not `no-cache`. With `no-cache` and an ETag, Chromium keeps one copy of the
+// image for every document in the process and, when another document asks for the same address,
+// revalidates that shared copy in place. Should that request be cancelled before it is answered,
+// the copy fails for everyone showing it: the canvas, the palette's component frames and the
+// snapshot frames share a process, and those frames are removed while still loading, so the image
+// on the canvas went blank (only its background colour left) and stayed blank until the page was
+// loaded again. A `no-store` image is never revalidated: each new document gets its own copy, and
+// cancelling that one touches nobody else. It costs nothing more, because Astro's dev endpoint
+// does not answer 304: a revalidation already transformed and sent the whole image.
+//
+// Two kinds of request are touched: those to the image endpoint, and those the browser says are for
+// an image (`Sec-Fetch-Dest: image`, which it sends to loopback addresses), since Vite serves
+// `public/` and source images with `no-cache` too. The rest of the dev server keeps its headers.
 //
 // It applies to `serve` only, and exists only in the configs Stacki generates under
 // node_modules/.avb: the project's build and its own config file are never touched. It runs inside
@@ -22,7 +31,7 @@ import { assert } from '../../shared/core/assert';
 /** Astro's image endpoint unless the project names another (`image.endpoint.route`). */
 export const IMAGE_ROUTE_DEFAULT = '/_image';
 
-export const IMAGE_CACHE_CONTROL = 'no-cache';
+export const IMAGE_CACHE_CONTROL = 'no-store';
 
 const CACHE_HEADER = 'cache-control';
 
@@ -66,13 +75,13 @@ function propertyOf(value: unknown, key: string): unknown {
 }
 
 /**
- * Makes `response` go out with `no-cache` whatever is set on it later. Every way of sending headers
+ * Makes `response` go out with `no-store` whatever is set on it later. Every way of sending headers
  * passes through writeHead (Node calls it itself for setHeader followed by end), so it is the one
  * method replaced: a cache header given to it is dropped, and ours is set just before the original runs.
  */
-export function forceRevalidation(response: ServerResponse): void {
+export function forbidStoring(response: ServerResponse): void {
   const writeHead = response.writeHead.bind(response);
-  function writeHeadRevalidating(
+  function writeHeadUnstored(
     status: number,
     second?: string | OutgoingHttpHeaders | ReadonlyArray<unknown>,
     third?: OutgoingHttpHeaders | ReadonlyArray<unknown>,
@@ -83,7 +92,7 @@ export function forceRevalidation(response: ServerResponse): void {
     const kept = headers === undefined ? undefined : withoutCacheHeader(headers);
     return message === undefined ? writeHead(status, kept) : writeHead(status, message, kept);
   }
-  Reflect.set(response, 'writeHead', writeHeadRevalidating);
+  Reflect.set(response, 'writeHead', writeHeadUnstored);
 }
 
 // writeHead takes headers as an object, or as one flat list of names and values in turn.
@@ -132,8 +141,9 @@ export function previewImageCachePlugin(image: unknown) {
     enforce: 'pre' as const,
     configureServer(server: PreviewServer): void {
       server.middlewares.use((request, response, next) => {
-        if (routes.some((route) => isImageRequest(request.url, route))) {
-          forceRevalidation(response);
+        const endpoint = routes.some((route) => isImageRequest(request.url, route));
+        if (endpoint || request.headers['sec-fetch-dest'] === 'image') {
+          forbidStoring(response);
         }
         next();
       });

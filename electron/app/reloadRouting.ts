@@ -10,7 +10,7 @@
 export type ReloadAction = 'refreshPreview' | 'clearCacheAndRefreshPreview' | 'noop';
 
 // Both refreshes bump the iframe's key, which mounts a new document. An image replaced under the same name shows on either one
-// because Stacki's preview servers send images with `no-cache` (previewServer/previewImageCache.ts), not because of anything here.
+// because Stacki's preview servers send images with `no-store` (previewServer/previewImageCache.ts), not because of anything here.
 // The hard refresh (⇧⌘R) also clears the HTTP cache, which helps with other long-lived answers (a remote file, say). It does not
 // reach what a running window holds in memory, so it cannot by itself replace an image a server said to keep, as a server Stacki
 // did not configure still does (one the person started, or the fallback on the project's own config). With no preview open (the
