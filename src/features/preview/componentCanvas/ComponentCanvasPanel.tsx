@@ -20,7 +20,7 @@ import {
   type FrameLength,
   type SharedSetting,
 } from '../../../../shared/properties/componentCanvas';
-import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../../ui/DirectionIcons';
+import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../../ui/Icons';
 import InfoHint from '../../../ui/InfoHint';
 import SegmentedControl from '../../../ui/SegmentedControl';
 import { ResetLabel } from '../../../ui/ResetLabel';

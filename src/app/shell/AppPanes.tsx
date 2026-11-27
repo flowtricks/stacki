@@ -81,7 +81,7 @@ import {
 } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { PropFieldExtrasContext } from '../../features/props/propFieldExtras';
 import { useCanvasInstanceSettings, type CanvasInstanceSettings } from './canvasFrameSettings';
-import { desktopGuideSubject } from '../../features/preview/guideSubject';
+import { desktopGuideSubject } from '../../features/preview/guideSettings';
 import { CanvasSectionHeading } from '../../features/preview/componentCanvas/CanvasScopeControl';
 import type { PropsPanelProps } from '../../features/props/propsPanelTypes';
 import { installCssFieldChips } from '../../ui/cssFieldChips';

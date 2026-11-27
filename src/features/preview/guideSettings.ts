@@ -4,6 +4,7 @@ import { useProjectGuideSettings } from './guidePersistence';
 import { useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
+import { CANVAS_DIRECTORY } from '../../../shared/properties/defaultsCanvas';
 import {
   GUIDE_DEFAULTS,
   GUIDE_COLUMN_COUNT_DEFAULT,
@@ -21,7 +22,6 @@ import {
   type ResolvedGuide,
 } from './guideModel';
 import type { GuideMenuProps } from './GuideMenu';
-import type { GuideSubject } from './guideSubject';
 
 const GUIDE_STORAGE_PREFIX = 'stacki.columnGuide:';
 // A stored record is a handful of short fields; anything longer is not one.
@@ -29,6 +29,39 @@ const GUIDE_STORED_CHARS_MAX = 2_048;
 // Earlier records saved the old default 12 as a literal even when never edited.
 // Mark new saves so an explicitly entered 12 remains an override after reopening.
 const GUIDE_COLUMN_DEFAULTS_VERSION = 1;
+
+// What the canvas is editing, as the column guide sees it. The guide lays out a page's columns, so while a component is
+// open (in its own canvas, in place on a page, or on its defaults page) it is not drawn, and neither its toolbar button
+// nor ⇧G is there to turn it on. The saved preference is not touched: it applies again on the next page.
+export type GuideSubject = 'page' | 'component';
+
+/** What Desktop is editing. */
+export function desktopGuideSubject(editor: {
+  readonly openFile: { readonly kind: string; readonly path?: string | undefined } | undefined;
+  readonly componentCanvas: 'idle' | 'opening' | 'open' | undefined;
+  readonly defaultsCanvas: 'idle' | 'shown';
+}): GuideSubject {
+  if (editor.componentCanvas !== undefined && editor.componentCanvas !== 'idle') {
+    return 'component';
+  }
+  if (editor.defaultsCanvas === 'shown') {
+    return 'component';
+  }
+  if (editor.openFile?.kind === 'component') {
+    return 'component';
+  }
+  // A canvas page can stay open for a moment after its canvas has closed, while the way back loads.
+  const path = editor.openFile?.path?.replaceAll('\\', '/');
+  return path?.includes('/' + CANVAS_DIRECTORY) === true ? 'component' : 'page';
+}
+
+/** What Studio is editing, from the open file's project path: an Astro file outside src/pages/ is a component. */
+export function studioGuideSubject(file: string): GuideSubject {
+  if (!file.endsWith('.astro')) {
+    return 'page';
+  }
+  return file.startsWith('src/pages/') ? 'page' : 'component';
+}
 
 export type GuideUpdate = (update: (settings: GuideSettings) => GuideSettings) => void;
 

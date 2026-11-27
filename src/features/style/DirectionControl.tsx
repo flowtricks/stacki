@@ -1,7 +1,7 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { arrowLeft as centralArrowLeft, arrowUp as centralArrowUp } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
-import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../ui/DirectionIcons';
+import { ArrowDownIcon, ArrowRightIcon, RowWrapIcon } from '../../ui/Icons';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';

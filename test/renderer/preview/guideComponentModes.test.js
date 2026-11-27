@@ -20,7 +20,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { default as PreviewPane } from './src/features/preview/PreviewPane.tsx';",
-      "export { desktopGuideSubject, studioGuideSubject } from './src/features/preview/guideSubject.ts';",
+      "export { desktopGuideSubject, studioGuideSubject } from './src/features/preview/guideSettings.ts';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'jsx',

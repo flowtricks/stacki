@@ -24,8 +24,7 @@ import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
 import { GuideOverlay } from './GuideOverlay';
-import { useColumnGuide, type ShownGuide } from './guideSettings';
-import type { GuideSubject } from './guideSubject';
+import { useColumnGuide, type GuideSubject, type ShownGuide } from './guideSettings';
 
 export { deviceForWidth } from './PreviewToolbar';
 
@@ -99,7 +98,7 @@ interface PreviewPaneProps {
   readonly onViewportWidth?: ((widthPx: number | undefined) => void) | undefined;
   /** The open project: the column guide's settings are kept per project. */
   readonly projectPath?: string | undefined;
-  /** What the canvas is editing: a component has no column guide (guideSubject.ts). */
+  /** What the canvas is editing: a component has no column guide (guideSettings.ts). */
   readonly guideSubject: GuideSubject;
   /** More paths for the canvas to measure (the elements app overlays anchor to). */
   readonly extraTrackPaths?: readonly string[] | undefined;
