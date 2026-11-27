@@ -9,6 +9,7 @@ import type { Translator } from '../../lib/i18n/localeContext';
 import { ORIGIN_TOKEN, type PreviewSnapshotStore } from './previewSnapshotStore';
 import { tileId, useTileState } from './previewTiles';
 import type { HeldSnapshot } from './snapshotPersistence';
+import { STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 
 // The picture of a component in the insert grid. It is a snapshot, rendered once through the project's
 // preview route and kept (previewSnapshotStore.ts), so a tile never loads when it scrolls into view and
@@ -85,6 +86,7 @@ function SnapshotPicture({
             aria-hidden
             // No scripts: a snapshot is a picture. Same origin so the dev server's fonts and images load as on the page.
             sandbox="allow-same-origin"
+            {...STILL_PAGE_FRAME}
             srcDoc={held.html.split(ORIGIN_TOKEN).join(origin)}
             style={{
               width: 1200,

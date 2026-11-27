@@ -17,6 +17,18 @@
 //   app → frame  `avb:page-scroll-to` { topPx }  a drag or a click on the canvas's scrollbar.
 // Only the page's scrolling root is touched (<html>, or <body> on a page that scrolls its body): the page's own
 // inner scroll areas (a menu, a carousel) keep theirs.
+//
+// Every other frame or window the app draws a person's page in has to deal with the same bar. It came back once, in a
+// kind of frame added after the first fix, so each is one of these, and test/renderer/ui/pageFrameSurfaces.test.js
+// refuses a new one that has not said which:
+//   - the canvas's own: a live page in a SizedFrame or an all-breakpoints frame, told by CanvasScrollbar (above).
+//   - a still frame, which nobody scrolls by hand: a copy, a picture, a preview, a frame that is only measured. It
+//     takes STILL_PAGE_FRAME, and a copy the app can write into also takes hidePageRootScrollbar.
+//   - a window the app pictures takes CANVAS_SCROLLBAR_CSS as a user stylesheet (electron/project/thumbs.ts).
+//   - a page the person scrolls with nothing beside it keeps Chromium's bar.
+//
+// Only hidePageRootScrollbar needs the DOM's types: the main process imports this file for the rule alone.
+/// <reference lib="dom" />
 
 import { assert } from '../core/assert';
 
@@ -38,6 +50,39 @@ export const CANVAS_SCROLLBAR_LIMITS = {
  * a page whose <html> does not scroll and whose <body> does; on a <body> that does not scroll, the rule changes nothing.
  */
 export const CANVAS_SCROLLBAR_CSS = 'html, body { scrollbar-width: none !important; }';
+
+// ───────────────────────────── Still frames and copies ─────────────────────────────
+
+/**
+ * The attributes of a still frame. `scrolling="no"` belongs to the frame, not to the page: the frame draws no
+ * scrollbar from its first layout on, whatever the page's CSS says (`!important`, a cascade layer, an inline style,
+ * `::-webkit-scrollbar`), and a script or the app can still scroll it. It does not give back the room a page reserves
+ * with `scrollbar-gutter`, nor reach a page that scrolls <body>: hidePageRootScrollbar does both.
+ */
+export const STILL_PAGE_FRAME = { scrolling: 'no' } as const;
+
+const STYLE_ATTRIBUTE = 'data-stacki-page-frame';
+
+/**
+ * Takes the scrollbar and its reserved gutter off the root of a page the app can write into (a same-origin copy with
+ * scripts off). The rule is the editor canvas's own. It is also written inline, which no stylesheet of the page can
+ * outrank; the stylesheet stays for a <style> attribute the app later replaces (Design mode's live restyle).
+ * The page is the person's, so nothing is assumed of what it holds. Writing it again changes nothing.
+ */
+export function hidePageRootScrollbar(document: Document): void {
+  const root = document.documentElement;
+  assert(root !== null, 'hidePageRootScrollbar: a loaded document has a root');
+  const holder = document.head ?? root;
+  if (holder.querySelector(`style[${STYLE_ATTRIBUTE}]`) === null) {
+    const style = document.createElement('style');
+    style.setAttribute(STYLE_ATTRIBUTE, '');
+    style.textContent = CANVAS_SCROLLBAR_CSS;
+    holder.appendChild(style);
+  }
+  root.style.setProperty('scrollbar-width', 'none', 'important');
+  document.body?.style.setProperty('scrollbar-width', 'none', 'important');
+  assert(root.style.getPropertyValue('scrollbar-width') === 'none', 'hidePageRootScrollbar: the root draws no bar');
+}
 
 // ───────────────────────────── App → frame: hide the page's bar ─────────────────────────────
 
