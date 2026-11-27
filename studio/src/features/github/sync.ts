@@ -46,7 +46,9 @@ export class RepositorySync {
       return this.state;
     }
     if (await readGitWorkspace(this.root)) {
-      // Explicit Git pulls own merging once local commits/branches exist.
+      // Explicit Git pulls own merging once local commits/branches exist. An earlier failure or conflict
+      // would otherwise stay for good, and publishing refuses while the last check failed.
+      this.state = { kind: 'idle' };
       return this.state;
     }
     this.state = { kind: 'checking' };
