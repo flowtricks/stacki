@@ -20,13 +20,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const IMAGE = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="red"/></svg>';
 const IMAGE_WIDTH = 40;
-// Each wait is a poll of a condition, at most this many steps of this length.
-const WAIT = { stepMs: 20, stepsMax: 500 };
-// How long the page is given to hear of a cancelled request. A fault shows within a few milliseconds.
-const SETTLE_MS = 500;
+// Each wait is a poll of a condition, at most this many polls at this interval.
+const WAIT = { pollIntervalMs: 20, pollCountMax: 500 };
 
 const CASES = [
   { name: 'the image endpoint', url: '/_image?href=%2Fa.svg', header: 'public, max-age=31536000', plugin: true, widthAfter: IMAGE_WIDTH },
@@ -46,6 +45,7 @@ async function probe() {
   let current;
   let held = false;
   let heldCount = 0;
+  let cancelledCount = 0;
   const server = http.createServer((request, response) => {
     const answer = () => {
       if (!request.url.startsWith(current.url.split('?')[0])) {
@@ -55,6 +55,7 @@ async function probe() {
       }
       if (held) {
         heldCount += 1; // Never answered: it is still in flight when its frame leaves.
+        response.once('close', () => (cancelledCount += 1));
         return;
       }
       response.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': current.header, etag: '"one"' });
@@ -66,16 +67,7 @@ async function probe() {
       answer();
     }
   });
-  const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const until = async (what, condition) => {
-    for (let step = 0; step < WAIT.stepsMax; step += 1) {
-      if (await condition()) {
-        return;
-      }
-      await pause(WAIT.stepMs);
-    }
-    throw new Error(`timed out: ${what}`);
-  };
+  const until = (what, condition) => waitFor({ ...WAIT, what, read: condition, until: Boolean });
   await app.whenReady();
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -86,6 +78,7 @@ async function probe() {
     current = entry;
     held = false;
     heldCount = 0;
+    cancelledCount = 0;
     await window.loadURL(`${base}/page-${index}`);
     await until(`${entry.name}: the image loads`, () => page('picture.complete && picture.naturalWidth > 0'));
     held = true;
@@ -93,7 +86,10 @@ async function probe() {
     // The frame either asks again or, were the copy reused unasked, never does: the check below says which.
     await until(`${entry.name}: the frame asks for the image`, () => heldCount > 0);
     await page('frame.remove(); true');
-    await pause(SETTLE_MS);
+    // The cancel has reached the server, and a request the page made after that has come back, so the page has heard
+    // of it. The control shows this is late enough: without the plugin its picture is gone by now.
+    await until(`${entry.name}: the held request is cancelled`, () => cancelledCount === heldCount);
+    await page(`fetch('/after-cancel-${index}', { cache: 'no-store' }).then((reply) => reply.text()).then(() => true)`);
     results.push({ name: entry.name, widthAfter: await page('picture.naturalWidth') });
   }
   assert.equal(results.length, CASES.length);

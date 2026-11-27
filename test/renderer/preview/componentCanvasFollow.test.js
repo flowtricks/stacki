@@ -19,6 +19,7 @@ const { buildSync } = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 const { installPopupDOM } = require('../../helpers/popupDom.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 const { CANVAS_LIMITS: LIMITS } = require('#dist/shared/properties/componentCanvas.js');
 
@@ -337,11 +338,15 @@ test('Layout shows direction icons, named and tipped by their words', async (con
   );
   assert.equal(segments[2].querySelectorAll('svg path[opacity="0.4"]').length, 1, 'the direction bar’s wrap icon');
   assert.equal(segments[0].getAttribute('aria-checked'), 'true', 'side by side is what nobody arranged');
-  await act(async () => {
-    segments[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, TOOLTIP_WAIT_MS));
+  await act(async () => segments[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
+  await waitFor({
+    what: 'the words as the hover tip',
+    read: async () => {
+      await act(async () => {});
+      return document.querySelector('[role="tooltip"]')?.textContent ?? '';
+    },
+    until: (tip) => tip === 'Stacked',
   });
-  assert.equal(document.querySelector('[role="tooltip"]')?.textContent, 'Stacked', 'the words are the hover tip');
   await act(async () => segments[2].dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
   assert.deepEqual(arrangements, ['wrap']);
   canvas.noteComponentCanvas({ kind: 'idle' });

@@ -4,7 +4,8 @@
 // Methodology: check which editor states count as a component, then mount the real PreviewPane
 // in jsdom over a stored visible guide, let the frame report its measurements, and switch the
 // pane between a page and a component. A MutationObserver counts every guide element ever added
-// while a component is the subject, and the metadata bridge counts every write.
+// while a component is the subject, and the metadata bridge counts every write. The test owns the
+// clock (mock timers), so the guide's save delay has passed when it says so, on any machine.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -33,7 +34,9 @@ esbuild.buildSync({
   logLevel: 'silent',
 });
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+// A frame and what follows it; then past the guide's 200 ms save delay.
+const SETTLE_MS = 20;
+const PAST_SAVE_MS = 260;
 const SETTINGS = { visible: true, numbers: true, color: '#929292', opacity: 0.06, columns: { kind: 'automatic' }, columnDefaultsVersion: 1 };
 const STORED = JSON.stringify({ version: 1, settings: SETTINGS });
 const GUIDE_BUTTON = '.guide-btns:not(.is-interaction) button[aria-haspopup="dialog"]';
@@ -73,8 +76,15 @@ test('Desktop and Studio tell the guide what they are editing', () => {
   assert.match(studio, /subject: studioGuideSubject\(props\.file\)/);
 });
 
-test('a component is never drawn with the guide, and the page gets it back as saved', async () => {
+test('a component is never drawn with the guide, and the page gets it back as saved', async (context) => {
   const dom = installDOM();
+  context.mock.timers.enable({ apis: ['setTimeout'] });
+  // Lets every settled promise run (setImmediate is not mocked), then moves the clock, then lets what that started run.
+  const advanceClock = async (clockMs = SETTLE_MS) => {
+    await new Promise((resolve) => setImmediate(resolve));
+    context.mock.timers.tick(clockMs);
+    await new Promise((resolve) => setImmediate(resolve));
+  };
   const writes = [];
   dom.window.avb = bridge(writes);
   const React = require('react');
@@ -85,7 +95,7 @@ test('a component is never drawn with the guide, and the page gets it back as sa
   const render = async (guideSubject) =>
     act(async () => {
       root.render(React.createElement(PreviewPane, { ...paneProps(), guideSubject }));
-      await settle();
+      await advanceClock();
     });
   const columns = () => document.querySelectorAll('.guide-column').length;
   const numbers = () => document.querySelectorAll('.guide-column-number').length;
@@ -94,7 +104,7 @@ test('a component is never drawn with the guide, and the page gets it back as sa
     const event = new dom.window.KeyboardEvent('keydown', { key: 'G', shiftKey: true, bubbles: true, cancelable: true });
     await act(async () => {
       dom.window.dispatchEvent(event);
-      await new Promise((resolve) => setTimeout(resolve, 260)); // Past the guide's save delay.
+      await advanceClock(PAST_SAVE_MS);
     });
     return event;
   };
@@ -110,7 +120,7 @@ test('a component is never drawn with the guide, and the page gets it back as sa
   });
   try {
     await render('page');
-    await reportMetrics(act, dom);
+    await reportMetrics(act, dom, advanceClock);
     assert.equal(columns(), 12, 'The saved guide is drawn over a page');
     assert.equal(numbers(), 12);
     assert.equal(guideButton() === null, false);
@@ -120,7 +130,7 @@ test('a component is never drawn with the guide, and the page gets it back as sa
     assert.equal(numbers(), 0);
     assert.equal(guideButton() === null, true, 'No guide button over a component');
     observer.observe(document.getElementById('root'), { childList: true, subtree: true });
-    await reportMetrics(act, dom, 900);
+    await reportMetrics(act, dom, advanceClock, 900);
     const event = await pressGuideShortcut();
     assert.equal(event.defaultPrevented, false, 'The shortcut is not taken');
     assert.deepEqual(drawn, [], 'Nothing of the guide was added, even for one commit');
@@ -129,7 +139,7 @@ test('a component is never drawn with the guide, and the page gets it back as sa
     // A pane that mounts on a component never draws it either, from its first commit.
     await act(async () => root.render(undefined));
     await render('component');
-    await reportMetrics(act, dom);
+    await reportMetrics(act, dom, advanceClock);
     assert.deepEqual(drawn, []);
     observer.disconnect();
 
@@ -150,13 +160,13 @@ test('a component is never drawn with the guide, and the page gets it back as sa
 });
 
 // The frame's measurements, as electron/preload/frameGuide.ts posts them.
-async function reportMetrics(act, dom, viewportWidth = 1200) {
+async function reportMetrics(act, dom, advanceClock, viewportWidth = 1200) {
   const frame = document.querySelector('iframe');
   assert.equal(frame === null, false);
   await act(async () => {
     const data = { type: 'avb:guide', viewportWidth, rootFontSize: 16, margin: 32, gutter: 16, widthMax: 1100, variables: {}, counts: {} };
     dom.window.dispatchEvent(new dom.window.MessageEvent('message', { data, source: frame.contentWindow }));
-    await settle();
+    await advanceClock();
   });
 }
 
