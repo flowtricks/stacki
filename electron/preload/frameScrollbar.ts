@@ -2,9 +2,13 @@
 // (frameQueries.ts) and Studio's preview client: hides the page's own scrollbar once the app says so, reports the
 // page's vertical scroll so the canvas can draw its own bar, and scrolls when that bar is dragged.
 //
-// Until the app's word arrives, the page keeps Chromium's scrollbar and every report says so (`chromium: true`),
-// so the canvas never draws a second bar beside a frame that still shows its own. A frame with no app (the phone
-// preview, a page opened on its own) is never told and keeps its scrollbar.
+// A canvas frame (its URL carries #avb-design, PreviewFrame.tsx) hides the page's bar before its first paint, without
+// waiting for the app's word: the word comes on the frame's `load`, after every picture and font, and the page would
+// show Chromium's bar until then. Every canvas frame has the canvas's own bar beside it (SizedFrame.tsx,
+// CanvasView.tsx), so the page is never left without one. Any other frame keeps Chromium's scrollbar until the app's
+// word arrives, and every report says so (`chromium: true`), so the canvas never draws a second bar beside a frame that
+// still shows its own. A frame with no app (the phone preview, a page opened on its own) is never told and keeps its
+// scrollbar.
 //
 // The scrolling root is <html> (the document's scrolling element) on nearly every page. A page that holds <html> still
 // and scrolls <body> instead (`html { overflow: hidden } body { overflow: auto; height: 100% }`) is read and scrolled
@@ -21,6 +25,8 @@ import {
 } from '../../shared/properties/canvasScrollbar';
 
 const STYLE_ID = 'avb-canvas-scrollbar';
+/** The mark the app's canvas loads every page with (PreviewFrame.tsx), read the way markFrameMode reads it. */
+const CANVAS_HASH_MARK = 'avb-design';
 /** The `overflow-y` values under which a <body> taller than its box scrolls itself. */
 const SCROLLING_OVERFLOWS: readonly string[] = ['auto', 'scroll', 'overlay'];
 
@@ -38,6 +44,7 @@ export function installPageScrollReport(send: (message: unknown) => void): void 
     return;
   }
   post = send;
+  hideCanvasPageScrollbarEarly();
   // Capture on the document: a scrolling <body> fires `scroll` at itself, and element scroll events do not bubble.
   document.addEventListener('scroll', scheduleReport, { capture: true, passive: true });
   window.addEventListener('resize', scheduleReport);
@@ -69,6 +76,24 @@ function observeRootWhenReady(): void {
   observe();
   document.addEventListener('readystatechange', observe);
   window.addEventListener('DOMContentLoaded', observe);
+}
+
+// A canvas frame hides the page's bar now, before the page is parsed or painted. The rule goes into the document's
+// adopted style sheets: no element is added to the page, so nothing that watches its DOM (the column guide, the
+// outlines, the canvas patcher) sees a change, and a document whose <html> does not exist yet takes it as well. The
+// app's word on `load` still writes the <style> element, as for any frame; both hold the same rule.
+function hideCanvasPageScrollbarEarly(): void {
+  if (!window.location.hash.includes(CANVAS_HASH_MARK)) {
+    return; // Not the canvas's frame: it waits for the app's word.
+  }
+  if (!('adoptedStyleSheets' in document)) {
+    return; // A document without constructable style sheets waits for the app's word too.
+  }
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(CANVAS_SCROLLBAR_CSS);
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+  told = true;
+  assert(document.adoptedStyleSheets.includes(sheet), 'hideCanvasPageScrollbarEarly: the canvas frame draws no bar of its own');
 }
 
 /** Applies an app message if it is one (hide the page's bar, or a scroll); false when it was something else. */
