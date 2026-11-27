@@ -167,6 +167,9 @@ app.whenReady().then(async () => {
   await live('const section = document.querySelector("#tween"); section.innerHTML = "<div class=card>Four</div><div class=card>Five</div>"; armCards(); document.querySelector(".parallax").style.width = "123px"; 0');
   const edited = await run('take("allowed")');
   out.edited = { copy: await read(edited) };
+  // Read after every copy: software GL on a machine with no graphics card can lose the context, and then the page's
+  // draws do nothing and there is no picture to take.
+  out.webglLost = await live('window.lostWebGL()');
   out.liveStyles = await live('JSON.stringify({ pin: document.querySelector(".pin-spacer").getAttribute("style"), canvases: document.querySelectorAll("canvas").length, menu: document.querySelector("#menu").getAttribute("style") })');
   console.log(JSON.stringify(out));
   app.quit();
@@ -237,13 +240,15 @@ app.whenReady().then(async () => {
   process.exit(1);
 });
 
-function judge({ webgl, held, walked, again, edited, liveStyles }) {
+function judge({ webgl: made, webglLost, held, walked, again, edited, liveStyles }) {
+  // macOS draws WebGL on its graphics card, so there a lost context still fails the picture check.
+  const webgl = made && !(webglLost && process.platform !== 'darwin');
   check('a request is acknowledged before its answer', held.reply.ok && held.reply.heard, held.reply);
   check('a held request never scrolls the page', held.scrolls === 0, held.scrolls);
   check('control: held, the entrances below the screen have not played', held.copy.cards.every((card) => !card) && held.copy.splitMasks === 3, held.copy);
   check('a walked page is pictured', walked.ok, walked);
   if (!webgl) {
-    console.log('design-snapshot-chromium: no WebGL here, so its picture is not checked');
+    console.log(`design-snapshot-chromium: ${made ? 'the WebGL context was lost' : 'no WebGL'} here, so its picture is not checked`);
   }
   whole('first copy', walked.copy, webgl);
   // Bounded by its own count of stops, endless animations and all: two walks of at most WALK_STOPS_MAX, the top,

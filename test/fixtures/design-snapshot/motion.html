@@ -188,6 +188,7 @@
       // Redrawn 30 times a second while on screen, into a buffer that is gone once the frame is shown.
       const gl = one('.solid').getContext('webgl', { alpha: false });
       window.drawsWebGL = !!gl;
+      window.lostWebGL = () => !!gl && gl.isContextLost();
       let visible = false;
       let last = 0;
       const render = (time) => {
