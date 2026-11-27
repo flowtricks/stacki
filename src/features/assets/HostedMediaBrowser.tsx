@@ -23,11 +23,9 @@ import {
   type HostedFolder,
 } from '../../ipc/mediaHostingBridge';
 import {
-  AudioFileIcon,
   ChevronRightIcon,
   CopyIcon,
   ExternalIcon,
-  FileIcon,
   FolderIcon,
   FolderPlusIcon,
   PencilIcon,
@@ -47,6 +45,7 @@ import { hostedCrumbs, hostedKindMatches, movedOrder } from './hostedMediaModel'
 import { copyLink, openLink } from './assetLinks';
 import './hostedMedia.css';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 export type HostedToast = (message: string, kind: 'error' | 'success') => void;
 
@@ -477,7 +476,7 @@ export function HostedThumb({ file }: { readonly file: MediaFile }) {
   return (
     <div className="asset-thumb">
       <div className="asset-ext">
-        {file.kind === 'audio' ? <AudioFileIcon size={22} /> : <FileIcon size={22} />}
+        <FileTypeIcon name={file.name} size={22} />
         {extension.slice(0, 6)}
       </div>
     </div>
@@ -516,7 +515,7 @@ function PreviewMedia({ file }: { readonly file: MediaFile }) {
     case 'file':
       return (
         <div className="hosted-preview-file">
-          <FileIcon size={32} />
+          <FileTypeIcon name={file.name} size={32} />
         </div>
       );
     default: {

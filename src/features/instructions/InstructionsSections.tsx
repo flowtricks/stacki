@@ -27,7 +27,7 @@ import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import InfoHint from '../../ui/InfoHint';
 import { type MenuItem } from '../../ui/MoreMenu';
-import { FileIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon, PlusIcon, SkillIcon } from '../../ui/Icons';
+import { FolderIcon, FolderOpenIcon, FolderPlusIcon, PlusIcon, SkillIcon } from '../../ui/Icons';
 import { PanelRow } from '../../ui/PanelRow';
 import { PanelSection, PanelSectionAction, PanelSectionNote } from '../../ui/PanelSection';
 import {
@@ -56,6 +56,7 @@ import {
 import { useReportMatches } from '../../lib/useReportMatches';
 import { selectInstruction, useInstructionSelection } from './instructionSelection';
 import './instructions.css';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 interface Props {
   readonly projectPath: string;
@@ -360,7 +361,7 @@ function Tree(props: {
               key={node.path}
               depth={props.depth}
               label={node.label}
-              icon={<FileIcon size={13} />}
+              icon={<FileTypeIcon name={node.path} size={13} />}
               title={node.path}
               selected={props.selected === node.path}
               folder={undefined}

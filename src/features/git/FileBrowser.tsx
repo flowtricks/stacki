@@ -4,6 +4,7 @@ import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon } from '.
 import FileStatus from '../../ui/GitStatus';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 // A project of any size lists whole: the entry bound is the platform's. Path width and depth are structural.
 const FILE_LIMITS = { entriesMax: LIMITS.scanEntriesMax, pathCharsMax: 8_192, depthMax: 64 } as const;
@@ -306,6 +307,7 @@ function FileRow<T extends BrowserFile>({
           onClick={(event) => event.stopPropagation()}
         />
       )}
+      <FileTypeIcon name={file.path} />
       <span className="fb-name">{file.name || file.path.split('/').pop()}</span>
       {/* Where it is, but only while searching — in the tree the indentation
           already says it, and repeating it would be noise on every row. */}

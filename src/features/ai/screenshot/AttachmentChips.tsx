@@ -2,11 +2,12 @@
 // lightbox when clicked; every chip has a remove button. The thumbnail and the lightbox read the
 // draft's in-memory data URL, so showing an image larger writes nothing anywhere.
 import { useState } from 'react';
-import { CloseIcon, FileIcon } from '../../../ui/Icons';
+import { CloseIcon } from '../../../ui/Icons';
 import Popup from '../../../ui/Popup';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import type { DraftAttachment } from '../aiStore';
 import { fitContain } from './FramePicker';
+import { FileTypeIcon } from '../../../ui/ElementIcons';
 
 export function AttachmentChips({ attachments, onRemove }: { readonly attachments: readonly DraftAttachment[]; readonly onRemove: (id: string) => void }) {
   const translate = useTranslate();
@@ -24,7 +25,7 @@ export function AttachmentChips({ attachments, onRemove }: { readonly attachment
           <span className={`ai-attachment${entry.preview === undefined ? '' : ' is-image'}`} key={entry.id}>
             {entry.preview === undefined ? (
               <>
-                <FileIcon size={12} />
+                <FileTypeIcon name={name} size={12} />
                 <span>{name}</span>
               </>
             ) : (

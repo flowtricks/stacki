@@ -2,11 +2,11 @@ import { assetSources } from '../ipc/editorEnvironment';
 import React, { useRef, useState } from 'react';
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
-import { FileIcon, CodeIcon } from './Icons';
 import { Skeleton } from './Skeleton';
 import { THUMBNAIL_EXT, useThumbnail } from './assetThumbnails';
 import { FONT_PREVIEW_EXTENSIONS, acquireFontPreview, releaseFontPreview, useFontPreview } from './fontPreview';
 import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
+import { FileTypeIcon } from './ElementIcons';
 
 export const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i;
 export const VIDEO_EXT = /\.(mp4|webm|mov|m4v|ogv)$/i;
@@ -114,7 +114,7 @@ interface AssetThumbProps {
   readonly downscale?: { readonly key: string } | undefined;
 }
 export default function AssetThumb({ file, className = '', onImageLoad, onClick, downscale }: AssetThumbProps) {
-  const { videoRef, source, failed, nextSource, isText, isVideo, isImage, isFont, fontFamily, sourceIndex } = useAssetPreview(file);
+  const { videoRef, source, failed, nextSource, isVideo, isImage, isFont, fontFamily, sourceIndex } = useAssetPreview(file);
   // Only the first source is fetched for a copy; a fallback source is drawn as it is.
   const thumbnail = useThumbnail(downscale?.key ?? file.abs, source, {
     wanted: downscale !== undefined && isImage && !failed && sourceIndex === 0 && THUMBNAIL_EXT.test(file.name),
@@ -165,7 +165,7 @@ export default function AssetThumb({ file, className = '', onImageLoad, onClick,
         </span>
       ) : (
         <span className="asset-ext">
-          {isText ? <CodeIcon size={16} /> : <FileIcon size={16} />}
+          <FileTypeIcon name={file.name} size={16} />
           {(file.name.split('.').pop() || '').toUpperCase().slice(0, 5)}
         </span>
       )}
@@ -197,7 +197,6 @@ function useAssetPreview(file: AssetThumbProps['file']) {
     source,
     failed,
     nextSource,
-    isText,
     isVideo,
     isImage,
     isFont,

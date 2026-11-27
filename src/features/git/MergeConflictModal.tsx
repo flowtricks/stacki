@@ -6,6 +6,7 @@ import { conflictDraftsForSend } from './conflictDraft';
 import { useMergeConflict } from './useMergeConflict';
 import type { MergeConflictModel } from './useMergeConflict';
 import { MergeConflictDetail } from './MergeConflictDetail';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 export interface MergeConflictProps {
   readonly conflict: Conflict;
@@ -88,7 +89,10 @@ function ConflictFiles({ model }: { readonly model: MergeConflictModel }) {
             aria-current={file.path === model.file.path ? 'true' : undefined}
             onClick={() => model.setOpenPath(file.path)}
           >
-            <span className="conflict-file-name">{file.path.split('/').pop()}</span>
+            <span className="conflict-file-name">
+              <FileTypeIcon name={file.path} />
+              {file.path.split('/').pop()}
+            </span>
             <span className="conflict-file-dir">{file.path.split('/').slice(0, -1).join('/')}</span>
             <span className={`conflict-file-badge ${pending > 0 ? 'warn' : ''}`}>
               {pending > 0 ? translate('git.conflict.toReview', { count: pending }) : translate('git.conflict.ready')}

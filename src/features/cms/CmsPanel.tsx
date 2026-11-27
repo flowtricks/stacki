@@ -8,7 +8,7 @@ import { collectionHasContent, collectionOf } from './cmsSchema';
 import { createCmsCollection } from './cmsPanelBridge';
 import { cmsCache, keptCmsConnections, readCmsCatalog } from './cmsCatalog';
 import { assert } from '../../../shared/core/assert';
-import { ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CmsIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
 import { ASTRO_CONTENT_ID, ASTRO_CONTENT_SOURCE, type CmsSource } from '../../../shared/properties/astroContent';
@@ -18,6 +18,7 @@ import { RemoteCmsBrowser } from './RemoteCmsBrowser';
 import { prefetchConnection } from './remoteCmsCache';
 import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
 import { PanelHeader } from '../../ui/PanelHeader';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 interface CmsPanelProps {
   readonly project: { readonly path: string };
@@ -515,7 +516,7 @@ function GroupList({
           selected={group.items.some((item) => item.rel === selectedRel)}
           onClick={() => onOpen(group.key)}
           onSettings={group.kind === 'file' && onSettings !== undefined ? () => onSettings(group) : undefined}
-          icon={group.kind === 'file' ? <FileIcon size={14} /> : <FolderDefaultIcon size={14} />}
+          icon={group.kind === 'file' ? <FileTypeIcon name={group.path} /> : <FolderDefaultIcon size={14} />}
         />
       ))}
     </>

@@ -70,6 +70,16 @@
   --git-deleted: #e8735c;
   --git-conflicted: #ff8589;
   --git-ignored: #8c8c8c;
+  /* File-type icons, one colour per type, after VS Code's: each reads on a panel and on a selected row. */
+  --file-astro: #ff5d01;
+  --file-blue: #4a9fe0;
+  --file-cyan: #53c1de;
+  --file-green: #8dc149;
+  --file-grey: #9aa7b0;
+  --file-orange: #f08d49;
+  --file-purple: #b08ce0;
+  --file-red: #e5645c;
+  --file-yellow: #d9cb4a;
   --orange: #ff9f0a;
   --radius: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -604,6 +614,10 @@ html[data-platform='win32'] .titlebar {
 }
 .conflict-file-row.on {
   background: var(--accent-soft);
+}
+.conflict-file-name .file-type-icon {
+  margin-inline-end: 6px;
+  vertical-align: text-bottom;
 }
 .conflict-file-name {
   font-size: 12px;
@@ -9502,13 +9516,40 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   border-radius: 50%;
   background: currentColor;
 }
-/* Astro's mark in a file row's 16px icon box (ui/ElementIcons.tsx, file-type icons). */
-.files-icon-brand {
-  display: flex;
+/* A file's type icon (ui/ElementIcons.tsx, file-type icons): a square box, in its type's colour. The colour is set on
+   the icon itself, so it holds on a hovered or selected row; git's colours stay on the name and the badge. */
+.file-type-icon {
+  display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+}
+[data-file-hue='astro'] {
+  color: var(--file-astro);
+}
+[data-file-hue='blue'] {
+  color: var(--file-blue);
+}
+[data-file-hue='cyan'] {
+  color: var(--file-cyan);
+}
+[data-file-hue='green'] {
+  color: var(--file-green);
+}
+[data-file-hue='grey'] {
+  color: var(--file-grey);
+}
+[data-file-hue='orange'] {
+  color: var(--file-orange);
+}
+[data-file-hue='purple'] {
+  color: var(--file-purple);
+}
+[data-file-hue='red'] {
+  color: var(--file-red);
+}
+[data-file-hue='yellow'] {
+  color: var(--file-yellow);
 }
 
 /* The Git panel's list of changes (features/git/CommitFilePicker.tsx): closed until asked for, then its own bounded

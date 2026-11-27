@@ -6,10 +6,11 @@ import { readCSSVariables } from '../../ipc/variablesBridge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
 import type { VariableFile, VariableGroup, VariableSelection } from '../../ipc/variablesBridge';
-import { ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
+import { ChevronRightIcon, VariableIcon } from '../../ui/Icons';
 import { VariableScopeBadge } from './VariableScopeBadge';
 import { variableFileListed, type VariablePlace } from '../../editor/variablePlace';
 import { assert } from '../../../shared/core/assert';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 import { PanelHeader } from '../../ui/PanelHeader';
 
 export interface VariablesPanelProps {
@@ -140,7 +141,7 @@ function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
         onSelect({ file: file.rel, index: 0 });
       }}
     >
-      <FileIcon size={14} />
+      <FileTypeIcon name={file.rel} />
       <span className="cms-collection-name">{file.name}</span>
       {onlyGroup(file) && <VariableScopeBadge scope={file.groups[0]?.scope} />}
       <span className="cms-collection-count">{file.error ? '' : translate('variables.count', { count: file.count ?? 0 })}</span>

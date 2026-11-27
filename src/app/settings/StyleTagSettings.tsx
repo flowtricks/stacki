@@ -35,7 +35,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { NoticeToast } from '../../ui/NoticeToast';
-import { CodeIcon, FileIcon } from '../../ui/Icons';
+import { CodeIcon } from '../../ui/Icons';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { Skeleton } from '../../ui/Skeleton';
 import { SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
@@ -44,6 +44,7 @@ import { useCodeChips } from '../../features/style/codeChips/CodeChips';
 import { can } from '../../../shared/properties/projectRoles';
 import { styleTagLock, styleTagParts, styleTagText } from './styleTagEditor';
 import './styleTagSettings.css';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 /** How long typing pauses before the block is saved: one save per thought, not per key. */
 const SAVE_DELAY_MS = 600;
@@ -194,10 +195,10 @@ export function locationOptions(
 ): readonly DropdownOption[] {
   const options: DropdownOption[] = [{ value: CREATE_TAG_CHOICE, label: labels.createTag, pinned: true, icon: <CodeIcon size={14} /> }];
   for (const rel of stylesheets) {
-    options.push({ value: rel, label: rel, icon: <FileIcon size={14} /> });
+    options.push({ value: rel, label: rel, icon: <FileTypeIcon name={rel} /> });
   }
   if (location.kind === 'file' && !stylesheets.includes(location.path)) {
-    options.push({ value: location.path, label: location.path, hint: labels.missing, dim: true, icon: <FileIcon size={14} /> });
+    options.push({ value: location.path, label: location.path, hint: labels.missing, dim: true, icon: <FileTypeIcon name={location.path} /> });
   }
   assert(options.length >= 1, 'locationOptions: "Create a style tag" is always offered');
   return options;

@@ -12,7 +12,7 @@ import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
 import { choiceDialog, confirmDialog } from '../../ui/ConfirmDialog';
 import { EmptyState } from '../../ui/EmptyState';
-import { CloseIcon, FileIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { CloseIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { sourceCandidates } from '../../ui/AssetThumb';
 import { codeIndentStyleFor } from '../../ui/codeIndentStyle';
 import { explorerErrorText } from './filesActions';
@@ -26,6 +26,7 @@ import { fileGitMark } from './fileGitMarks';
 import { FilesTipButton } from './FilesTipButton';
 import { useFileDocument, type FileDocument } from './useFileDocument';
 import './files.css';
+import { FileTypeIcon } from '../../ui/ElementIcons';
 
 export interface FileEditorViewProps {
   readonly projectPath: string;
@@ -130,7 +131,7 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
         )}
         {load.kind === 'other' && load.content.kind === 'binary' && (
           <EmptyState
-            icon={<FileIcon size={20} />}
+            icon={<FileTypeIcon name={name} size={20} />}
             title={translate('workspace.files.editor.binary')}
             description={translate('workspace.files.editor.binaryHint', { size: formatBytes(load.content.sizeBytes) })}
             align="center"
@@ -138,7 +139,7 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
         )}
         {load.kind === 'other' && load.content.kind === 'too-large' && (
           <EmptyState
-            icon={<FileIcon size={20} />}
+            icon={<FileTypeIcon name={name} size={20} />}
             title={translate('workspace.files.editor.tooLarge')}
             description={translate('workspace.files.editor.tooLargeHint', {
               size: formatBytes(load.content.sizeBytes),
@@ -147,7 +148,9 @@ function TextOrMedia(props: FileEditorViewProps & { readonly name: string; reado
             align="center"
           />
         )}
-        {load.kind === 'failed' && <EmptyState icon={<FileIcon size={20} />} title={explorerErrorText(load.error, translate, name)} align="center" />}
+        {load.kind === 'failed' && (
+          <EmptyState icon={<FileTypeIcon name={name} size={20} />} title={explorerErrorText(load.error, translate, name)} align="center" />
+        )}
       </div>
     </div>
   );
@@ -170,6 +173,7 @@ function EditorHead(props: {
     <div className="cms-detail-head files-editor-head">
       <span className="cms-detail-title files-editor-title" data-git={gitTone(mark)}>
         {props.dirty === true && <span className="files-dirty" aria-hidden="true" />}
+        <FileTypeIcon name={props.name} />
         <bdi className="files-editor-name" dir="ltr">
           {props.name}
         </bdi>
