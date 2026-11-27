@@ -147,19 +147,43 @@ function setAttribute(element: Element, name: string, value: string): void {
   undos.push(() => element.removeAttribute(name));
 }
 
+// A render can write the element's style while it is shown, and restoring the whole attribute
+// would put the old one over it until a refresh. So the attribute goes back as it was only while
+// nothing else wrote it; otherwise declaration by declaration, where it still says what was set.
 function setStyle(element: Element, declarations: Readonly<Record<string, string>>): void {
   if (!(element instanceof HTMLElement || element instanceof SVGElement)) {
     return;
   }
-  const before = element.getAttribute('style');
-  for (const [property, value] of Object.entries(declarations)) {
+  const attribute = element.getAttribute('style');
+  const changed = Object.entries(declarations).map(([property, value]) => {
+    const before = { value: element.style.getPropertyValue(property), priority: element.style.getPropertyPriority(property) };
     element.style.setProperty(property, value, 'important');
-  }
+    return { property, before, set: element.style.getPropertyValue(property) };
+  });
+  const shownAs = element.getAttribute('style');
   undos.push(() => {
-    if (before === null) {
-      element.removeAttribute('style');
-    } else {
-      element.setAttribute('style', before);
+    if (element.getAttribute('style') === shownAs) {
+      putAttributeBack(element, attribute);
+      return;
+    }
+    for (const { property, before, set } of changed) {
+      if (element.style.getPropertyValue(property) !== set) {
+        continue;
+      }
+      if (before.value === '') {
+        element.style.removeProperty(property);
+      } else {
+        element.style.setProperty(property, before.value, before.priority);
+      }
     }
   });
+}
+
+// `getAttribute` answers null for an element without one: that one is taken off again.
+function putAttributeBack(element: Element, attribute: ReturnType<Element['getAttribute']>): void {
+  if (typeof attribute === 'string') {
+    element.setAttribute('style', attribute);
+  } else {
+    element.removeAttribute('style');
+  }
 }

@@ -11,7 +11,7 @@ import {
 import { parseCanvasTextClose, parseCanvasTextFocus } from '../../shared/properties/canvasTextOverlay';
 import { canvasTextSourceMatches, pathsOf } from './frameRegions';
 import { matchCanvasText, textRunsAround, type TextMatch, type TextRun } from './frameTextMatch';
-import { openNativeText, type NativeTextResult } from './frameTextNative';
+import { openNativeText, showTypedWords, type NativeTextResult } from './frameTextNative';
 import { holdsInlineWords, openRichText, type RichTextKept, type RichTextPlace } from './frameRichText';
 import { textEditorRoot, textSelection, type TextOffsets } from './frameTextSelection';
 
@@ -441,7 +441,10 @@ function commitCanvasText(
   // the save writes as markup: the rendered `<br>` and its words arrive as new nodes, beside which kept words would
   // show twice.
   if (!edits.some(({ run, value }) => run.target.breaks !== undefined && value.includes('\n'))) {
-    result.keep();
+    showTypedWords(
+      entry.runs.flatMap((run) => run.match.nodes),
+      result.keep,
+    );
   }
 }
 

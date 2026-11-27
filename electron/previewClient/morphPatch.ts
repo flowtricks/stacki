@@ -110,18 +110,27 @@ const EXACT_DIFF_CELLS_MAX = 1_000_000;
 const MYERS_EDITS_MAX = 1024;
 const MYERS_WORK_MAX = 4_000_000;
 
-export function diffChildren(before: readonly string[], after: readonly string[]): DiffOp[] {
+// `identical`, when given, says whether two same-kind nodes are the same node unchanged. Among
+// the ways to line them up, the ones keeping those win: a paragraph inserted before another is
+// a new node, not the old one rewritten into it with the old one rebuilt after it. Why it
+// matters: what a page script did to a node's insides (a heading split into lines) stays on
+// the live node, and the patch cannot reach through it, so
+// pairing a node with the wrong partner showed one node's words under another's class and
+// left the new words off the page until a refresh. Only the exact diff weighs it; lists past
+// its size are lined up by kind alone.
+export function diffChildren(before: readonly string[], after: readonly string[], identical?: (i: number, j: number) => boolean): DiffOp[] {
   const beforeCount = before.length;
   const afterCount = after.length;
   const ops: DiffOp[] = [];
+  const weigh = identical !== undefined && (beforeCount + 1) * (afterCount + 1) <= EXACT_DIFF_CELLS_MAX ? identical : undefined;
   let i = 0;
   let j = 0;
-  while (i < beforeCount && j < afterCount && before[i] === after[j]) {
+  while (i < beforeCount && j < afterCount && before[i] === after[j] && (weigh === undefined || !isElementKey(before[i]) || weigh(i, j))) {
     ops.push([0, i++, j++]);
   }
   if (i < beforeCount && j < afterCount) {
     if ((beforeCount - i + 1) * (afterCount - j + 1) <= EXACT_DIFF_CELLS_MAX) {
-      appendExactDiff(ops, before, after, i);
+      appendExactDiff(ops, before, after, i, weigh);
       return ops;
     }
     appendScalableDiff(ops, before, after, i);
@@ -136,8 +145,24 @@ export function diffChildren(before: readonly string[], after: readonly string[]
   return ops;
 }
 
+const isElementKey = (key: string | undefined): boolean => key?.startsWith('e:') === true;
+
+// What a kept pair is worth to the exact diff. An unchanged node outweighs two pairs of
+// different ones, so that of two swapped siblings one stays as it is and the other is built
+// anew, rather than each being rewritten into the other: what a page script had set on one (an
+// entrance holding it invisible) went to the other's content, and hid it until a refresh.
+const PAIR_WEIGHT = 2;
+const IDENTICAL_PAIR_WEIGHT = 5;
+
 // The exact matrix, from `start` (the lists agree before it), appended to `ops`.
-function appendExactDiff(ops: DiffOp[], before: readonly string[], after: readonly string[], start: number): void {
+function appendExactDiff(
+  ops: DiffOp[],
+  before: readonly string[],
+  after: readonly string[],
+  start: number,
+  identical: ((i: number, j: number) => boolean) | undefined,
+): void {
+  const weightOf = (i: number, j: number): number => (identical?.(i, j) ? IDENTICAL_PAIR_WEIGHT : PAIR_WEIGHT);
   const beforeCount = before.length;
   const afterCount = after.length;
   let i = start;
@@ -153,11 +178,13 @@ function appendExactDiff(ops: DiffOp[], before: readonly string[], after: readon
       continue;
     }
     for (let col = afterCount - start - 1; col >= 0; col--) {
-      currentRow[col] = before[row + start] === after[col + start] ? (next[col + 1] ?? 0) + 1 : Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
+      const skipped = Math.max(next[col] ?? 0, currentRow[col + 1] ?? 0);
+      const paired = before[row + start] === after[col + start] ? (next[col + 1] ?? 0) + weightOf(row + start, col + start) : 0;
+      currentRow[col] = Math.max(paired, skipped);
     }
   }
   while (i < beforeCount && j < afterCount) {
-    if (before[i] === after[j]) {
+    if (before[i] === after[j] && (dp[i - start]?.[j - start] ?? 0) === (dp[i - start + 1]?.[j - start + 1] ?? 0) + weightOf(i, j)) {
       ops.push([0, i++, j++]);
       continue; // keep
     }
@@ -438,6 +465,77 @@ function patchClass(live: Element, previous: Element, next: Element): void {
   }
 }
 
+interface Declaration {
+  readonly value: string;
+  readonly priority: string;
+}
+
+// One declaration of a style attribute: a `;` inside quotes or brackets (a data URL, a quoted
+// font name) does not end it.
+const DECLARATION_TEXT = /(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:"[^"]*"|'[^']*'|\([^()]*\)|[^()"'])*\)|[^;"'(])+/g;
+
+// A style attribute's declarations in order, or undefined past the bound.
+function declarationsOf(element: Element): Map<string, Declaration> | undefined {
+  const parts = (element.getAttribute('style') || '').match(DECLARATION_TEXT) ?? [];
+  if (parts.length > STYLE_DECLARATIONS_MAX) {
+    return undefined;
+  }
+  const declarations = new Map<string, Declaration>();
+  for (const part of parts) {
+    const colon = part.indexOf(':');
+    if (colon <= 0) {
+      continue;
+    }
+    const written = part.slice(0, colon).trim();
+    const name = written.startsWith('--') ? written : written.toLowerCase();
+    const text = part.slice(colon + 1).trim();
+    const value = text.replace(/\s*!\s*important$/i, '');
+    declarations.set(name, { value, priority: value === text ? '' : 'important' });
+  }
+  return declarations;
+}
+
+const isStyleDeclaration = (value: unknown): value is CSSStyleDeclaration =>
+  typeof value === 'object' && value !== null && 'setProperty' in value && 'removeProperty' in value;
+
+// A style the page has written to as well as the server: only the declarations the two renderings
+// disagree about are written, as classes are merged. Writing the whole attribute took away what a
+// script had put there (a text entrance's `visibility: visible`), which no fresh load is without.
+// False when the page has added nothing, and the attribute is then written as the server wrote
+// it. So is a variant's (the class changed too): what the page set was set for the element it
+// was before.
+function mergeStyle(live: Element, previous: Element, next: Element): boolean {
+  if (live.getAttribute('style') === previous.getAttribute('style')) {
+    return false;
+  }
+  if ((previous.getAttribute('class') || '') !== (next.getAttribute('class') || '')) {
+    return false;
+  }
+  const style: unknown = 'style' in live ? live.style : undefined;
+  const before = declarationsOf(previous);
+  const after = declarationsOf(next);
+  if (!isStyleDeclaration(style) || before === undefined || after === undefined) {
+    return false;
+  }
+  const removed = [...before.keys()].filter((name) => !after.has(name));
+  for (const name of removed) {
+    style.removeProperty(name);
+  }
+  for (const [name, { value, priority }] of after) {
+    const had = before.get(name);
+    // Removing a shorthand takes its longhands with it (`margin`, `margin-top`): those the
+    // server still writes are written again.
+    const swept = removed.some((gone) => name.startsWith(gone + '-'));
+    if (swept || had?.value !== value || had.priority !== priority) {
+      style.setProperty(name, value, priority);
+    }
+  }
+  if (live.getAttribute('style') === '' && !next.hasAttribute('style')) {
+    live.removeAttribute('style');
+  }
+  return true;
+}
+
 // Only where the two renderings disagree. An attribute the client set that the
 // server never mentions is never seen here, so it stays.
 export function patchAttrs(live: Element, previous: Element, next: Element): void {
@@ -452,7 +550,7 @@ export function patchAttrs(live: Element, previous: Element, next: Element): voi
     }
     if (attribute.name === 'class') {
       patchClass(live, previous, next);
-    } else {
+    } else if (attribute.name !== 'style' || !mergeStyle(live, previous, next)) {
       live.setAttribute(attribute.name, attribute.value);
     }
   }
@@ -467,20 +565,21 @@ export function patchAttrs(live: Element, previous: Element, next: Element): voi
     }
     if (attribute.name === 'class') {
       patchClass(live, previous, next);
-    } else {
+    } else if (attribute.name !== 'style' || !mergeStyle(live, previous, next)) {
       live.removeAttribute(attribute.name);
     }
   }
 }
 
-function patchNode(live: Node, previous: Node, next: Node): void {
+// Returns the node now standing where `live` stood: `live` itself, but for words a script re-wrapped.
+function patchNode(live: Node, previous: Node, next: Node): Node {
   // An unchanged server subtree has no patch to contribute. Client code is
   // free to reorder, remove, or clone anything inside it, so descending into
   // that live subtree is both wasted work and actively unsafe: a slider or nav
   // can no longer resemble its server rendering even though the edit happened
   // somewhere else on the page.
   if (previous.isEqualNode(next)) {
-    return;
+    return live;
   }
   if (live.nodeType === 3 || live.nodeType === 8) {
     // Only when the server changed it, and only if the live copy still says
@@ -491,17 +590,20 @@ function patchNode(live: Node, previous: Node, next: Node): void {
     if (liveText && previousData !== undefined && nextData !== undefined && previousData !== nextData && liveText.data === previousData) {
       liveText.data = nextData;
     }
-    return;
+    return live;
   }
   if (!asElement(live) || pinned(live)) {
-    return;
+    return live;
   }
   if (!asElement(previous) || !asElement(next)) {
     // The diff only pairs nodes of equal kind, so reach is impossible; the
     // guard keeps the types truthful rather than encoding a lie about it.
-    return;
+    return live;
   }
   refuseStaleMeasurement(live, previous, next);
+  if (rewrappedWords(live, previous, next)) {
+    return replaceRewrapped(live, previous, next);
+  }
   patchAttrs(live, previous, next);
   // A change to the element's own attributes (a class, a style, a prop's value) is not
   // a change to what it holds. Its children are left to the page when the server's are
@@ -509,10 +611,93 @@ function patchNode(live: Node, previous: Node, next: Node): void {
   // an entrance), and lining that up with the server's children would fail and reload
   // the page, restarting every animation on it, for an edit that changed one attribute.
   if (sameChildren(previous, next)) {
-    return;
+    return live;
   }
   patchChildren(live, previous, next);
+  reloadChangedMedia(live, previous, next);
+  return live;
 }
+
+// A <video> or <audio> reads its <source> children once, when it starts loading: a source the
+// patch swaps under it changes the markup and nothing else, and the old film plays on where a
+// fresh load shows the new one. A `src` on the element itself loads by itself.
+function reloadChangedMedia(live: Element, previous: Element, next: Element): void {
+  if (live.tagName !== 'VIDEO' && live.tagName !== 'AUDIO') {
+    return;
+  }
+  if (mediaSources(previous) !== mediaSources(next)) {
+    if (canLoad(live)) {
+      live.load();
+    }
+  }
+}
+
+const canLoad = (element: Element): element is Element & { load: () => void } => 'load' in element && typeof element.load === 'function';
+
+function mediaSources(element: Element): string {
+  const sources = Array.from(element.children).filter((child) => child.tagName === 'SOURCE');
+  return JSON.stringify(sources.map((source) => [source.getAttribute('src'), source.getAttribute('type'), source.getAttribute('media')]));
+}
+
+// Words a script wrapped again: split into lines or letters for an entrance, which leaves none of
+// the server's text where the patch looks for it. A change to those words had nowhere to land,
+// so the canvas kept the old ones until a refresh, and the script, putting back the markup it
+// had saved, kept them for good. Only plain words are judged: an element the server filled with
+// text and inline markup, whose live copy still says exactly those words, in other nodes.
+const PHRASING_TAGS: ReadonlySet<string> = new Set(
+  'A ABBR B BDI BDO BR CITE CODE DATA DEL DFN EM I INS KBD MARK Q S SAMP SMALL SPAN STRONG SUB SUP TIME U VAR WBR'.split(' '),
+);
+// Elements read to judge one element's words; longer content is left to the ordinary patch.
+const PHRASING_ELEMENTS_MAX = 512;
+
+function plainWords(element: Element): boolean {
+  const inside = element.getElementsByTagName('*');
+  if (inside.length > PHRASING_ELEMENTS_MAX) {
+    return false;
+  }
+  return Array.from(inside).every((child) => PHRASING_TAGS.has(child.tagName));
+}
+
+const lettersOf = (text: string): string => text.replace(/\s+/g, '');
+const lettersIn = (node: Element): string => lettersOf(node.textContent ?? '');
+
+function rewrappedWords(live: Element, previous: Element, next: Element): boolean {
+  const said = lettersIn(previous);
+  if (said === '' || said === lettersIn(next)) {
+    return false; // Nothing new to say: the script's own wrapping stays.
+  }
+  if (!plainWords(previous) || !plainWords(next)) {
+    return false;
+  }
+  if (lettersIn(live) !== said) {
+    return false; // The script changed the words themselves (a counter, a typed line): its own.
+  }
+  const liveTexts = new Set(Array.from(live.childNodes).flatMap((node) => (asText(node) ? [node.data] : [])));
+  return Array.from(previous.childNodes).some((node) => asText(node) && node.data.trim() !== '' && !liveTexts.has(node.data));
+}
+
+// A new element, not new children: a split keeps hold of the element it split and writes its saved
+// markup back into it when its animation ends, which must reach the old element, no longer on the
+// page. What the page added to the element itself (classes, inline style) comes along.
+function replaceRewrapped(live: Element, previous: Element, next: Element): Element {
+  const made = live.cloneNode(false);
+  if (!isElementNode(made)) {
+    throw Ambiguous(describe(previous) + ', whose words a script wrapped');
+  }
+  patchAttrs(made, previous, next);
+  // A label the split added to say the words it took apart: the old words, over the new ones.
+  const label = made.getAttribute('aria-label');
+  if (label !== null && !previous.hasAttribute('aria-label') && lettersOf(label) === lettersIn(previous)) {
+    made.removeAttribute('aria-label');
+  }
+  for (const child of Array.from(next.childNodes)) {
+    made.appendChild(document.importNode(child, true));
+  }
+  live.replaceWith(made);
+  return made;
+}
+
+const isElementNode = (node: Node): node is Element => asElement(node);
 
 // A page script that sized an element from what it held, once, as it mounted: the
 // patch keeps the size (it is the client's inline style, which the patch never
@@ -605,6 +790,33 @@ function sameChildren(previous: Element, next: Element): boolean {
   return true;
 }
 
+// The editor's own attributes name a node by its place, so they differ for a node that only
+// moved along; they are no part of what makes it the same node.
+const MARKER_ATTRIBUTE_TEXT = / data-avb-[a-z-]+="[^"]*"/g;
+
+// Whether two renderings hold the same element, unchanged. Text and comments never count: blank
+// text is all alike, and weighing it would steer which elements are paired. Each element is
+// written out at most once per list.
+function identicalNodes(before: readonly Node[], after: readonly Node[]): (i: number, j: number) => boolean {
+  const written = new Map<Node, string>();
+  const writtenAs = (element: Element): string => {
+    let markup = written.get(element);
+    if (markup === undefined) {
+      markup = element.outerHTML.replace(MARKER_ATTRIBUTE_TEXT, '');
+      written.set(element, markup);
+    }
+    return markup;
+  };
+  return (i, j) => {
+    const left = before[i];
+    const right = after[j];
+    if (left === undefined || right === undefined || !asElement(left) || !asElement(right)) {
+      return false;
+    }
+    return left.tagName === right.tagName && writtenAs(left) === writtenAs(right);
+  };
+}
+
 export function patchChildren(liveParent: Element, previousParent: Element, nextParent: Element): void {
   const before: Node[] = [];
   for (let node = previousParent.firstChild; node; node = node.nextSibling) {
@@ -632,7 +844,7 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
     return target;
   };
 
-  for (const [kind, i, j] of diffChildren(before.map(keyFor), after.map(keyFor))) {
+  for (const [kind, i, j] of diffChildren(before.map(keyFor), after.map(keyFor), identicalNodes(before, after))) {
     if (kind === 0) {
       const previousNode = before[i];
       const nextNode = after[j];
@@ -646,8 +858,7 @@ export function patchChildren(liveParent: Element, previousParent: Element, next
         patchAway(previousNode, nextNode, 0);
         continue;
       }
-      patchNode(target, previousNode, nextNode);
-      live = target.nextSibling;
+      live = patchNode(target, previousNode, nextNode).nextSibling;
     } else if (kind === -1) {
       const previousNode = before[i];
       if (previousNode === undefined) {
