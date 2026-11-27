@@ -2530,10 +2530,13 @@ is one isolated history event and leaves the caret where it was; Tab moves betwe
 to the composer.
 
 **Add to chat** (`shared/properties/ai/mentions.ts`, `src/features/ai/addToChat.ts`,
-`src/app/shell/aiAddToChat.ts`). A selection (the Code panel's selected text or highlighted element; an element from
-the canvas or Navigator menu; ⌘L / Ctrl+L) becomes two chips at the composer's caret: a `code` chip (path, lines,
-element name and the code as it read when added, unsaved text included) and a `page` chip (the file it is in: `page`,
-`layout`, `component` or `file`, plus `viewedOn`, the page on the canvas when that is another file). Bounds
+`src/app/shell/aiAddToChat.ts`). A selection (the Code panel's selected text; or the selected element, from the
+composer's "+" menu "Add selected …", the canvas or Navigator menu, the Code panel or ⌘L / Ctrl+L) becomes two chips
+at the composer's caret: a `code` chip (path, lines, element name and the code as it read when added, unsaved text
+included) and a `page` chip (the file it is in: `page`, `layout`, `component` or `file`, plus `viewedOn`, the page on
+the canvas when that is another file). No route adds component or member chips; those come from `@`. Every element
+route is one function, which saves pending edits first and cuts the element, opening to closing tag with all its
+children, from the saved file; on the component canvas's generated page it is refused with a toast. Bounds
 (`AI_LIMITS`): `codeChipCharsMax` per selection, `codeChipsMax` and `codeChipsCharsMax` per message; a selection past
 one, or past `promptCharsMax`, is refused with a toast and never cut.
 

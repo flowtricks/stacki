@@ -5,6 +5,7 @@
 //
 // What does not fit is refused whole with the reason in a toast: a selection is never cut to fit, since a cut
 // snapshot would not be the code the person selected.
+import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import type { ChatId } from '../../../shared/properties/ai/chatModel';
@@ -130,4 +131,36 @@ export async function addSelectionToChat(projectPath: string, chips: SelectionCh
   }
   placeChips(chat, chips);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// The selected element, as the "+" menu offers it
+// ---------------------------------------------------------------------------
+
+/** What the shell offers while an element is selected: what to call it, and the one "Add to chat" of it. */
+export interface SelectedElementOffer {
+  /** The component's name or the element's `<tag>`; undefined for text and other code without a name. */
+  readonly name: string | undefined;
+  readonly add: () => void;
+}
+
+let selectedElement: SelectedElementOffer | undefined;
+const selectedElementListeners = new Set<() => void>();
+
+/** Called by the shell as the selection changes; undefined when nothing with code is selected. */
+export function offerSelectedElement(offer: SelectedElementOffer | undefined): void {
+  selectedElement = offer;
+  for (const listener of [...selectedElementListeners]) {
+    listener();
+  }
+}
+
+export function useSelectedElementOffer(): SelectedElementOffer | undefined {
+  return useSyncExternalStore(
+    (listener) => {
+      selectedElementListeners.add(listener);
+      return () => selectedElementListeners.delete(listener);
+    },
+    () => selectedElement,
+  );
 }

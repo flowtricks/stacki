@@ -11,7 +11,7 @@ import { assert } from '../../../shared/core/assert';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { parsePseudoLayerTarget } from '../../../shared/page/pseudoElements';
 import type { ScanResult } from '../../../shared/properties/projectScan';
-import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
+import { followedNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
 import { usePreviewDimensions, type CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
@@ -510,13 +510,10 @@ export function useSessionRefs(projectState: ReturnType<typeof useProjectState>)
       return;
     }
     setSelectedId((id) => {
-      if (!id || id === 'layout' || id === 'frontmatter' || findNodeById(model.nodes, id)) {
+      if (!id || id === 'layout' || id === 'frontmatter') {
         return id;
       }
-      const was = findNodeById(before.nodes, id);
-      const trail = pathOfNode(before.nodes, id);
-      const now = trail ? nodeAtPath(model.nodes, trail) : undefined;
-      return now && was && now.kind === was.kind ? now.id : undefined;
+      return followedNode(before.nodes, model.nodes, id)?.id;
     });
   }, [pageState, setSelectedId]);
   return { devLogRef, insertables, pageStateRef, saveTimer };

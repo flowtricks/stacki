@@ -17,9 +17,6 @@ import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
 import { can } from '../../../shared/properties/projectRoles';
 import { aiAgentTaskHandler, AI_PANEL_HANDLER_PRIORITY } from '../../features/ai/aiAgentTask';
 import { mentionComponentsOf, setMentionComponents } from '../../features/ai/mentions/componentMentions';
-import { setSelectionMention } from '../../features/ai/mentions/selectionMention';
-import { projectRelativePath } from '../../lib/projectPath';
-import { locatorOf, selectionMentionOf } from './aiSelection';
 import { useAddToChat } from './aiAddToChat';
 import { mentionIndexSource } from './aiMentionIndex';
 import { setMentionIndexSource } from '../../features/ai/mentions/projectMentions';
@@ -216,27 +213,6 @@ export function AiHost({ app }: { readonly app: ShellView }) {
     setMentionIndexSource(mentionIndexSource({ projectPath, platform: window.avb.platform, pages: scannedPages, classNames: projectClasses }));
     return () => setMentionIndexSource(undefined);
   }, [projectPath, scannedPages, projectClasses]);
-  // "Add selected element" offers what the Properties panel shows: the selected node and the values it writes.
-  const { selectedNode, selectedComponent, selectedId, pathFor } = app;
-  const openPage = app.currentPage?.path;
-  useEffect(() => {
-    const platform = window.avb.platform;
-    const openFile = openPage === undefined ? undefined : projectRelativePath(projectPath, openPage, platform);
-    const place = locatorOf(selectedId === undefined ? undefined : pathFor(selectedId), openFile);
-    const node = selectedNode !== undefined && 'kind' in selectedNode && selectedNode.kind !== 'frontmatter' ? selectedNode : undefined;
-    setSelectionMention(
-      selectionMentionOf({
-        node,
-        component: selectedComponent,
-        file: place?.file,
-        locator: place?.locator,
-        componentFile: selectedComponent === undefined ? undefined : projectRelativePath(projectPath, selectedComponent.path, platform),
-      }),
-    );
-    // pathFor is rebuilt each render; the selection and the file are what change the answer.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
-  }, [selectedNode, selectedComponent, selectedId, openPage, projectPath]);
-  useEffect(() => () => setSelectionMention(undefined), []);
   useEffect(
     () =>
       registerAgentTaskHandler(

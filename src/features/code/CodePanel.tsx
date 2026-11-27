@@ -3,13 +3,13 @@ import type { Extension } from '@codemirror/state';
 import type { EditorModel } from '../../editor/pageView';
 import {
   componentSourceRanges,
-  nodeSelectionOf,
+  offeredNodeOf,
+  type CodeAddRequest,
   sourceLineLabel,
   sourceNodeAtOffset,
   sourceRangeForSelection,
   textSelectionOf,
   type SourceRange,
-  type SourceSelection,
 } from './codePanelModel';
 import CodeEditor, { type CodeEditorSelection } from '../../ui/CodeEditor';
 import Menu from '../../ui/Menu';
@@ -34,7 +34,7 @@ interface CodePanelProps {
   /** What the editor draws beside its code with those extensions (the chips' popups). */
   readonly overlay?: ReactNode;
   /** "Add to chat" for what is selected here: the selected text, else the highlighted element. Absent where there is no AI panel. */
-  readonly onAddToChat?: ((selection: SourceSelection) => void) | undefined;
+  readonly onAddToChat?: ((request: CodeAddRequest) => void) | undefined;
 }
 
 export default function CodePanel(props: CodePanelProps) {
@@ -105,14 +105,13 @@ function useCodeSelection(
   }, [relativePath]);
   // A selection made in other text (an undo, a save from outside) selects nothing here.
   const textRange = selected !== undefined && selected.source === source ? selected : undefined;
-  const selection =
-    textRange !== undefined
-      ? textSelectionOf(source, textRange)
-      : revealRange !== undefined
-        ? textSelectionOf(source, revealRange)
-        : activeRange === undefined
-          ? undefined
-          : nodeSelectionOf(source, model, selectedId);
+  const range = textRange ?? revealRange;
+  const text = range === undefined ? undefined : textSelectionOf(source, range);
+  // With no text selected, it is the selected element, which the shell reads the way every "Add to chat" does.
+  const element =
+    range !== undefined || activeRange === undefined || selectedId === undefined || offeredNodeOf(model, selectedId) === undefined ? undefined : selectedId;
+  const selection: CodeAddRequest | undefined =
+    text !== undefined ? { kind: 'text', selection: text } : element === undefined ? undefined : { kind: 'node', id: element };
   const add = (): void => {
     if (selection !== undefined) {
       onAddToChat?.(selection);
