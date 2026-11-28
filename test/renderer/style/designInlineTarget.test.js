@@ -2,15 +2,17 @@
 // the selected element only. It never moves to a class by itself, and never writes a component's file, which
 // every instance shares. A plain element takes the edit on its own `style`, and so does an instance whose
 // component keeps it: one that combines the instance's style with its own, the instance's last (the fixture
-// project's Grid and Heading), or passes it to an element that writes none. The instance's existing style is
-// read back and edited, and removing its last declaration removes the attribute. Where the component would lose
-// one of the two styles (Grid and Heading as they were, `style={columns} {...rest}`), drops the style, or cannot
-// be read, the chip stays selected, the controls are disabled and say why on hover, and nothing is written.
-// Picking a class is the person's own step, which brings the controls back for a global edit. In the editor, the
-// chip picked on a combining instance edits the instance, not the component's file.
+// project's Grid and Heading). The instance's existing style is read back and edited, and removing its last
+// declaration removes the attribute. The chip is locked, with why on hover and nothing written, only where the
+// edit is shown to be lost now: the component's own value renders for this instance (Grid and Heading as they
+// were, `style={columns} {...rest}`, with columns or maxWidth set), or the component drops the style. Where it
+// is not shown, nothing is locked that was editable before: the old Grid with default columns, the old Heading
+// without maxWidth, Button, and a component that cannot be read are edited as any element. Picking a class is
+// the person's own step, which brings the controls back for a global edit. In the editor, the chip picked on a
+// combining instance edits the instance, not the component's file.
 // Method: the shared harness (test/helpers/stylePanelHarness.js) mounts the real StylePanel with the host's
 // inline-style write, which the test feeds back into the page model as the app does. Component files are the
-// fixture project's own, and the same files with the combining edit undone. Selections are made with the canvas
+// fixture project's own, and Grid and Heading with the combining edit undone. Selections are made with the canvas
 // answering at once, and held then released in reverse, so the rendered style and the classes land in either
 // order. What was written is read from the writes the host got (the instance's attribute) and the files written
 // (stylesheets and components). Dispatched events only; fixtures only.
@@ -38,6 +40,7 @@ const COMPONENTS = new Map([
   [component('OldHeading'), uncombined(HEADING, 'style={maxWidth ? `--_mw: ${maxWidth}ch;` : undefined}')],
   [component('Box'), '---\nconst { ...rest } = Astro.props;\n---\n<div {...rest}><slot /></div>\n'],
   [component('Sealed'), '---\nconst { title } = Astro.props;\n---\n<div>{title}</div>\n'],
+  [component('Button'), fixtureSource('Button.astro')],
 ]);
 // Each instance node, the component it is of, and what that component renders as the element's style.
 const INSTANCES = [
@@ -49,23 +52,25 @@ const INSTANCES = [
   ['old-grid', 'OldGrid', '--_cols-lg: 3'],
   ['old-grid-default', 'OldGrid', undefined],
   ['old-grid-own', 'OldGrid', '--_cols-lg: 3'],
+  ['old-grid-own-shown', 'OldGrid', 'gap: 1rem'],
   ['old-heading', 'OldHeading', '--_mw: 30ch;'],
+  ['old-heading-default', 'OldHeading', undefined],
+  ['button', 'Button', undefined],
   ['sealed', 'Sealed', undefined],
   ['missing', 'Missing', undefined],
 ];
-const EDITABLE = ['grid-set', 'grid-default', 'heading', 'box'];
+const EDITABLE = ['grid-set', 'grid-default', 'heading', 'box', 'old-grid-default', 'old-heading-default', 'button', 'missing'];
 const LOCKED = [
-  ['old-grid', /^OldGrid\.astro writes its own style/],
-  ['old-grid-default', /^OldGrid\.astro writes its own style/],
-  ['old-grid-own', /^OldGrid\.astro writes its own style/],
-  ['old-heading', /^OldHeading\.astro writes its own style/],
+  ['old-grid', /^OldGrid\.astro writes this element’s style itself/],
+  ['old-grid-own', /^OldGrid\.astro writes this element’s style itself/],
+  ['old-heading', /^OldHeading\.astro writes this element’s style itself/],
   ['sealed', /^Sealed\.astro doesn’t pass a style/],
-  ['missing', /could not be read/],
   ['coded', /chain of conditions/],
 ];
 const OWN_STYLES = new Map([
   ['grid-own', 'gap: 1rem'],
   ['old-grid-own', 'gap: 1rem'],
+  ['old-grid-own-shown', 'gap: 1rem'],
 ]);
 const RELEASE_ROUNDS_MAX = 20;
 
@@ -210,10 +215,27 @@ for (const [id, why] of LOCKED) {
   });
 }
 
+test('Design mode: an old Grid whose own style is what renders is edited on that style', async (context) => {
+  const { panel, inlineWrites } = await mount(context);
+  await step(panel, 'select it', () => select(panel, 'old-grid-own-shown'));
+  assert.equal(controls(panel).disabled, false);
+  await choose(panel, 'Flex');
+  assert.deepEqual(inlineWrites, [['old-grid-own-shown', 'gap: 1rem; display: flex']]);
+});
+
+for (const id of ['old-grid-default', 'button']) {
+  test(`editor: ${id} behaves as before, with no chip until it has a style`, async (context) => {
+    const { panel } = await mount(context, 'selector');
+    await step(panel, 'select it', () => select(panel, id));
+    assert.equal(inlineChip(panel) ?? undefined, undefined);
+    assert.equal(controls(panel).disabled, false);
+  });
+}
+
 test('Design mode: the person picking the class is what makes a locked Grid editable, in that rule', async (context) => {
   const { panel, inlineWrites } = await mount(context);
   await step(panel, 'select the Grid', () => select(panel, 'old-grid'));
-  assert.match(inlineChip(panel).title, /^OldGrid\.astro writes/, 'the chip says why too');
+  assert.match(inlineChip(panel).title, /^OldGrid\.astro writes this/, 'the chip says why too');
   await step(panel, 'pick the class', () => press(panel, classChip(panel, '.grid')));
   assert.deepEqual(pressed(panel), ['.grid']);
   assert.equal(controls(panel).disabled, false);
@@ -257,7 +279,7 @@ test('editor: a Heading that does not combine still edits the component’s own 
   await step(panel, 'select it', () => select(panel, 'old-heading'));
   await step(panel, 'pick the chip', () => press(panel, inlineChip(panel)));
   assert.equal(controls(panel).disabled, false);
-  assert.doesNotMatch(inlineChip(panel).title, /writes its own style/);
+  assert.doesNotMatch(inlineChip(panel).title, /writes this element’s style itself/);
   await choose(panel, 'Flex');
   assert.deepEqual(inlineWrites, []);
   assert.match(panel.writes.map((write) => write.css).join('\n'), /--_mw: \$\{maxWidth\}ch;\s*display: flex/);

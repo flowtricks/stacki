@@ -300,9 +300,8 @@ export const messages = {
   'styleModel.inline.label': 'Styles en ligne',
   'styleModel.inline.reason.componentUnreadable': 'Le composant qui écrit ce style n’a pas pu être lu.',
   'styleModel.inline.reason.componentDrops': '{file} ne transmet pas de style à son élément ; un style en ligne serait donc ignoré ici.',
-  'styleModel.inline.reason.componentUnproven': 'Stacki ne peut pas confirmer que {file} conserve un style défini sur cette instance.',
   'styleModel.inline.reason.componentWrites':
-    '{file} écrit son propre style sur cet élément sans le combiner avec celui de l’instance ; l’un des deux serait donc perdu.',
+    '{file} écrit lui-même le style de cet élément ; un style propre à cette instance serait perdu ou remplacerait celui du composant.',
   'styleModel.inline.reason.fromProp': 'Une branche donne une valeur issue d’une propriété plutôt qu’un texte : elle se modifie dans les Réglages.',
   'styleModel.inline.reason.onlyChain': 'Seule une chaîne de conditions, chacune donnant un texte ou un modèle, peut être modifiée ici.',
   'styleModel.inline.reason.rendersNothing': 'Cet attribut style n’affiche rien.',

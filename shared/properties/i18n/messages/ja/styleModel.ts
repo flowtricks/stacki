@@ -299,8 +299,8 @@ export const messages = {
   'styleModel.inline.label': 'インラインスタイル',
   'styleModel.inline.reason.componentUnreadable': 'このスタイルを書き出しているコンポーネントを読み込めませんでした。',
   'styleModel.inline.reason.componentDrops': '{file} は要素にスタイルを渡さないため、ここで指定したインラインスタイルは無視されます。',
-  'styleModel.inline.reason.componentUnproven': '{file} がこのインスタンスに設定したスタイルを保持するかどうか、Stacki は確認できません。',
-  'styleModel.inline.reason.componentWrites': '{file} はこの要素に独自のスタイルを書き出し、インスタンスのスタイルと結合しないため、どちらか一方が失われます。',
+  'styleModel.inline.reason.componentWrites':
+    'この要素のスタイルは {file} 自体が書き出しているため、このインスタンスだけのスタイルは失われるか、コンポーネントのスタイルを置き換えます。',
   'styleModel.inline.reason.fromProp': 'テキストではなくpropから値を受け取る分岐があるため、設定で編集します。',
   'styleModel.inline.reason.onlyChain': 'ここで編集できるのは、各条件がテキストまたはテンプレートを返す条件の連鎖のみです。',
   'styleModel.inline.reason.rendersNothing': 'このstyle属性は何も出力しません。',

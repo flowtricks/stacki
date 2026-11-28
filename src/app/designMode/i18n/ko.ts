@@ -24,7 +24,7 @@ export const designModeKo: DesignCatalog = {
   'toast.pageTooLarge': '이 페이지는 너무 커서 디자인 모드에서 프레임으로 표시할 수 없습니다.',
   'toast.frameUnread': '편집기가 아직 이 프레임의 페이지를 읽지 못했습니다. 다시 선택하세요.',
   'toast.styleIsCode': '이 요소의 스타일은 코드로 작성되어 있어 여기서 이동하거나 크기를 바꿀 수 없습니다.',
-  'toast.styleNotKept': '{file}에서 이 인스턴스에 설정한 스타일을 유지하는지 확인할 수 없어 여기에서는 이동하거나 크기를 바꿀 수 없습니다.',
+  'toast.styleNotKept': '이 {file} 인스턴스에 설정한 스타일은 지금은 사라지므로 여기에서는 이동하거나 크기를 바꿀 수 없습니다.',
   'bar.close': '디자인 모드 종료',
   'reset.title': '처음부터 다시 시작할까요?',
   'reset.body': '모든 프레임이 삭제되고 캔버스가 프로젝트에서 다시 시작합니다. 되돌릴 수 없습니다.',

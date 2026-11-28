@@ -301,9 +301,8 @@ export const messages = {
   'styleModel.inline.label': 'Inlinestijlen',
   'styleModel.inline.reason.componentUnreadable': 'De component die deze stijl schrijft, kon niet worden gelezen.',
   'styleModel.inline.reason.componentDrops': '{file} geeft geen stijl door aan zijn element, dus een inline stijl zou hier genegeerd worden.',
-  'styleModel.inline.reason.componentUnproven': 'Stacki kan niet bevestigen dat {file} een stijl op deze instantie behoudt.',
   'styleModel.inline.reason.componentWrites':
-    '{file} schrijft een eigen stijl op dit element zonder die te combineren met die van de instantie, dus een van beide zou verloren gaan.',
+    '{file} schrijft de stijl van dit element zelf, dus een stijl alleen voor deze instantie zou verloren gaan of die van het component vervangen.',
   'styleModel.inline.reason.fromProp': 'Een vertakking geeft een waarde uit een prop in plaats van tekst, dus ze wordt bewerkt in Instellingen.',
   'styleModel.inline.reason.onlyChain': 'Alleen een keten van voorwaarden die elk een tekst of sjabloon geven, kan hier worden bewerkt.',
   'styleModel.inline.reason.rendersNothing': 'Dit style-attribuut rendert niets.',

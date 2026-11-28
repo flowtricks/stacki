@@ -8,7 +8,8 @@
 //   const { class: className, style, ...rest } = Astro.props;
 //   <div style={[columns, style].filter(Boolean).join("; ") || undefined} {...rest}>
 //
-// The Style panel and Design mode write an instance's style only where this reading proves it takes effect. The
+// `combines` is proof the instance's style takes effect beside the component's, so the Style panel edits it. Design
+// mode refuses a write only where this reading and what renders show it would be lost now (instanceStyleBlock). The
 // reading is conservative: what it cannot prove is `unproven`, never a guess. The frontmatter and the style
 // expression are read with the JavaScript parser (@lezer/javascript); the template's tags by a bounded scan, since
 // no Astro parser runs in the renderer.
@@ -16,6 +17,8 @@
 import type { SyntaxNode } from '@lezer/common';
 import { parser } from '@lezer/javascript';
 import { assert } from '../../../../shared/core/assert';
+import { LIMITS } from '../../../../shared/core/limits';
+import { readInlineStyle } from '../../../../shared/engine/inlineStyle';
 import { matchingClose, stringEnd } from './inlineCode';
 
 /** What happens to a `style` set on an instance. */
@@ -31,28 +34,59 @@ export type StyleForwarding =
   // Anything this reading cannot follow.
   | 'unproven';
 
-/** Why an instance's own `style` cannot be written: the file is not held, or what it does with it. */
-export type InstanceStyleRefusal = 'unreadable' | 'overrides' | 'drops' | 'unproven';
+/** Why a style written on an instance now would be lost: the component drops it, or its own value stands in its place. */
+export type InstanceStyleBlock = 'drops' | 'overrides';
 
-/** Why a style written on an instance of the component reading `code` is not sure to take effect; undefined when it is. */
-export function instanceStyleRefusal(code: string | undefined): InstanceStyleRefusal | undefined {
-  if (code === undefined) {
-    return 'unreadable';
+/** An instance as the page has it now. */
+export interface StyledInstance {
+  /** The component's file and its text, once read. */
+  readonly file: string | undefined;
+  readonly source: string | undefined;
+  /** The instance's own `style`: none, a plain string, or code. */
+  readonly own: { readonly kind: 'none' } | { readonly kind: 'string'; readonly text: string } | { readonly kind: 'code' };
+  /** The `style` the element renders now, as the canvas reports it. */
+  readonly rendered: string | undefined;
+}
+
+/**
+ * Why a style written on this instance would be lost now; undefined everywhere it is not shown to be. An edit is
+ * refused only on evidence: the component's file shows the style reaches nothing, or the component writes its own
+ * on the element and what renders is that value, not the instance's. A component that cannot be read or followed,
+ * and one whose own value is empty for this instance, take the write as any element does.
+ */
+export function instanceStyleBlock(instance: StyledInstance): InstanceStyleBlock | undefined {
+  if (instance.source === undefined || instance.file?.endsWith('.astro') !== true) {
+    return undefined;
   }
-  const forwarding = styleForwardingOf(code);
-  switch (forwarding) {
+  switch (styleForwardingOf(instance.source)) {
+    case 'drops':
+      return 'drops';
+    case 'overrides':
+      return componentValueRenders(instance) ? 'overrides' : undefined;
     case 'combines':
     case 'passes':
-      return undefined;
-    case 'overrides':
-    case 'drops':
     case 'unproven':
-      return forwarding;
-    default: {
-      const exhaustive: never = forwarding;
-      return exhaustive;
-    }
+      return undefined;
   }
+}
+
+// Whether what renders is the component's own value: a style with no instance style to account for it, or one
+// holding none of the properties the instance declares (its attribute was the second, which the browser ignores).
+function componentValueRenders(instance: StyledInstance): boolean {
+  const rendered = instance.rendered?.trim() ?? '';
+  if (rendered === '' || instance.own.kind === 'code') {
+    return false;
+  }
+  if (instance.own.kind === 'none') {
+    return true;
+  }
+  const own = instance.own.text.length > LIMITS.attrCharsMax ? undefined : readInlineStyle(instance.own.text);
+  const shown = rendered.length > LIMITS.attrCharsMax ? undefined : readInlineStyle(rendered);
+  if (own === undefined || shown === undefined || own.length === 0) {
+    return false;
+  }
+  const properties = new Set(shown.map((declaration) => declaration.property.toLowerCase()));
+  return own.every((declaration) => !properties.has(declaration.property.toLowerCase()));
 }
 
 const SOURCE_CHARS_MAX = 1_000_000;
@@ -129,7 +163,23 @@ function read(code: string): StyleForwarding {
   if (/Astro\s*\.\s*props\s*(\?\.|\.|\[)/.test(code)) {
     return 'unproven';
   }
-  return frontmatter.styleName === undefined ? passedForwarding(frontmatter, tags) : namedForwarding(frontmatter, frontmatter.styleName, tags);
+  const forwarding = frontmatter.styleName === undefined ? passedForwarding(frontmatter, tags) : namedForwarding(frontmatter, frontmatter.styleName, tags);
+  return forwarding === 'drops' && !nothingCarriesStyle(code, template, frontmatter, tags) ? 'unproven' : forwarding;
+}
+
+// `drops` refuses edits, so it is said only where nothing else could carry the style: the props are read once at most,
+// with `style` left in the rest no object at all is spread, and a named `style` is not read in the template's text.
+function nothingCarriesStyle(code: string, template: string, frontmatter: Frontmatter, tags: readonly Tag[]): boolean {
+  if ((code.match(/Astro\s*\.\s*props/g)?.length ?? 0) > 1) {
+    return false;
+  }
+  if (frontmatter.styleName === undefined) {
+    return !template.includes('...');
+  }
+  const markup = template.replace(/<(style|script)\b[^>]*?(\/>|>[\s\S]*?<\/\1\s*>)/g, ' ');
+  const name = frontmatter.styleName.replaceAll('$', '\\$');
+  const read = new RegExp(`\\{[^{}]*(?<![\\w$.-])${name}(?![\\w$=:-])`).test(markup);
+  return !read && tags.every((tag) => tag.attributes.every((attribute) => attribute.name !== '...' || isRestSpread(attribute, frontmatter)));
 }
 
 // `style` is named in the props: it reaches an element only where the template writes it.

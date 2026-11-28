@@ -24,8 +24,7 @@ export const designModeId: DesignCatalog = {
   'toast.pageTooLarge': 'Halaman ini terlalu besar untuk ditampilkan sebagai bingkai di mode Desain.',
   'toast.frameUnread': 'editor belum membaca halaman bingkai ini. Pilih lagi.',
   'toast.styleIsCode': 'Gaya elemen ini ditulis sebagai kode, jadi tidak bisa dipindah atau diubah ukurannya di sini.',
-  'toast.styleNotKept':
-    'Stacki tidak dapat memastikan bahwa {file} mempertahankan gaya pada instans ini, jadi instans ini tidak bisa dipindahkan atau diubah ukurannya di sini.',
+  'toast.styleNotKept': 'Gaya pada instans {file} ini saat ini akan hilang, jadi instans ini tidak bisa dipindahkan atau diubah ukurannya di sini.',
   'bar.close': 'Keluar dari mode Desain',
   'reset.title': 'Mulai ulang?',
   'reset.body': 'Semua bingkai dibuang dan kanvas mulai lagi dari proyek Anda. Tindakan ini tidak bisa dibatalkan.',

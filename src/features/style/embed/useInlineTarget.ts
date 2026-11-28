@@ -49,7 +49,7 @@ import type { LiveSetProp, SetProp } from './EditorBasics';
 import type { InlineBranchView } from './InlineBranchEditor';
 import type { StyleCardProps } from './QueryForms';
 import { readableStyleCode, readableStyleText } from '../model/inlineCode';
-import { instanceStyleRefusal, type InstanceStyleRefusal } from '../model/componentStyleForwarding';
+import { instanceStyleBlock, type InstanceStyleBlock, type StyledInstance } from '../model/componentStyleForwarding';
 import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 /** The chip as the well draws it. */
@@ -277,8 +277,8 @@ export function useInlineCard(
     leave();
     host.setInlineStyle(nodeId, undefined);
   };
-  const lock = designInstanceLock(style, inline);
-  const lockedReason = lock === undefined ? undefined : translate(LOCK_MESSAGES[lock.refusal], { file: lock.file });
+  const lock = designInstanceLock(style, inline, card.snapshot);
+  const lockedReason = lock === undefined ? undefined : translate(LOCK_MESSAGES[lock.block], { file: lock.file });
   const chip: InlineChip | undefined = shown ? inlineChipOf(style, { lockedReason, active, onSelect: select, onDeselect: leave, onClear: clear }) : undefined;
   const withChip: StyleCardProps = {
     ...card,
@@ -384,35 +384,57 @@ export function useInlineCard(
 }
 
 const LOCK_MESSAGES = {
-  unreadable: 'styleModel.inline.reason.componentUnreadable',
-  overrides: 'styleModel.inline.reason.componentWrites',
   drops: 'styleModel.inline.reason.componentDrops',
-  unproven: 'styleModel.inline.reason.componentUnproven',
-} as const satisfies Record<InstanceStyleRefusal, string>;
+  overrides: 'styleModel.inline.reason.componentWrites',
+} as const satisfies Record<InstanceStyleBlock, string>;
 
 /**
- * In Design mode, why this instance's attribute cannot be written, and by which component; undefined when it can.
- * Design mode starts each selection on this chip, so an edit there must reach this instance and no other: a write
- * that would be ignored or would replace the component's style (componentStyleForwarding.ts), or one into the
- * component's file, which every instance shares, is never made. The target stays selected, locked
- * with why. In the editor the chip is the person's own pick, and behaves as it always has.
+ * In Design mode, why an edit of this instance's attribute would be lost or reach other instances; undefined
+ * everywhere that is not shown. Design mode starts each selection on this chip, so there it stays selected, locked
+ * with why, where the component drops the style or its own value stands in its place now (`style={columns} {...rest}`
+ * with columns set), and where the edit would be written into the component's file, which every instance shares.
+ * Everywhere else the instance is edited as it always was. In the editor the chip is the person's own pick.
  */
 function designInstanceLock(
   style: InlineStyle,
   inline: Pick<InlineState, 'instance' | 'ownStyle'>,
-): { readonly refusal: InstanceStyleRefusal; readonly file: string } | undefined {
+  snapshot: ElementSnapshot | undefined,
+): { readonly block: InstanceStyleBlock; readonly file: string } | undefined {
   if (inlineDefault() !== 'inline' || !inline.instance) {
     return undefined;
   }
   const path = getHost().selectedComponentPath;
-  const file = path?.split(/[\\/]/).pop() ?? '';
-  const refusal = instanceStyleRefusal(path === undefined ? undefined : componentSource(path));
-  if (refusal !== undefined) {
-    return { refusal, file };
+  if (path === undefined) {
+    return undefined;
   }
-  // The element shows a style the component wrote some other way: editing it would be editing the component.
-  const componentsOwn = inline.ownStyle.kind === 'none' && (style.kind === 'branched' || style.kind === 'code');
-  return componentsOwn ? { refusal: 'overrides', file } : undefined;
+  const file = path.split(/[\\/]/).pop() ?? path;
+  const block = instanceStyleBlock({
+    file: path,
+    source: componentSource(path),
+    own: ownStyleOf(inline.ownStyle),
+    rendered: snapshot?.attributes['style'],
+  });
+  if (block !== undefined) {
+    return { block, file };
+  }
+  const writesComponent = style.kind === 'branched' && style.source.kind === 'component';
+  return writesComponent ? { block: 'overrides', file } : undefined;
+}
+
+function ownStyleOf(own: InlineStyle): StyledInstance['own'] {
+  switch (own.kind) {
+    case 'none':
+      return { kind: 'none' };
+    case 'declarations':
+      return { kind: 'string', text: own.text };
+    case 'branched':
+    case 'code':
+      return { kind: 'code' };
+    default: {
+      const exhaustive: never = own;
+      return exhaustive;
+    }
+  }
 }
 
 function inlineChipOf(

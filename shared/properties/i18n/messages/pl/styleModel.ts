@@ -304,9 +304,8 @@ export const messages = {
   'styleModel.inline.label': 'Style inline',
   'styleModel.inline.reason.componentUnreadable': 'Nie udało się odczytać komponentu, który zapisuje ten styl.',
   'styleModel.inline.reason.componentDrops': '{file} nie przekazuje stylu do swojego elementu, więc styl w linii zostałby tu zignorowany.',
-  'styleModel.inline.reason.componentUnproven': 'Stacki nie może potwierdzić, że {file} zachowuje styl ustawiony na tej instancji.',
   'styleModel.inline.reason.componentWrites':
-    '{file} zapisuje na tym elemencie własny styl i nie łączy go ze stylem instancji, więc jeden z nich zostałby utracony.',
+    '{file} sam zapisuje styl tego elementu, więc styl tylko dla tej instancji zostałby utracony albo zastąpiłby styl komponentu.',
   'styleModel.inline.reason.fromProp': 'Gałąź podaje wartość z właściwości zamiast tekstu, więc jest edytowana w Ustawieniach.',
   'styleModel.inline.reason.onlyChain': 'Tutaj można edytować tylko łańcuch warunków, z których każdy podaje tekst lub szablon.',
   'styleModel.inline.reason.rendersNothing': 'Ten atrybut style niczego nie renderuje.',

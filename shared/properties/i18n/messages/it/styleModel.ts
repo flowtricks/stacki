@@ -300,9 +300,8 @@ export const messages = {
   'styleModel.inline.label': 'Stili inline',
   'styleModel.inline.reason.componentUnreadable': 'Impossibile leggere il componente che scrive questo stile.',
   'styleModel.inline.reason.componentDrops': '{file} non passa lo stile al suo elemento, quindi qui uno stile in linea verrebbe ignorato.',
-  'styleModel.inline.reason.componentUnproven': 'Stacki non può confermare che {file} mantenga uno stile impostato su questa istanza.',
   'styleModel.inline.reason.componentWrites':
-    '{file} scrive un proprio stile su questo elemento senza combinarlo con quello dell’istanza, quindi uno dei due andrebbe perso.',
+    '{file} scrive da sé lo stile di questo elemento, quindi uno stile solo per questa istanza andrebbe perso o sostituirebbe quello del componente.',
   'styleModel.inline.reason.fromProp': 'Un ramo prende un valore da una prop invece che da un testo, quindi si modifica nelle Impostazioni.',
   'styleModel.inline.reason.onlyChain': 'Qui si può modificare solo una catena di condizioni, ciascuna con un testo o un template.',
   'styleModel.inline.reason.rendersNothing': 'Questo attributo style non produce nulla.',

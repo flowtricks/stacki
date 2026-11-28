@@ -24,8 +24,7 @@ export const designModeIt: DesignCatalog = {
   'toast.pageTooLarge': 'Questa pagina è troppo grande per essere mostrata come frame in modalità Design.',
   'toast.frameUnread': 'l’editor non ha ancora letto la pagina di questo frame. Selezionalo di nuovo.',
   'toast.styleIsCode': 'Lo stile di questo elemento è scritto come codice, quindi qui non si può spostare né ridimensionare.',
-  'toast.styleNotKept':
-    'Stacki non può confermare che {file} mantenga uno stile impostato su questa istanza, quindi qui non si può spostare né ridimensionare.',
+  'toast.styleNotKept': 'Uno stile impostato su questa istanza di {file} ora andrebbe perso, quindi qui non si può spostare né ridimensionare.',
   'bar.close': 'Esci dalla modalità Design',
   'reset.title': 'Ricominciare?',
   'reset.body': 'Tutti i frame vengono eliminati e la tela riparte dal tuo progetto. L’operazione non si può annullare.',

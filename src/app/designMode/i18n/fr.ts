@@ -24,8 +24,7 @@ export const designModeFr: DesignCatalog = {
   'toast.pageTooLarge': 'Cette page est trop grande pour être affichée comme cadre en mode Design.',
   'toast.frameUnread': 'l’éditeur n’a pas encore lu la page de ce cadre. Sélectionnez-le à nouveau.',
   'toast.styleIsCode': 'Le style de cet élément est écrit sous forme de code : impossible de le déplacer ou de le redimensionner ici.',
-  'toast.styleNotKept':
-    'Stacki ne peut pas confirmer que {file} conserve un style défini sur cette instance ; impossible de la déplacer ou de la redimensionner ici.',
+  'toast.styleNotKept': 'Un style défini sur cette instance de {file} serait perdu pour le moment ; impossible de la déplacer ou de la redimensionner ici.',
   'bar.close': 'Quitter le mode Design',
   'reset.title': 'Recommencer ?',
   'reset.body': 'Tous les cadres sont supprimés et le canevas repart de votre projet. Cette action est irréversible.',

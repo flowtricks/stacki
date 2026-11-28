@@ -24,8 +24,7 @@ export const designModePtBR: DesignCatalog = {
   'toast.pageTooLarge': 'Esta página é grande demais para aparecer como quadro no modo Design.',
   'toast.frameUnread': 'o editor ainda não leu a página deste quadro. Selecione-o novamente.',
   'toast.styleIsCode': 'O estilo deste elemento está escrito como código, por isso não é possível movê-lo ou redimensioná-lo aqui.',
-  'toast.styleNotKept':
-    'O Stacki não pode confirmar que {file} mantém um estilo definido nesta instância, então ela não pode ser movida nem redimensionada aqui.',
+  'toast.styleNotKept': 'Um estilo definido nesta instância de {file} seria perdido agora, então ela não pode ser movida nem redimensionada aqui.',
   'bar.close': 'Sair do modo Design',
   'reset.title': 'Começar de novo?',
   'reset.body': 'Todos os quadros são descartados e a tela recomeça a partir do seu projeto. Não é possível desfazer.',

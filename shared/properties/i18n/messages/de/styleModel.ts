@@ -298,9 +298,8 @@ export const messages = {
   'styleModel.inline.label': 'Inline-Stile',
   'styleModel.inline.reason.componentUnreadable': 'Die Komponente, die diesen Stil schreibt, konnte nicht gelesen werden.',
   'styleModel.inline.reason.componentDrops': '{file} gibt keinen Stil an sein Element weiter, daher würde ein Inline-Stil hier ignoriert.',
-  'styleModel.inline.reason.componentUnproven': 'Stacki kann nicht bestätigen, dass {file} einen auf dieser Instanz gesetzten Stil behält.',
   'styleModel.inline.reason.componentWrites':
-    '{file} schreibt einen eigenen Stil auf dieses Element, ohne ihn mit dem der Instanz zu verbinden, daher ginge einer der beiden verloren.',
+    '{file} schreibt den Stil dieses Elements selbst, daher ginge ein Stil nur für diese Instanz verloren oder würde den der Komponente ersetzen.',
   'styleModel.inline.reason.fromProp': 'Ein Zweig liefert einen Wert aus einer Eigenschaft statt Text und wird deshalb in den Einstellungen bearbeitet.',
   'styleModel.inline.reason.onlyChain': 'Hier lässt sich nur eine Kette von Bedingungen bearbeiten, die jeweils Text oder eine Vorlage liefern.',
   'styleModel.inline.reason.rendersNothing': 'Dieses Style-Attribut gibt nichts aus.',

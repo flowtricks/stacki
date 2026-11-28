@@ -18,7 +18,7 @@ fs.mkdirSync(directory, { recursive: true });
 const bundle = path.join(directory, 'component-style-forwarding.bundle.js');
 esbuild.buildSync({
   stdin: {
-    contents: "export { styleForwardingOf, instanceStyleRefusal } from './src/features/style/model/componentStyleForwarding';",
+    contents: "export { styleForwardingOf, instanceStyleBlock } from './src/features/style/model/componentStyleForwarding';",
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -28,7 +28,7 @@ esbuild.buildSync({
   format: 'cjs',
   logLevel: 'silent',
 });
-const { styleForwardingOf, instanceStyleRefusal } = require(bundle);
+const { styleForwardingOf, instanceStyleBlock } = require(bundle);
 
 const PROPS = 'const { cols, class: className, style, ...rest } = Astro.props;';
 const JOINED = '[cols && `--c: ${cols}`, style].filter(Boolean).join("; ") || undefined';
@@ -92,6 +92,9 @@ const CASES = {
     'define:vars writes styles of its own': file(PROPS, `<div style={${JOINED}} {...rest} />\n<style define:vars={{ cols }}></style>`),
     'frontmatter that does not parse': file('const { = ;', '<div />'),
     'a tag the scan cannot read': file(PROPS, '<div {...rest'),
+    'another object made from the props': file('const attrs = pick(Astro.props);', '<div {...attrs} />'),
+    'the props read twice': file('const { title } = Astro.props;\nconst all = clean(Astro.props);', '<div {...all} />'),
+    'a named style handed to the markup': file(PROPS, '{render({ style })}'),
   },
 };
 
@@ -103,12 +106,27 @@ for (const [expected, cases] of Object.entries(CASES)) {
   });
 }
 
-test('only a proven reading lets an instance’s style be written; a file not held does not', () => {
-  assert.equal(instanceStyleRefusal(undefined), 'unreadable');
-  assert.equal(instanceStyleRefusal(merged(JOINED)), undefined);
-  assert.equal(instanceStyleRefusal(CASES.passes['all of Astro.props spread']), undefined);
-  assert.equal(instanceStyleRefusal(CASES.drops['no spread at all']), 'drops');
-  assert.equal(instanceStyleRefusal(CASES.unproven['not filtered']), 'unproven');
+test('a write is refused only where the file and what renders show it would be lost now', () => {
+  const overriding = CASES.overrides['its own style before the spread'];
+  const dropping = CASES.drops['no spread at all'];
+  const block = (source, own, rendered, name = 'A.astro') =>
+    instanceStyleBlock({ file: `/c/${name}`, source, own: own === undefined ? { kind: 'none' } : { kind: 'string', text: own }, rendered });
+  // The component's own value is empty for this instance: nothing is lost.
+  assert.equal(block(overriding, undefined, undefined), undefined);
+  assert.equal(block(overriding, undefined, '  '), undefined);
+  assert.equal(block(overriding, 'gap: 1rem', 'gap: 1rem'), undefined, 'the instance’s style is what renders');
+  assert.equal(block(overriding, 'gap: 1rem; color: red', 'gap: 1rem'), undefined, 'an edit not yet drawn');
+  // Its value stands where the instance's would be.
+  assert.equal(block(overriding, undefined, '--c: 3'), 'overrides');
+  assert.equal(block(overriding, 'gap: 1rem', '--c: 3'), 'overrides');
+  assert.equal(instanceStyleBlock({ file: '/c/A.astro', source: overriding, own: { kind: 'code' }, rendered: '--c: 3' }), undefined);
+  assert.equal(block(dropping, undefined, undefined), 'drops');
+  // Whatever cannot be read or followed is edited as ever, whatever renders.
+  assert.equal(block(undefined, undefined, '--c: 3'), undefined);
+  assert.equal(block(dropping, undefined, undefined, 'Island.tsx'), undefined, 'not an Astro component');
+  assert.equal(block(CASES.unproven['not filtered'], undefined, '--c: 3'), undefined);
+  assert.equal(block(merged(JOINED), 'gap: 1rem', '--c: 3'), undefined);
+  assert.equal(instanceStyleBlock({ file: undefined, source: dropping, own: { kind: 'none' }, rendered: undefined }), undefined);
 });
 
 const COMBINING = [
