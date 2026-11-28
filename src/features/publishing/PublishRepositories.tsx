@@ -2,6 +2,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
+import { ADD_OPTION, withAddOption } from './publishFields';
 import Popup from '../../ui/Popup';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
 import type { OrganizationAccess, PublishingRepositories, RepositoryRequest } from '../../../shared/ipc/publishRepository';
@@ -54,7 +55,7 @@ export function PublishRepositories(props: Props) {
           </button>
         </div>
       </div>
-      <RepositoryChoice {...props} state={displayed} />
+      <RepositoryChoice {...props} state={displayed} add={() => setAdding(true)} />
       {displayed?.kind === 'failed' && <ErrorToast message={translateDescribed(displayed)} />}
       {ready?.notice && <p className="hint-text">{translateDescribed({ message: ready.notice, messageRef: ready.noticeRef })}</p>}
       {adding && (
@@ -74,7 +75,7 @@ export function PublishRepositories(props: Props) {
   );
 }
 
-function RepositoryChoice(props: Props & { readonly state: SettledState | undefined }) {
+function RepositoryChoice(props: Props & { readonly state: SettledState | undefined; readonly add: () => void }) {
   const translate = useTranslate();
   const ready = props.state?.kind === 'ready' ? props.state.value : undefined;
   const selection = props.selection?.account === props.account ? props.selection : undefined;
@@ -84,21 +85,20 @@ function RepositoryChoice(props: Props & { readonly state: SettledState | undefi
     <Dropdown
       ariaLabel={translate('publish.repositories.title')}
       value={selected}
-      options={repositories.map((repository) => ({ value: repository, label: repository }))}
-      placeholder={
-        !props.account
-          ? translate('publish.repositories.chooseAccountFirst')
-          : props.state === undefined
-            ? translate('publish.repositories.loading')
-            : translate('publish.repositories.choose')
-      }
+      options={withAddOption(
+        translate('publish.repositories.add'),
+        repositories.map((repository) => ({ value: repository, label: repository })),
+      )}
+      placeholder={props.state === undefined ? translate('publish.repositories.loading') : translate('publish.repositories.choose')}
       disabled={props.state?.kind !== 'ready' || ready?.mode === 'managed'}
       searchable={repositories.length > 6}
       searchPlaceholder={translate('publish.repositories.find')}
       menuClassName="publish-dropdown"
       livePreview={false}
       onChange={(repository) => {
-        if (ready) {
+        if (repository === ADD_OPTION) {
+          props.add();
+        } else if (ready) {
           props.change(repository === ready.connected ? undefined : { action: 'connect', account: props.account, repository, revision: ready.revision });
         }
       }}

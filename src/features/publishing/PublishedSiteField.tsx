@@ -2,6 +2,7 @@ import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import { savedPublishedSite } from '../../../shared/properties/publishSite';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { withDetail } from './customHosting';
+import { hostingKey } from './PublishHosting';
 
 export function PublishedSiteField({ config, change }: { readonly config: PublishConfig; readonly change: (config: PublishConfig) => void }) {
   const translate = useTranslate();
@@ -22,7 +23,8 @@ export function PublishedSiteField({ config, change }: { readonly config: Publis
       </label>
     );
   }
-  if (hosting.provider === 'none') {
+  // The address belongs to a hosting project, so there is nothing to ask until one is chosen.
+  if (hosting.provider === 'none' || hostingKey(hosting) === '') {
     return undefined;
   }
   return (

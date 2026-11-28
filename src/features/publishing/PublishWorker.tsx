@@ -15,9 +15,11 @@ interface Props {
   readonly projects: readonly PublishProject[];
   readonly close: () => void;
   readonly change: (hosting: Hosting) => void;
+  /** `now` sets the site up and saves it as production. `on-first-deploy` only names a Worker, for staging. */
+  readonly setup: 'now' | 'on-first-deploy';
 }
 
-// Add Worker sets the site up for Workers and saves the Worker as its hosting, so the next Publish deploys at once.
+// For production, Add Worker sets the site up for Workers and saves the Worker as its hosting, so the next Publish deploys at once.
 // The Worker itself is created by that first deploy; nothing is created at Cloudflare before then.
 export function AddWorker(props: Props) {
   const translate = useTranslate();
@@ -29,6 +31,11 @@ export function AddWorker(props: Props) {
   const exists = props.projects.some((project) => project.hosting.provider === 'cloudflare-workers' && project.hosting.project === name);
   const ready = valid && !exists && props.account.length > 0;
   async function add(): Promise<void> {
+    if (props.setup === 'on-first-deploy') {
+      // Setting the site up would make this Worker production's. Staging's first deploy creates it.
+      props.change({ provider: 'cloudflare-workers', accountId: props.account, project: name });
+      return;
+    }
     setBusy(true);
     try {
       const result = await setUpWorker(props.projectPath, { accountId: props.account, project: name });
@@ -64,7 +71,7 @@ export function AddWorker(props: Props) {
             <p className="hint-text" id="publish-worker-name-help">
               {exists ? translate('publish.worker.exists') : translate('publish.worker.nameRule')}
             </p>
-            <p className="hint-text">{translate('publish.worker.setupHint')}</p>
+            {props.setup === 'now' && <p className="hint-text">{translate('publish.worker.setupHint')}</p>}
           </fieldset>
           <div className="modal-footer">
             <button type="button" onClick={close} disabled={busy}>

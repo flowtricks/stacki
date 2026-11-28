@@ -15,6 +15,7 @@ import { PlusIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { FieldLabel, MoreOptions, ScriptDropdown, ScriptListField, TextField } from './publishFields';
 import { PublishDeployLinkField } from './PublishDeployLinkField';
+import { StagingWorkerField } from './PublishStagingWorkerField';
 import type { CustomHostInfo, LinkDraft } from './useCustomHostInfo';
 import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 
@@ -22,6 +23,7 @@ import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 export type StagingAccess = 'supported' | 'desktop-only' | 'unreadable';
 
 interface Props {
+  readonly projectPath: string;
   readonly access: StagingAccess;
   readonly production: PublishConfig;
   readonly staging: Destination | undefined;
@@ -182,11 +184,12 @@ function WorkerFields(props: Present & { readonly target: Extract<StagingTarget,
           }}
         />
       </div>
-      {target.kind === 'cloudflare-worker' && (
-        <TextField
-          label={translate('publish.staging.workerName')}
+      {target.kind === 'cloudflare-worker' && production.hosting.provider === 'cloudflare-workers' && production.hosting.accountId !== '' && (
+        <StagingWorkerField
+          projectPath={props.projectPath}
+          accountId={production.hosting.accountId}
+          productionWorker={project}
           value={target.project}
-          maxLength={DESTINATION_LIMITS.workerNameCharsMax}
           invalid={invalid === 'stagingWorker'}
           change={(name) => change({ ...staging, target: { ...target, project: name } })}
         />

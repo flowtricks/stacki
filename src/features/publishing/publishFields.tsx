@@ -1,7 +1,8 @@
 // The small fields the publish settings are built from.
 import { useState, type ReactNode } from 'react';
-import Dropdown from '../../ui/Dropdown';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import InfoHint from '../../ui/InfoHint';
+import { PlusIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function FieldLabel({ label, hint }: { readonly label: string; readonly hint?: string | undefined }) {
@@ -106,6 +107,22 @@ export function ScriptDropdown(props: {
       />
     </div>
   );
+}
+
+/** The value of a list's own "Add …" row. No account, repository, project or Worker name can hold a plus sign. */
+export const ADD_OPTION = '+add';
+
+/**
+ * The first row of a publishing list: adds what the list holds. Its mark sits where an account's picture does. A search
+ * keeps it listed; alone in a list it is not pinned, so the list does not also say that nothing matched.
+ */
+export function withAddOption<Option extends DropdownOption<string>>(label: string, options: readonly Option[]): readonly DropdownOption<string>[] {
+  const mark = (
+    <span className="publish-avatar" aria-hidden="true">
+      <PlusIcon size={12} />
+    </span>
+  );
+  return [{ value: ADD_OPTION, label, icon: mark, pinned: options.length > 0 }, ...options];
 }
 
 /** Extras that stay out of the way until asked for. */

@@ -8,6 +8,7 @@ import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import { AddPublishAccount } from './PublishAccount';
 import { AddWorker } from './PublishWorker';
+import { ADD_OPTION, withAddOption } from './publishFields';
 import { AddNetlifySite } from './PublishNetlifySite';
 import { invalidatePublishingAccounts } from './publishDiscoveryCache';
 
@@ -31,7 +32,10 @@ export function HostingChoice(props: Props) {
   return (
     <>
       {props.provider === 'cloudflare' && <CloudflareAccount {...props} add={() => setDialog('account')} />}
-      <HostingProject {...props} projects={projects} add={() => setDialog(props.provider === 'netlify' ? 'site' : 'worker')} />
+      {/* A Cloudflare project belongs to an account, so it is not asked for until there is one, or a saved project. */}
+      {(props.provider !== 'cloudflare' || account !== '' || hostingKey(props.value) !== '') && (
+        <HostingProject {...props} projects={projects} add={() => setDialog(props.provider === 'netlify' ? 'site' : 'worker')} />
+      )}
       {dialog === 'site' && (
         <AddNetlifySite
           projectPath={props.projectPath}
@@ -59,6 +63,7 @@ export function HostingChoice(props: Props) {
       )}
       {dialog === 'worker' && (
         <AddWorker
+          setup="now"
           projectPath={props.projectPath}
           account={account}
           accountName={props.accounts.find((entry) => entry.id === account)?.name ?? account}
@@ -98,14 +103,18 @@ function CloudflareAccount(props: Props & { readonly add: () => void }) {
         invalid={invalid}
         ariaLabel={translate('publish.hosting.cloudflareAccount')}
         value={selected}
-        options={accounts.map((account) => ({ value: account.id, label: account.name }))}
+        options={withAddOption(
+          translate('publish.common.addAccount'),
+          accounts.map((account) => ({ value: account.id, label: account.name })),
+        )}
         placeholder={props.busy ? translate('publish.common.loadingAccounts') : translate('publish.hosting.chooseAccount')}
-        disabled={accounts.length === 0}
         searchable={accounts.length > 6}
         menuClassName="publish-dropdown"
         livePreview={false}
         onChange={(accountId) => {
-          if (accountId !== selected) {
+          if (accountId === ADD_OPTION) {
+            props.add();
+          } else if (accountId !== selected) {
             // A project belongs to its account; never carry it into a different destination.
             props.change({ provider: 'cloudflare-workers', accountId, project: '' });
           }
@@ -166,6 +175,13 @@ function HostingProject(props: Props & { readonly add: () => void }) {
       description: account || props.provider === 'netlify' ? translate('publish.hosting.saved') : translate('publish.hosting.accountUnverified'),
     });
   }
+  // The same step as the heading's button, offered under the same conditions.
+  const addLabel =
+    props.provider === 'cloudflare' && account !== '' && !props.busy
+      ? translate('publish.hosting.addWorker')
+      : props.provider === 'netlify' && props.accounts.length > 0 && !props.busy
+        ? translate('publish.hosting.addSite')
+        : undefined;
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
@@ -190,20 +206,17 @@ function HostingProject(props: Props & { readonly add: () => void }) {
         invalid={invalid}
         ariaLabel={translate('publish.hosting.project')}
         value={selected}
-        options={options}
-        placeholder={
-          props.provider === 'cloudflare' && !account
-            ? translate('publish.hosting.chooseCloudflareFirst')
-            : props.busy
-              ? translate('publish.hosting.loadingProjects')
-              : translate('publish.hosting.chooseProject')
-        }
-        disabled={props.provider === 'cloudflare' && !account && !selected}
+        options={addLabel === undefined ? options : withAddOption(addLabel, options)}
+        placeholder={props.busy ? translate('publish.hosting.loadingProjects') : translate('publish.hosting.chooseProject')}
         menuClassName="publish-dropdown"
         livePreview={false}
         searchable={true}
         searchPlaceholder={translate('publish.hosting.findProject')}
         onChange={(value) => {
+          if (value === ADD_OPTION) {
+            props.add();
+            return;
+          }
           const project = props.projects.find((entry) => hostingKey(entry.hosting) === value);
           if (project) {
             props.change(project.hosting);

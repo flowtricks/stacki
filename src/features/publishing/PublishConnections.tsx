@@ -1,18 +1,23 @@
 import { AddPublishAccount } from './PublishAccount';
 import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
 import { described, type Described, type MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import InfoHint from '../../ui/InfoHint';
 import { HostingChoice, hostingKey } from './PublishHosting';
+import { ADD_OPTION, withAddOption } from './publishFields';
 import { cachedPublishingDiscovery, invalidatePublishingAccounts } from './publishDiscoveryCache';
 import { connectionFailureMessage, type ConnectionProblem, type PublishAccount, type PublishDiscovery } from '../../../shared/properties/publishDiscovery';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
-type Props = { readonly projectPath: string } & (
+type Props = {
+  readonly projectPath: string;
+  /** Fields that need this connection: shown after it, and left out while it asks to be connected. */
+  readonly children?: ReactNode;
+} & (
   | {
       readonly provider: 'github';
       readonly value: string;
@@ -59,9 +64,11 @@ export function PublishConnections(props: Props) {
   const selected = props.provider === 'github' ? props.value : hostingKey(props.value);
   const refresh = () => setAttempt(attempt + 1);
   const problem = displayed?.kind === 'failed' ? displayed : displayed?.kind === 'ready' ? displayed.notice : undefined;
-  return (
+  // While the next step is to connect or sign in, that button is all there is to do: no list could be filled.
+  const signedOut = displayed?.kind === 'failed' && connectionRecovery(provider, displayed).kind === 'sign-in';
+  const connection = (
     <div className="publish-connections" aria-busy={busy} data-loading={busy && !selected && !displayed}>
-      {props.provider === 'github' ? (
+      {signedOut ? undefined : props.provider === 'github' ? (
         <GitHubChoice {...props} accounts={accounts} busy={busy} refresh={refresh} />
       ) : (
         <HostingChoice {...props} accounts={accounts} projects={projects} busy={busy} refresh={refresh} />
@@ -79,6 +86,12 @@ export function PublishConnections(props: Props) {
       )}
       {displayed?.kind === 'failed' && !installsOnConnect(provider, displayed) && <ConnectionHelp provider={provider} />}
     </div>
+  );
+  return (
+    <>
+      {connection}
+      {!signedOut && props.children}
+    </>
   );
 }
 
@@ -218,14 +231,12 @@ function GitHubChoice(
       <Dropdown
         ariaLabel={translate('publish.common.githubAccount')}
         value={props.value}
-        options={accounts.map((account) => ({
-          value: account.id,
-          label: account.name,
-          icon: <GitHubAvatar key={account.id} login={account.id} />,
-        }))}
+        options={withAddOption(
+          translate('publish.common.addAccount'),
+          accounts.map((account) => ({ value: account.id, label: account.name, icon: <GitHubAvatar key={account.id} login={account.id} /> })),
+        )}
         placeholder={props.busy ? translate('publish.common.loadingAccounts') : translate('publish.connection.noAccounts')}
-        disabled={accounts.length === 0}
-        onChange={props.change}
+        onChange={(account) => (account === ADD_OPTION ? setAdding(true) : props.change(account))}
         menuClassName="publish-dropdown"
         livePreview={false}
         searchable={accounts.length > 6}

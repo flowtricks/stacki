@@ -274,6 +274,83 @@ async function choose(label, name) {
   await act(async () => option.click());
 }
 
+const field = (label) => document.querySelector(`[aria-label="${label}"]`) ?? undefined;
+const optionLabels = () => [...document.querySelectorAll('.dd-option-label')].map((entry) => entry.textContent);
+const siteAddress = () => document.querySelector('input[type="url"]') ?? undefined;
+
+test('each field waits for the choice it depends on', async (context) => {
+  const { discovery, show } = fixture(context, JSON.stringify(DEFAULT_PUBLISH_CONFIG));
+  await show();
+  assert.equal(field('GitHub repository'), undefined, 'no repository without a GitHub account');
+  assert.equal(field('Hosting project'), undefined, 'no project without a host');
+  await chooseProvider('Cloudflare');
+  assert.ok(field('Cloudflare account'));
+  assert.equal(field('Hosting project'), undefined, 'no project without a Cloudflare account');
+  assert.equal(siteAddress(), undefined);
+  await act(async () => discovery.find((call) => call.request.provider === 'cloudflare').resolve(cloudflareInventory));
+  await choose('Cloudflare account', 'Team');
+  assert.ok(field('Hosting project'));
+  assert.equal(siteAddress(), undefined, 'no site address without a project');
+  await choose('Hosting project', 'team-site');
+  assert.ok(siteAddress());
+});
+
+test('while Cloudflare asks to be connected, only its button is offered', async (context) => {
+  const { discovery, show } = fixture(context, JSON.stringify(DEFAULT_PUBLISH_CONFIG));
+  await show();
+  await chooseProvider('Cloudflare');
+  await act(async () =>
+    discovery.find((call) => call.request.provider === 'cloudflare').resolve({ kind: 'failed', reason: 'signed-out', message: 'Signed out.' }),
+  );
+  assert.equal(field('Cloudflare account'), undefined);
+  assert.equal(field('Hosting project'), undefined);
+  assert.ok([...document.querySelectorAll('button')].some((entry) => entry.textContent === 'Sign in to Cloudflare'));
+});
+
+test('every list starts with its Add row, which opens that step and keeps the choice', async (context) => {
+  const { discovery, writes, show } = fixture(context, cloudflareSettings());
+  await show();
+  await loadCloudflare(discovery);
+  await act(async () => field('Hosting project').click());
+  assert.equal(optionLabels()[0], 'Add Worker');
+  assert.ok(document.querySelector('.dd-option .publish-avatar svg'), 'the row has a mark where a picture goes');
+  await act(async () => document.querySelector('.dd-option').click());
+  assert.ok(document.querySelector('.publish-new-worker'));
+  assert.match(field('Hosting project').textContent, /website/);
+  await act(async () => document.querySelector('.modal-footer .primary').click());
+  assert.equal(writes[0].hosting.project, 'website');
+});
+
+test('the staging Worker is chosen from the account, and naming a new one leaves production alone', async (context) => {
+  const source = cloudflareSettings();
+  const { discovery, writes, show } = fixture(context, source);
+  const staged = JSON.stringify({
+    version: 1,
+    destinations: [
+      { id: 'staging', target: { kind: 'cloudflare-worker', project: 'website-staging' }, buildScript: 'build', beforePublish: [], afterPublish: [] },
+    ],
+  });
+  window.avb.projectMetadata = async (input) => ({ ok: true, value: { source: input.kind === 'publishDestinations' ? staged : source } });
+  window.avb.setUpPublishWorker = async () => assert.fail('a staging Worker must not set the site up as production');
+  await show();
+  for (const call of discovery.filter((entry) => entry.request.provider === 'cloudflare')) {
+    await act(async () => call.resolve(cloudflareInventory));
+  }
+  await act(async () => field('Staging Worker').click());
+  assert.equal(optionLabels()[0], 'Add Worker');
+  assert.ok(!optionLabels().includes('website'), 'production’s Worker is not offered');
+  assert.ok(!optionLabels().includes('team-site'), 'another account’s Worker is not offered');
+  await act(async () => document.querySelector('.dd-option').click());
+  const { Simulate } = require('react-dom/test-utils');
+  await act(async () => {
+    Simulate.change(document.querySelector('.publish-new-worker input'), { target: { value: 'my-preview' } });
+  });
+  await act(async () => document.querySelector('.publish-new-worker .primary').click());
+  assert.equal(document.querySelector('.publish-new-worker') ?? undefined, undefined);
+  assert.match(field('Staging Worker').textContent, /my-preview/);
+  assert.deepEqual(writes, [], 'nothing is saved before Save');
+});
+
 function cloudflareSettings() {
   return JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, hosting: linked.projects[0].hosting });
 }
@@ -414,8 +491,8 @@ test('Cloudflare shows account names through loading and failed refreshes', asyn
   await act(async () => discovery.at(-1).resolve({ kind: 'failed', reason: 'network', message: 'Offline' }));
   assert.equal(account().textContent, 'Church International');
   await act(async () => account().click());
-  assert.equal(document.querySelector('.dd-option-label').textContent, 'Church International');
-  await act(async () => document.querySelector('.dd-option').click());
+  assert.deepEqual(optionLabels(), ['Add account', 'Church International']);
+  await act(async () => document.querySelectorAll('.dd-option')[1].click());
   await act(async () => document.querySelector('.modal-footer .primary').click());
   assert.equal(writes[0].hosting.accountId, accountId, 'Names never replace deployment IDs');
 });
@@ -520,7 +597,7 @@ test('Save with no Cloudflare account names the account first', async (context) 
   assert.deepEqual(toasts, ['Choose a Cloudflare account']);
   assert.deepEqual(writes, []);
   assert.equal(document.querySelector('[aria-label="Cloudflare account"]').getAttribute('aria-invalid'), 'true');
-  assert.equal(document.querySelector('[aria-label="Hosting project"]').hasAttribute('aria-invalid'), false);
+  assert.equal(field('Hosting project'), undefined);
 });
 
 test('Netlify: a saved site, Add site with a toast for a taken name, then the created site is saved', async (context) => {

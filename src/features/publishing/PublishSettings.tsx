@@ -198,15 +198,18 @@ function PublishSettingsForm({
                 provider="github"
                 value={config.githubAccount}
                 change={(githubAccount) => setConfig({ ...config, githubAccount })}
-              />
-              <PublishRepositories
-                key={config.githubAccount}
-                projectPath={projectPath}
-                account={config.githubAccount}
-                selection={repository}
-                change={setRepository}
-                busy={setRepositoryBusy}
-              />
+              >
+                {config.githubAccount !== '' && (
+                  <PublishRepositories
+                    key={config.githubAccount}
+                    projectPath={projectPath}
+                    account={config.githubAccount}
+                    selection={repository}
+                    change={setRepository}
+                    busy={setRepositoryBusy}
+                  />
+                )}
+              </PublishConnections>
             </section>
             <section className="publish-settings-section" aria-label={translate('publish.settings.hosting')}>
               <HostingFields
@@ -231,6 +234,7 @@ function PublishSettingsForm({
               )}
             </section>
             <PublishStaging
+              projectPath={projectPath}
               access={staging.access}
               production={config}
               staging={staging.staging}
@@ -425,14 +429,7 @@ function HostingFields({
           }}
         />
       </div>
-      {custom ? undefined : hosting.provider === 'none' ? (
-        <div className="publish-field">
-          <span className="publish-label">{translate('publish.hosting.project')}</span>
-          <button className="dd-trigger" aria-label={translate('publish.hosting.project')} disabled>
-            <span className="dd-label dim">{translate('publish.settings.chooseProviderFirst')}</span>
-          </button>
-        </div>
-      ) : (
+      {custom || hosting.provider === 'none' ? undefined : (
         <PublishConnections
           key={hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
           projectPath={projectPath}

@@ -105,14 +105,19 @@ test('no Vercel CLI offers Install Vercel and says nothing else: the button inst
   assert.equal(accounts[0].action, 'start');
 });
 
-test('signed out offers Sign in to Vercel; an expired login offers Sign in again', async (context) => {
+test('signed out offers Sign in to Vercel', async (context) => {
   const { discovery, open } = await mount(context);
   await act(async () => discovery[0].resolve({ kind: 'failed', reason: 'signed-out', message: 'You are not signed in to Vercel.' }));
   assert.ok(button('Sign in to Vercel'));
   assert.equal(open()[0].recovery[0].label, 'Sign in to Vercel');
-  await act(async () => document.querySelector('[aria-label="Refresh hosting project"]').click());
-  await act(async () => discovery[1].resolve({ kind: 'failed', reason: 'expired', message: 'Vercel sign-in expired or was revoked. Sign in again.' }));
+  assert.equal(document.querySelector('[aria-label="Hosting project"]') ?? undefined, undefined, 'no list can be filled before signing in');
+});
+
+test('an expired login offers Sign in again and nothing to choose', async (context) => {
+  const { discovery, open } = await mount(context);
+  await act(async () => discovery[0].resolve({ kind: 'failed', reason: 'expired', message: 'Vercel sign-in expired or was revoked. Sign in again.' }));
   assert.ok(button('Sign in again'));
+  assert.equal(document.querySelector('[aria-label="Hosting project"]') ?? undefined, undefined);
   assert.deepEqual(
     open().map((toast) => toast.message),
     ['Vercel sign-in expired or was revoked. Sign in again.'],

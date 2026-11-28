@@ -1876,6 +1876,7 @@
     "src/features/publishing/PublishRepositories.tsx",
     "src/features/publishing/PublishSettings.tsx",
     "src/features/publishing/PublishStaging.tsx",
+    "src/features/publishing/PublishStagingWorkerField.tsx",
     "src/features/publishing/customHosting.ts",
     "src/features/publishing/publishFields.tsx",
     "src/features/publishing/saveDeployLinks.ts",
