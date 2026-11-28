@@ -158,10 +158,14 @@ test('a message of pins: words and names, a status per pin, no instructions, no 
   await act(async () => picture.click());
   assert.equal(document.querySelector('.ai-lightbox-image')?.getAttribute('src'), THUMB);
   await act(async () => document.querySelector('.ai-lightbox-close').click());
-  for (let attempt = 0; attempt < 100 && document.querySelector('.ai-lightbox') !== null; attempt += 1) {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
-  }
-  assert.ok(document.querySelector('.ai-lightbox') === null, 'it closes');
+  await waitFor({
+    what: 'the picture viewer closes',
+    read: async () => {
+      await act(async () => {});
+      return (document.querySelector('.ai-lightbox') ?? undefined) === undefined;
+    },
+    until: (closed) => closed,
+  });
   for (const hidden of ['src/', '.astro', '0.1', 'comment-pins', 'Wave', 'subagent', 'locator', 'toolu_', '768']) {
     assert.ok(!shown.includes(hidden), `shows no "${hidden}"`);
   }

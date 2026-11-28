@@ -14,6 +14,7 @@ const path = require('node:path');
 const esbuild = require('esbuild');
 const { JSDOM } = require('jsdom');
 const { ROOT, repoPath } = require('../../../helpers/sources.js');
+const { waitFor } = require('../../../helpers/waitFor.js');
 
 const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 globalThis.window = dom.window;
@@ -62,8 +63,6 @@ esbuild.buildSync({
 });
 const model = require(bundle);
 
-const WAIT_ROUNDS_MAX = 400;
-
 // The stand-in page: what the dragged element renders as its style.
 let rendered;
 model.setCanvasFrame({
@@ -94,9 +93,7 @@ async function drag(target, componentFile, shown) {
   model.writeElementStyle(context, 'f1', node, [['width', '10rem']], () => {
     refusals += 1;
   });
-  for (let round = 0; round < WAIT_ROUNDS_MAX && writes.length === 0 && refusals === 0; round += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
+  await waitFor({ what: 'the drag wrote or refused', read: () => writes.length + refusals, until: (done) => done > 0 });
   return { writes, toasts, refusals };
 }
 

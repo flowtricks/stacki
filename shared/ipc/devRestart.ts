@@ -5,6 +5,7 @@
 // `begun` is sent before the old server stops, and `done` once the new one answers, with its address (the old one
 // unless that port was taken meanwhile), or without one when it did not start.
 import { record, text } from '../core/boundary';
+import { assert } from '../core/assert';
 
 export type DevRestartNotice = { readonly kind: 'begun' } | { readonly kind: 'done'; readonly url: string | undefined };
 
@@ -30,5 +31,6 @@ export function parseDevRestartNotice(input: unknown): DevRestartNotice {
   if (!URL.canParse(url) || new URL(url).protocol !== 'http:') {
     throw new Error('DevRestartNotice.url: expected an http address');
   }
+  assert(url.length > 0, 'A restarted server’s address is not empty');
   return { kind, url };
 }

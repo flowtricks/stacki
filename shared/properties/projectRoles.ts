@@ -1149,6 +1149,7 @@ export function limitsEditing(off: ReadonlySet<EditorPart>): boolean {
 
 /** Whether any option holds the page's elements as they are in some way: their order, or which are there. */
 export function limitsStructure(off: ReadonlySet<EditorPart>): boolean {
+  assert(off.size <= EDITOR_PARTS.length, 'Editing options are bounded');
   return off.has('drag') || STRUCTURE_PARTS.some((part) => off.has(part));
 }
 

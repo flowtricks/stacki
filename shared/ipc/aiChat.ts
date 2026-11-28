@@ -105,6 +105,7 @@ function imageData(input: unknown, name: string): string {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
     throw new Error(`${name}: expected base64`);
   }
+  assert(data.length <= AI_LIMITS.imageBase64CharsMax, 'Image data stays within its bound');
   return data;
 }
 

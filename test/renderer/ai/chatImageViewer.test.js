@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTranscript } = require('../../helpers/aiTranscriptDom.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const {
   modules: view,
@@ -46,12 +47,16 @@ function message(attachments, loadImage) {
 }
 
 const shown = () => document.querySelector('.ai-lightbox-image') ?? undefined;
-const until = async (check) => {
-  for (let attempt = 0; attempt < 100 && !check(); attempt += 1) {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
-  }
-  assert.ok(check(), 'the expected state arrives');
-};
+// Each read first lets React apply what has arrived.
+const until = (check) =>
+  waitFor({
+    what: 'the expected state arrives',
+    read: async () => {
+      await act(async () => {});
+      return Boolean(check());
+    },
+    until: (held) => held,
+  });
 
 async function close() {
   await act(async () => document.querySelector('.ai-lightbox-close').click());
