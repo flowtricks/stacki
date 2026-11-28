@@ -12,7 +12,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import * as Y from 'yjs';
-import { checksum, createRooms, type Room } from '../src/features/collaboration/rooms';
+import { checksum, createRooms, Room } from '../src/features/collaboration/rooms';
+import { SerialQueue } from '../src/shared/serialQueue';
 import { CodeGuard } from '../src/features/roles/codeGuard';
 import { applyEdits, flatten, nodesOf } from '../src/features/source/source';
 import { pasteEdits } from '../src/features/source/paste';
@@ -310,4 +311,60 @@ test('code added and removed again while edits wait is never applied on the way'
     result.seen.join('\n'),
   );
   assert.ok(!first.room.text.toString().includes('process.env'));
+});
+
+test('a shared page holds nothing but the text the checks read', async (context) => {
+  const { connect } = await workspace(context);
+  const second = await connect(SECOND);
+  const before = second.room.text.toString();
+  const local = new Y.Doc();
+  Y.applyUpdate(local, Y.encodeStateAsUpdate(second.room.document));
+  const vector = Y.encodeStateVector(local);
+  local.getText('source').insertEmbed(0, { extra: true });
+  const update = Buffer.from(Y.encodeStateAsUpdate(local, vector)).toString('base64');
+  local.destroy();
+  assert.notEqual(await send(second, { type: 'update', update }), 'saved');
+  assert.equal(second.room.text.length, before.length);
+});
+
+test('edits still run after the project queue refused a backlog', async (context) => {
+  const { root } = await workspace(context);
+  let refusing = false;
+  const coordinator = new SerialQueue(async () => {
+    if (refusing) {
+      throw new Error('Busy');
+    }
+  });
+  const room = new Room(root, SECOND, coordinator);
+  await room.initialize();
+  const server = new WebSocketServer({ port: 0, host: '127.0.0.1' });
+  await once(server, 'listening');
+  server.on('connection', (socket) => room.attach(socket, undefined, undefined, undefined, () => Promise.resolve(CLIENT)));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const socket = new WebSocket(`ws://127.0.0.1:${address.port}/`);
+  context.after(async () => {
+    socket.terminate();
+    server.close();
+    await room.persist();
+  });
+  await reply(socket, ['sync']);
+  const epoch = room.document.getMap('metadata').get('epoch');
+  const nothing = Buffer.from(Y.encodeStateAsUpdate(new Y.Doc())).toString('base64');
+  refusing = true;
+  const errors: string[] = [];
+  const both = new Promise<void>((resolve) => {
+    socket.on('message', (bytes: Buffer) => {
+      const message = record(JSON.parse(bytes.toString()));
+      if (message['type'] === 'error' && errors.push(String(message['message'])) === 3) {
+        resolve();
+      }
+    });
+  });
+  for (let sent = 0; sent < 3; sent++) {
+    socket.send(JSON.stringify({ type: 'update', epoch, update: nothing }));
+  }
+  await both;
+  refusing = false;
+  assert.equal(await restore({ socket, room }, room.text.toString().replace('Target', 'Changed')), 'saved');
 });

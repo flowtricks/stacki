@@ -204,7 +204,8 @@ export class Room {
     }
     const batch = this.alone > 0 ? [next] : [next, ...this.following(next)];
     this.alone = Math.max(0, this.alone - 1);
-    if (batch.length > 1 && (await this.coordinator.run(() => this.handleTogether(batch)))) {
+    // A coordinator that refuses must not break the queue: each edit then takes its own turn and hears why.
+    if (batch.length > 1 && (await this.coordinator.run(() => this.handleTogether(batch)).catch(() => false))) {
       this.inbox.splice(0, batch.length - 1);
       this.queued -= batch.length;
       return;
@@ -590,6 +591,10 @@ export class Room {
         throw new Error('Another edit arrived. Please repeat the edit.');
       }
       const after = probe.getText('source').toString();
+      // A shared page is plain text. The checks read it as a string and edits are placed by position, so it holds nothing else.
+      if (probe.getText('source').length !== after.length) {
+        throw new Error('Invalid document content');
+      }
       if (after !== this.text.toString()) {
         assertDocumentChangeAllowed(role, this.file, this.text.toString(), after);
       }

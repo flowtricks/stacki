@@ -17,6 +17,20 @@ export interface CodeScope {
 
 const DEPTH_MAX = 200;
 
+// The loop settings' sort by image file size (loopQuery.ts, `fileSizeCode`): exactly that text, over a field read.
+// It is matched against one parsed node, never replaced in a file's text.
+const FIELD = String.raw`([A-Za-z_$][\w$]*)(?:\??\.[A-Za-z_$][\w$]*|(?:\?\.)?\['(?:[^'\\\n]|\\.)*'\])*`;
+const FILE_SIZE = new RegExp(
+  String.raw`^\(globalThis\.process\?\.getBuiltinModule\?\.\('node:fs'\)\?\.statSync\(` +
+    FIELD +
+    String.raw`\?\.fsPath \?\? '', \{ throwIfNoEntry: false \}\)\?\.size \?\? 0\)$`,
+);
+
+function fileSizeRead(node: ts.ParenthesizedExpression, scope: CodeScope): boolean {
+  const root = FILE_SIZE.exec(node.getText())?.[1];
+  return root !== undefined && scope.names.has(root);
+}
+
 const GLOBALS: ReadonlySet<string> = new Set(['undefined', 'NaN', 'Infinity']);
 /**
  * Globals usable only as `Name.member`, so the object itself is never handed around, with the members each may
@@ -85,6 +99,14 @@ const CALLED_NAMES: ReadonlySet<string> = new Set([
 const PARSED_MAX = 5_000;
 const parsed = new Map<string, ts.Expression | undefined>();
 
+/**
+ * Whether a written value, taken whole as a link, would run script. Data reaches links the reader of one expression
+ * cannot follow, so a new value may not be written as one. Prose that opens with the word has a space after the colon.
+ */
+export function scriptValue(value: string): boolean {
+  return /^[\u0000- ]*(?:javascript|vbscript):(?! )/i.test(value.replace(/[\t\n\r]/g, ''));
+}
+
 /** Parses one expression, or undefined when `code` is not exactly one. */
 export function parseExpression(code: string): ts.Expression | undefined {
   if (parsed.has(code)) {
@@ -141,7 +163,10 @@ export function safeExpression(node: ts.Expression, scope: CodeScope, depth = 0)
     return false;
   }
   const next = (child: ts.Expression) => safeExpression(child, scope, depth + 1);
-  if (isLiteral(node)) {
+  if (ts.isStringLiteralLike(node)) {
+    return !scriptValue(node.text);
+  }
+  if (isLiteral(node) || (ts.isParenthesizedExpression(node) && fileSizeRead(node, scope))) {
     return true;
   }
   if (ts.isIdentifier(node)) {
@@ -158,6 +183,9 @@ export function safeExpression(node: ts.Expression, scope: CodeScope, depth = 0)
     return next(node.expression);
   }
   if (ts.isTemplateExpression(node)) {
+    if (scriptValue(node.head.text)) {
+      return false;
+    }
     return node.templateSpans.every((span) => next(span.expression));
   }
   if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
@@ -242,6 +270,10 @@ function safeMember(node: ts.PropertyAccessExpression | ts.ElementAccessExpressi
 }
 
 function safeCall(node: ts.CallExpression, scope: CodeScope, depth: number): boolean {
+  // Data needs no type arguments, and not every kind of file the check reads is TypeScript.
+  if (node.typeArguments !== undefined) {
+    return false;
+  }
   const callee = node.expression;
   const next = (child: ts.Expression) => safeExpression(child, scope, depth + 1);
   const values = node.arguments.map((argument) => (ts.isSpreadElement(argument) ? argument.expression : argument));
@@ -326,6 +358,9 @@ function plainArguments(values: readonly ts.Expression[], scope: CodeScope, dept
 
 function safeConstruction(node: ts.NewExpression, scope: CodeScope, depth: number): boolean {
   const target = node.expression;
+  if (node.typeArguments !== undefined) {
+    return false;
+  }
   const known = ts.isIdentifier(target)
     ? CONSTRUCTORS.has(target.text) && !scope.names.has(target.text)
     : ts.isPropertyAccessExpression(target) && ts.isIdentifier(target.expression) && target.expression.text === 'Intl';

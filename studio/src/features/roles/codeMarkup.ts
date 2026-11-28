@@ -4,8 +4,10 @@
 import { parseAstro } from './codeCompiler';
 import type { AttributeNode, Node, TagLikeNode } from '@astrojs/compiler/types';
 import ts from 'typescript';
-import { parseExpression } from './codeExpression';
-import { chainSources } from './codeModule';
+import { createHash } from 'node:crypto';
+import { onlyComments } from './codeText';
+import { parseExpression, scriptValue } from './codeExpression';
+import { chainSources, declaredNames, importSpecifier, readModule } from './codeModule';
 
 export type CodeUnit =
   | {
@@ -15,9 +17,15 @@ export type CodeUnit =
       readonly code: string;
       readonly names: ReadonlySet<string>;
       /** A value the browser runs or reads as markup, which data alone does not make safe. */
-      readonly sink: 'none' | 'handler' | 'url' | 'html';
+      readonly sink: Sink;
     }
   | { readonly kind: 'browser'; readonly key: string };
+
+/**
+ * Where a value ends up. `handler`, `html` and `names` are never accepted as new code: the browser runs the first,
+ * reads the second as markup, and the third also chooses the names of the attributes that are written.
+ */
+export type Sink = 'none' | 'handler' | 'url' | 'html' | 'names';
 
 export interface PageCode {
   readonly frontmatter: string;
@@ -29,11 +37,12 @@ export interface PageCode {
 
 const NODES_MAX = 50_000;
 const SCOPE_DEPTH_MAX = 200;
+const TAG_LIKE = /<[A-Za-z/!?]/;
 const URL_ATTRIBUTES: ReadonlySet<string> = new Set(['href', 'src', 'action', 'formaction', 'xlink:href', 'data', 'poster']);
 const EVENT_NAMES =
-  /^on(?:abort|animation\w+|before\w+|blur|canplay\w*|change|click|contextmenu|copy|cut|dblclick|drag\w*|drop|ended?|error|focus\w*|input|invalid|key\w+|load\w*|message|mouse\w+|paste|pause|play\w*|pointer\w+|popstate|resize|scroll\w*|select\w*|submit|toggle|touch\w+|transition\w+|unload|wheel)$/i;
+  /^on(?:abort|animation\w+|auxclick|before\w+|begin|blur|cancel|canplay\w*|change|click|close|command|content\w+|context\w*|copy|cuechange|cut|dblclick|device\w+|drag\w*|drop|durationchange|emptied|ended?|error|focus\w*|formdata|fullscreen\w+|gotpointercapture|hashchange|input|invalid|key\w+|languagechange|load\w*|lostpointercapture|message\w*|mouse\w+|offline|online|orientationchange|page\w+|paste|pause|play\w*|pointer\w+|popstate|progress|ratechange|readystatechange|rejectionhandled|repeat|reset|resize|scroll\w*|search|securitypolicyviolation|seek\w+|select\w*|slotchange|stalled|storage|submit|suspend|timeupdate|toggle|touch\w+|transition\w+|unhandledrejection|unload|visibilitychange|volumechange|waiting|webkit\w+|wheel)$/i;
 
-const decodeEntities = (value: string): string =>
+export const decodeEntities = (value: string): string =>
   value.replace(/&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|(colon|tab|newline|lt|gt|quot|amp));?/gi, (whole, decimal: string, hex: string, named: string) => {
     const code = decimal !== undefined && decimal !== '' ? Number(decimal) : hex !== undefined && hex !== '' ? Number.parseInt(hex, 16) : undefined;
     if (code !== undefined) {
@@ -52,7 +61,10 @@ export function scriptAddress(value: string): boolean {
 /** Whether HTML written into a page as a string runs script. */
 export function scriptMarkup(value: string): boolean {
   const html = decodeEntities(value);
-  return /<\s*script\b/i.test(html) || /<[a-z][^>]*[\s/"']on[a-z]+\s*=/i.test(html) || /(?:javascript|vbscript)\s*:/i.test(html) || /\bsrcdoc\s*=/i.test(html);
+  // A handler anywhere after a tag opens: a `>` inside an earlier quoted value does not end the tag.
+  const tag = html.search(/<[a-z]/i);
+  const handler = tag >= 0 && /[\s/"']on[a-z]+\s*=/i.test(html.slice(tag));
+  return /<\s*script\b/i.test(html) || handler || /(?:javascript|vbscript)\s*:/i.test(html) || /\bsrcdoc\s*=/i.test(html);
 }
 
 /** A page without its style blocks, comparable between two versions: equal means only styles differ. */
@@ -90,18 +102,56 @@ export async function markupBesideStyles(source: string): Promise<string> {
     .join('\u0000');
 }
 
+interface Entry {
+  readonly node: Node;
+  readonly names: ReadonlySet<string>;
+  /** The expressions around the node, which bind the names it can read. */
+  readonly bound: string;
+}
+
 interface Walk {
   readonly units: CodeUnit[];
   readonly sources: string[];
-  readonly pending: { readonly node: Node; readonly names: ReadonlySet<string> }[];
+  readonly pending: Entry[];
+  readonly declarations: Declarations;
+}
+
+/** What the frontmatter declares, to tell a component's tag from a tag that is whatever a value says. */
+export interface Declarations {
+  readonly components: ReadonlySet<string>;
+  readonly declared: ReadonlyMap<string, string>;
+}
+
+// An imported data file's value is whatever the file says, so as a tag it is no component.
+const DATA_MODULE = /\.(?:json|md|markdown|mdoc|ya?ml|toml|csv|ndjson|txt|css|scss|sass|less)$/i;
+
+export const fingerprint = (value: string): string => createHash('sha256').update(value).digest('base64');
+
+export function declarationsOf(frontmatter: string): Declarations {
+  const components = new Set<string>();
+  const declared = new Map<string, string>();
+  for (const statement of readModule(frontmatter).statements) {
+    const names = declaredNames(statement);
+    const specifier = importSpecifier(statement);
+    let written: string | undefined;
+    for (const name of names) {
+      if (specifier !== undefined && !DATA_MODULE.test(specifier)) {
+        components.add(name);
+      } else {
+        // Digests, not the statements themselves: one statement may declare thousands of names.
+        declared.set(name, fingerprint(`${declared.get(name) ?? ''}\n${(written ??= fingerprint(statement.getText()))}`));
+      }
+    }
+  }
+  return { components, declared };
 }
 
 /** The code of one `.astro` source. */
 export async function readPageCode(source: string): Promise<PageCode> {
   const parsed = await parseAstro(source);
-  const walk: Walk = { units: [], sources: [], pending: [] };
-  let frontmatter = '';
-  walk.pending.push(...parsed.ast.children.map((node) => ({ node, names: new Set<string>() })));
+  const frontmatter = parsed.ast.children.map((node) => (node.type === 'frontmatter' ? node.value : '')).join('');
+  const walk: Walk = { units: [], sources: [], pending: [], declarations: declarationsOf(frontmatter) };
+  walk.pending.push(...parsed.ast.children.map((node) => ({ node, names: new Set<string>(), bound: '' })));
   for (let index = 0; index < walk.pending.length; index++) {
     if (index >= NODES_MAX) {
       throw new Error('This page is too large to check');
@@ -110,38 +160,66 @@ export async function readPageCode(source: string): Promise<PageCode> {
     if (entry === undefined) {
       break;
     }
-    const { node, names } = entry;
-    if (node.type === 'frontmatter') {
-      frontmatter += node.value;
-    } else if (node.type === 'expression') {
-      readExpression(walk, node.children, names);
+    const { node } = entry;
+    if (node.type === 'expression') {
+      // The compiler gives an empty `{}` no list at all.
+      readExpression(walk, node.children ?? [], entry);
     } else if (node.type === 'element' || node.type === 'component' || node.type === 'custom-element' || node.type === 'fragment') {
-      readTag(walk, node, names);
+      readTag(walk, node, entry);
     }
   }
   const errors = parsed.diagnostics.filter((diagnostic) => diagnostic.severity === 1).length;
   return { frontmatter, units: walk.units, sources: walk.sources, errors };
 }
 
-function readTag(walk: Walk, node: TagLikeNode, names: ReadonlySet<string>): void {
+function readTag(walk: Walk, node: TagLikeNode, entry: Entry): void {
   const element = node.type === 'element' || node.type === 'custom-element';
+  const tag = node.name.toLowerCase();
   for (const attribute of node.attributes) {
-    readAttribute(walk, attribute, names, element);
+    readAttribute(walk, attribute, entry.names, { element, tag });
   }
-  if (element && node.name.toLowerCase() === 'script') {
-    readScript(walk, node);
+  if (node.type === 'component' || node.type === 'fragment') {
+    readComponentTag(walk, node.name, entry);
+  }
+  if (element && tag === 'script') {
+    readScript(walk, node.attributes, node.children.map((child) => (child.type === 'text' ? child.value : '')).join(''));
     return;
   }
-  walk.pending.push(...node.children.map((child) => ({ node: child, names })));
+  walk.pending.push(...node.children.map((child) => ({ node: child, names: entry.names, bound: entry.bound })));
+}
+
+// A tag named after a value writes whatever element the value says. It is code, together with what gives it its value,
+// unless it was already there unchanged.
+export function readComponentTag(walk: Pick<Walk, 'units' | 'declarations'>, name: string, entry: Pick<Entry, 'names' | 'bound'>): void {
+  const root = name.split('.')[0] ?? '';
+  if (root === '') {
+    return;
+  }
+  const local = entry.names.has(root);
+  const declared = walk.declarations.declared.get(root);
+  const compiled = root === 'Fragment' && declared === undefined;
+  if (!local && (compiled || (walk.declarations.components.has(root) && declared === undefined))) {
+    return;
+  }
+  walk.units.push({ kind: 'browser', key: `tag:${name}\n${local ? entry.bound : (declared ?? '')}` });
+}
+
+interface ScriptAttribute {
+  readonly kind: string;
+  readonly name: string;
+  readonly value: string;
 }
 
 // An empty script, as the Add panel writes one, runs nothing; JSON data in a script tag is never run.
-function readScript(walk: Walk, node: TagLikeNode): void {
-  const content = node.children.map((child) => (child.type === 'text' ? child.value : '')).join('');
-  const attribute = (name: string) => node.attributes.find((item) => item.name.toLowerCase() === name);
-  const written = node.attributes.map((item) => `${item.kind} ${item.name}=${item.value}`).join('\n');
+export function readScript(walk: Pick<Walk, 'units'>, attributes: readonly ScriptAttribute[], content: string): void {
+  // A value, a spread or a directive could change what the tag is.
+  const plain = attributes.every((item) => (item.kind === 'quoted' || item.kind === 'empty') && !item.name.includes(':'));
+  const attribute = (name: string) => attributes.find((item) => item.name.toLowerCase() === name);
+  const written = attributes.map((item) => `${item.kind} ${item.name}=${item.value}`).join('\n');
   const type = attribute('type');
-  const data = type?.kind === 'quoted' && type.value === 'application/ld+json' && attribute('src') === undefined;
+  const typed = plain && type?.kind === 'quoted' && type.value === 'application/ld+json';
+  // Data holds no tag.
+  const data = typed && attribute('src') === undefined && !TAG_LIKE.test(content);
   const empty = content.trim() === '' && attribute('src') === undefined && attribute('set:html') === undefined;
   if (!data && !empty) {
     walk.units.push({ kind: 'browser', key: `script:${written}\n${content}` });
@@ -159,27 +237,56 @@ export function sinkOf(name: string, element: boolean): 'none' | 'handler' | 'ur
   return lower === 'set:html' || lower === 'srcdoc' ? 'html' : 'none';
 }
 
-function readAttribute(walk: Walk, attribute: AttributeNode, names: ReadonlySet<string>, element: boolean): void {
-  const sink = sinkOf(attribute.name, element);
+/** The attributes with which an SVG animation writes another attribute, a link among them. */
+export const ANIMATION_VALUES: ReadonlySet<string> = new Set(['values', 'to', 'from', 'by']);
+const ANIMATIONS: ReadonlySet<string> = new Set(['animate', 'set']);
+
+export interface Owner {
+  readonly element: boolean;
+  readonly tag: string;
+}
+
+// A value that holds markup may be printed as markup. Words that only mention a script stay words.
+const holdsScript = (value: string): boolean => /<[a-z]/i.test(decodeEntities(value)) && scriptMarkup(value);
+
+/** Whether a written (not computed) attribute value makes the browser run something. */
+export function runsWritten(name: string, value: string, owner: Owner): boolean {
+  const sink = sinkOf(name, owner.element);
+  if (sink === 'handler') {
+    return true;
+  }
+  if (ANIMATIONS.has(owner.tag) && ANIMATION_VALUES.has(name.toLowerCase())) {
+    return value.split(';').some(scriptAddress);
+  }
+  return (sink === 'url' ? scriptAddress(value) : scriptValue(decodeEntities(value))) || holdsScript(value);
+}
+
+function readAttribute(walk: Walk, attribute: AttributeNode, names: ReadonlySet<string>, owner: Owner): void {
+  const animates = ANIMATIONS.has(owner.tag) && ANIMATION_VALUES.has(attribute.name.toLowerCase());
+  const sink = animates ? 'url' : sinkOf(attribute.name, owner.element);
   if (attribute.kind === 'quoted' || attribute.kind === 'empty') {
-    const runs = sink === 'handler' || (sink === 'url' && scriptAddress(attribute.value)) || (sink === 'html' && scriptMarkup(attribute.value));
-    if (runs) {
+    if (runsWritten(attribute.name, attribute.value, owner)) {
       walk.units.push({ kind: 'browser', key: `attribute:${attribute.name.toLowerCase()}=${attribute.value}` });
     }
     return;
   }
-  if (attribute.kind === 'shorthand' || attribute.kind === 'spread') {
-    walk.units.push(expressionUnit(attribute.name, names, 'none'));
+  if (attribute.kind === 'spread') {
+    walk.units.push(expressionUnit(attribute.name, names, 'names'));
+    return;
+  }
+  if (attribute.kind === 'shorthand') {
+    // `{src}` names the attribute after its text, so only a plain name is a value like any other.
+    walk.units.push(expressionUnit(attribute.name, names, /^[A-Za-z_$][\w$]*$/.test(attribute.name.trim()) ? sink : 'names'));
     return;
   }
   const code = attribute.kind === 'template-literal' ? `\`${attribute.value}\`` : attribute.value;
   walk.units.push(expressionUnit(code, names, sink));
 }
 
-export function expressionUnit(code: string, names: ReadonlySet<string>, sink: 'none' | 'handler' | 'url' | 'html'): CodeUnit {
+export function expressionUnit(code: string, names: ReadonlySet<string>, sink: Sink): CodeUnit {
   const text = code.trim();
   // A comment alone, or nothing at all, is no code.
-  const blank = text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '').trim() === '';
+  const blank = onlyComments(text);
   return {
     kind: 'expression',
     key: `${sink === 'none' ? 'expression' : sink}:${text}`,
@@ -193,7 +300,8 @@ const PLACEHOLDER = '__avbMarkup';
 
 // `{items.map((item) => (<li>{item}</li>))}` is judged as `items.map((item) => (__avbMarkup0))`, and the markup inside
 // is walked in turn, knowing `item` is in scope there.
-function readExpression(walk: Walk, children: readonly Node[], names: ReadonlySet<string>): void {
+function readExpression(walk: Walk, children: readonly Node[], entry: Entry): void {
+  const { names } = entry;
   const markup: Node[] = [];
   const code = children
     .map((child) => {
@@ -207,14 +315,17 @@ function readExpression(walk: Walk, children: readonly Node[], names: ReadonlySe
   const placeholders = new Set(markup.map((_, index) => `${PLACEHOLDER}${index}`));
   const unit = expressionUnit(code, new Set([...names, ...placeholders]), 'none');
   // The key keeps the markup's place without its bytes: editing the words inside leaves the expression the same.
-  walk.units.push({ ...unit, key: unit.key.replace(new RegExp(`${PLACEHOLDER}\\d+`, 'g'), PLACEHOLDER) });
+  const key = unit.key.replace(new RegExp(`${PLACEHOLDER}\\d+`, 'g'), PLACEHOLDER);
+  walk.units.push({ ...unit, key });
   const reads = markup.length > 0 || code.includes('.map(');
   const expression = reads && unit.kind === 'expression' ? parseExpression(unit.code) : undefined;
   const scopes = expression === undefined ? new Map<string, ReadonlySet<string>>() : placeholderScopes(expression, names);
   if (expression !== undefined) {
     walk.sources.push(...loopSources(expression));
   }
-  markup.forEach((node, index) => walk.pending.push({ node, names: scopes.get(`${PLACEHOLDER}${index}`) ?? names }));
+  // What binds the names inside, as one short value however deep and long the expressions around are.
+  const bound = markup.length === 0 ? entry.bound : fingerprint(`${entry.bound}\n${key}`);
+  markup.forEach((node, index) => walk.pending.push({ node, names: scopes.get(`${PLACEHOLDER}${index}`) ?? names, bound }));
 }
 
 // The names each placeholder can read: those outside, plus the parameters of every callback around it.

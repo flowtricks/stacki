@@ -20,6 +20,7 @@ import { packageComponentFiles, packageComponentImport } from '../../../vendor/s
 import { RoleRefusal } from './documentAccess';
 import { innerScope, parseExpression, safeExpression, type CodeScope } from './codeExpression';
 import {
+  declaredNames,
   importSpecifier,
   moduleScope,
   onlyDataChanged,
@@ -30,8 +31,9 @@ import {
   type ImportRules,
   type ModuleCode,
 } from './codeModule';
-import { readPageCode, scriptAddress, scriptMarkup, type CodeUnit } from './codeMarkup';
+import { readPageCode, scriptAddress, type CodeUnit } from './codeMarkup';
 import { readMdxCode } from './codeMdx';
+import { readRuntimeCode } from './codeRuntime';
 import { InertEdits, type InertEdit } from './codeInert';
 import { componentTextProps, printedLiterals } from './editorFacts';
 
@@ -96,21 +98,16 @@ interface Analysis {
 const EMPTY: Analysis = { module: { statements: [], errors: 0 }, units: [], sources: [], errors: 0 };
 const ANALYSES_MAX = 8;
 
-// The loop settings' sort by image file size (loopQuery.ts, `fileSizeCode`): exactly that text, over a field read.
-const FIELD = String.raw`[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*|(?:\?\.)?\['(?:[^'\\\n]|\\.)*'\])*`;
-const FILE_SIZE = new RegExp(
-  String.raw`\(globalThis\.process\?\.getBuiltinModule\?\.\('node:fs'\)\?\.statSync\(` +
-    FIELD +
-    String.raw`\?\.fsPath \?\? '', \{ throwIfNoEntry: false \}\)\?\.size \?\? 0\)`,
-  'g',
-);
-
-async function analyze(kind: FileKind, written: string): Promise<Analysis> {
-  // The brackets stay, so a call written around it is still read as that call.
-  const source = written.replace(FILE_SIZE, '(0)');
+// The text is read exactly as written, so what is judged is what the preview server runs.
+async function analyze(kind: FileKind, source: string): Promise<Analysis> {
   if (kind === 'page') {
-    const page = await readPageCode(source);
-    return { module: readModule(page.frontmatter), units: page.units, sources: page.sources, errors: page.errors };
+    // Both readings are judged: the editor's, and that of the compiler which runs the site.
+    const [page, run] = await Promise.all([readPageCode(source), readRuntimeCode(source)]);
+    // The two must also agree on the frontmatter, whose statements are judged once.
+    const apart: readonly CodeUnit[] =
+      page.frontmatter.trim() === run.frontmatter.trim() ? [] : [{ kind: 'browser', key: `run:frontmatter:${run.frontmatter}` }];
+    const units = [...page.units, ...run.units, ...apart];
+    return { module: readModule(page.frontmatter), units, sources: page.sources, errors: page.errors + run.errors };
   }
   if (kind === 'mdx') {
     const mdx = readMdxCode(source);
@@ -122,7 +119,17 @@ async function analyze(kind: FileKind, written: string): Promise<Analysis> {
 
 // One piece of code, however deeply it is indented: pasting and wrapping re-indent what they move, and the space at
 // the start of a line, or around the markup inside an expression, changes no JavaScript. Line breaks are kept.
-const settled = (key: string): string => key.replace(/\n[ \t]+/g, '\n').replace(/\s*__avbMarkup\s*/g, ' __avbMarkup ');
+// The space around each placeholder is trimmed piece by piece: one pattern for it takes quadratic time over a long run
+// of spaces.
+const settled = (key: string): string => {
+  const parts = key.replace(/\n[ \t]+/g, '\n').split('__avbMarkup');
+  return parts
+    .map((part, index) => {
+      const opened = index === 0 ? part : part.trimStart();
+      return index === parts.length - 1 ? opened : opened.trimEnd();
+    })
+    .join(' __avbMarkup ');
+};
 const digest = (key: string): string => createHash('sha256').update(settled(key)).digest('base64');
 
 function keysOf(analysis: Analysis): readonly string[] {
@@ -142,8 +149,8 @@ interface Analyzed {
 
 const moduleOnly = (code: string): Analysis => ({ ...EMPTY, module: readModule(code) });
 
-// A string inside an expression that the browser would run: an address or markup that runs script.
-function harmlessStrings(expression: ts.Expression, sink: 'url' | 'html'): boolean {
+// A string inside a link's expression that is an address running script.
+function harmlessAddresses(expression: ts.Expression): boolean {
   const pending: ts.Node[] = [expression];
   for (let index = 0; index < pending.length; index++) {
     const node = pending[index];
@@ -151,7 +158,7 @@ function harmlessStrings(expression: ts.Expression, sink: 'url' | 'html'): boole
       return false;
     }
     if (ts.isStringLiteralLike(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
-      if (sink === 'url' ? scriptAddress(node.text) : scriptMarkup(node.text)) {
+      if (scriptAddress(node.text)) {
         return false;
       }
     }
@@ -163,7 +170,7 @@ function harmlessStrings(expression: ts.Expression, sink: 'url' | 'html'): boole
 }
 
 function safeUnit(unit: CodeUnit, scope: CodeScope, mdx: boolean): boolean {
-  if (unit.kind !== 'expression' || unit.sink === 'handler') {
+  if (unit.kind !== 'expression' || (unit.sink !== 'none' && unit.sink !== 'url')) {
     return false;
   }
   // Text that is not one expression is accepted only as a copy of existing code.
@@ -172,7 +179,7 @@ function safeUnit(unit: CodeUnit, scope: CodeScope, mdx: boolean): boolean {
     return false;
   }
   const inner = innerScope(scope, [...unit.names, ...(mdx ? ['props', 'frontmatter'] : [])]);
-  return safeExpression(expression, inner) && (unit.sink === 'none' || harmlessStrings(expression, unit.sink));
+  return safeExpression(expression, inner) && (unit.sink === 'none' || harmlessAddresses(expression));
 }
 
 interface Judged {
@@ -180,6 +187,11 @@ interface Judged {
   readonly kind: FileKind;
   readonly before: Analysis;
   readonly after: Analysis;
+}
+
+// In MDX these decide which elements the entry is written with, so they are more than data.
+function wrapsContent(statement: ts.Statement): boolean {
+  return ts.isExportAssignment(statement) || ts.isExportDeclaration(statement) || declaredNames(statement).has('components');
 }
 
 /** Whether every piece of code in `after` is code `known` holds, or only data. */
@@ -199,8 +211,9 @@ function onlyAllowedCode(judged: Judged, known: Known): boolean {
   const statements = after.module.statements.every(
     (statement) =>
       known(statementKey(statement)) ||
-      safeStatement(statement, scope, rules) ||
-      before.module.statements.some((old) => ++comparisons <= CODE_GUARD_LIMITS.comparisonsMax && onlyDataChanged(old, statement, scope)),
+      ((kind === 'mdx' && wrapsContent(statement)) === false &&
+        (safeStatement(statement, scope, rules) ||
+          before.module.statements.some((old) => ++comparisons <= CODE_GUARD_LIMITS.comparisonsMax && onlyDataChanged(old, statement, scope)))),
   );
   return statements && after.units.every((unit) => known(unit.key) || safeUnit(unit, scope, kind === 'mdx'));
 }
