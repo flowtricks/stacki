@@ -132,6 +132,27 @@ export const inFocus = (node: Node): boolean => {
   }
   return roots.some((root) => root === node || (root.nodeType === 1 && root.contains(node)));
 };
+// The nodes of the one copy of `nodePath` that a selection of copy `occurrence` outlines, or undefined when every copy is meant:
+// the selection names no copy, or there is only one. Copies are numbered as the boxes and the clicks number them (rectsForPath,
+// occurrenceOf): marker runs, else tagged places. A number past the end is the first copy, as the outline draws it (copiesToDraw).
+export const copyNodesOf = (nodePath: string, occurrence: number | undefined): readonly Node[] | undefined => {
+  if (occurrence === undefined) {
+    return undefined;
+  }
+  assert(Number.isSafeInteger(occurrence), 'copyNodesOf: a copy is a whole number');
+  assert(occurrence >= 0, 'copyNodesOf: a copy is not negative');
+  const runs = runsOf(nodePath);
+  if (runs !== undefined && runs.length > 0) {
+    return runs.length === 1 ? undefined : (runs[occurrence] ?? runs[0]);
+  }
+  const places = taggedPlaces(nodePath);
+  if (places.length <= 1) {
+    return undefined;
+  }
+  const place = places[occurrence] ?? places[0];
+  return place === undefined ? undefined : [place.el];
+};
+
 // The occurrences of a path that are on the page, narrowed to the focused
 // instance when there is one. Rects, classes and occurrence numbering all
 // read this, so "the second copy" means the same thing to all of them.

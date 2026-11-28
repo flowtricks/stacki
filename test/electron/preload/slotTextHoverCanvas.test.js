@@ -190,7 +190,8 @@ const PAGE_SOURCE = [
        const boxes = (selector, index) => run('(() => { const el = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + ']; const walker = ' + frame + '.document.createTreeWalker(el, 4); let node = walker.nextNode(); while (node && !node.data.trim()) { node = walker.nextNode(); }  const r = ' + frame + '.document.createRange(); r.selectNodeContents(node); const w = r.getBoundingClientRect(); const e = el.getBoundingClientRect(); return { words: { x: w.left, y: w.top, w: w.width, h: w.height }, element: { x: e.left, y: e.top, w: e.width, h: e.height } }; })()');
        const posts = () => run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)))').then(JSON.parse);
        const point = (at) => win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(at.x), y: Math.round(at.y) });
-       const away = { x: 990, y: 740 };
+       // Inside the frame (900 by 700): a click outside it never reaches the page, and would drop no pick.
+       const away = { x: 890, y: 690 };
        const press = (at) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
@@ -238,7 +239,15 @@ const PAGE_SOURCE = [
          until: (box) => box !== undefined,
          pollCountMax: 40,
        }).catch(() => undefined);
+       out.unselectedHoverCount = out.hoversOnWords.length;
        out.selectedHover = await pickAt(middle(out.first.words), 'selected button words');
+       // The pointer rests on the marked words, so the hover is what the frame last said about them.
+       out.markedHover = await waitFor({
+         what: 'the marked words were hovered',
+         read: async () => (await posts()).filter((m) => m.type === 'avb:text-marks').at(-1)?.hover ?? false,
+         until: Boolean,
+         pollCountMax: 40,
+       }).catch(() => undefined);
        // A double click on the words opens their editor; the frame answers once its session has settled, so it is repeated while nothing answered.
        await run('window.posts.length = 0');
        let clickedAtMs = 0;
@@ -288,10 +297,16 @@ const PAGE_SOURCE = [
     // Within a pixel: the frame's report and the page's own measure round differently.
     const near = (left, right) => Math.abs(left - right) <= 1;
     const hugs = (hover, box) => hover !== undefined && near(hover.x, box.x) && near(hover.y, box.y) && near(hover.w, box.w) && near(hover.h, box.h);
+    // Nothing was selected while the first words were pointed at; then the first Button is, and its words carry a dashed mark.
     check(
-      "words draw no hover outline of their own, a component's own words being the instance's hover",
-      out.hoversOnWords.every((hover) => hover === undefined || hover === null),
+      "words of an unselected instance draw no hover outline of their own, the pointer on them being the instance's hover",
+      out.hoversOnWords.slice(0, out.unselectedHoverCount).every((hover) => hover === undefined || hover === null),
       JSON.stringify(out.hoversOnWords),
+    );
+    check(
+      "the selected Button's marked words turn into a named hover outline under the pointer",
+      out.markedHover?.scope === found['Start your free flight'].parent && out.markedHover?.label === '.button',
+      JSON.stringify(out.markedHover),
     );
     const hoveredFor = (hover, measured, words) => {
       check(`hovering "${words}" outlines them, owned by their own Button`, hover?.scope === found[words].parent, JSON.stringify(hover));

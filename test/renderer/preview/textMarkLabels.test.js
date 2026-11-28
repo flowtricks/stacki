@@ -61,17 +61,15 @@ const redraw = installTextMarks({
   editing: () => undefined,
   editingElement: () => undefined,
   focus: () => new Set(['0.1']),
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });
 redraw();
-// Hovering words draws no outline of their own (a component's own words are the instance's hover), so the name the app gives an
-// element is read from the pick a click makes.
+// The instance is selected, so its words are marked, and the one under the pointer is hovered and named.
 const hoverAt = (y) => {
   dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 50, clientY: y }));
-  assert.equal(posted.at(-1).hover, undefined, 'no hover outline of its own over words');
-  dom.window.dispatchEvent(new dom.window.MouseEvent('click', { clientX: 50, clientY: y }));
-  return posted.at(-1).picked;
+  return posted.at(-1).hover;
 };
 
 test('closed HomeHero selected: a nested component root is named for its component', () => {

@@ -46,15 +46,28 @@ export function parseCanvasTextOverlay(input: unknown): CanvasTextOverlayEvent |
 export interface CanvasTextFocus {
   readonly type: 'avb:text-focus';
   readonly paths: readonly string[];
+  /** The selected copy of the node, for one in a loop: the same number the selection outline is drawn on. Undefined means every copy. */
+  readonly occurrence?: number;
 }
 
 // A selection is never deeper than this; a longer list is not a selection.
 export const CANVAS_FOCUS_PATHS_MAX = 256;
 
-export function canvasTextFocus(paths: readonly string[]): CanvasTextFocus {
+// A copy's number is its place among a node's copies on the page, which the page's node count bounds.
+const CANVAS_FOCUS_COPY_MAX = 100_000;
+
+function isCopyIndex(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= CANVAS_FOCUS_COPY_MAX;
+}
+
+export function canvasTextFocus(paths: readonly string[], occurrence?: number): CanvasTextFocus {
   assert(paths.length <= CANVAS_FOCUS_PATHS_MAX, 'Canvas text focus stays within its bound');
   assert(!paths.includes(''), 'Canvas text focus names real paths');
-  return { type: 'avb:text-focus', paths };
+  if (occurrence === undefined) {
+    return { type: 'avb:text-focus', paths };
+  }
+  assert(isCopyIndex(occurrence), 'Canvas text focus names a whole copy from the first');
+  return { type: 'avb:text-focus', paths, occurrence };
 }
 
 export function parseCanvasTextFocus(input: unknown): CanvasTextFocus | undefined {
@@ -66,7 +79,15 @@ export function parseCanvasTextFocus(input: unknown): CanvasTextFocus | undefine
   if (paths.length > CANVAS_FOCUS_PATHS_MAX) {
     throw new Error('Canvas text focus exceeds limit');
   }
-  return { type: 'avb:text-focus', paths: paths.filter((path) => path !== '') };
+  const focus = { type: 'avb:text-focus', paths: paths.filter((path) => path !== '') } as const;
+  const occurrence = data['occurrence'];
+  if (occurrence === undefined) {
+    return focus;
+  }
+  if (!isCopyIndex(occurrence)) {
+    throw new Error('Canvas text focus names no copy');
+  }
+  return { ...focus, occurrence };
 }
 
 export function parseCanvasTextClose(input: unknown) {

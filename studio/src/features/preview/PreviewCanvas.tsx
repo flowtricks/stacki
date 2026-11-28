@@ -175,6 +175,8 @@ function useStudioCanvasText(props: Props, role: RoleView) {
     frame: props.preview.frame,
     url: props.preview.url,
     post: props.preview.send,
+    // The copy the selection outline is drawn on.
+    occurrence: props.preview.outlines.selected?.occurrence,
     subscribeLoad: props.preview.subscribeLoad,
   });
 }

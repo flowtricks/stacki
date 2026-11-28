@@ -131,6 +131,7 @@ installTextMarks({
   editing: () => undefined,
   editingElement: () => undefined,
   focus: () => new Set(),
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });
