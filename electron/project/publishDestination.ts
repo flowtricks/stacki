@@ -21,7 +21,7 @@ import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { toArray, toRecord } from '../../shared/core/record';
 import { err, ok, type AppError, type Result } from '../../shared/core/result';
-import { described } from '../../shared/properties/i18n/messageRef';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { DescribedError } from '../../shared/properties/describedError';
 import { hostingCommand, type PublishCommand } from '../../shared/properties/publishCommands';
 import { destinationConflict, destinationSiteHosts, previewName } from '../../shared/properties/publishDestinationConflicts';
@@ -43,7 +43,8 @@ import {
   type WorkerPlace,
 } from './publishDestinationWorker';
 import { withTemporaryWorkerConfig, workerConfigParse } from './publishWorkerConfig';
-import { HOST_QUESTIONS, type HostProject, type HostQuestions, type NetlifyHosting, type PagesHosting, type VercelHosting } from './publishDestinationHost';
+import { HOST_QUESTIONS, type HostQuestions } from './publishDestinationHost';
+import type { HostProject, HostRepository, NetlifyHosting, PagesHosting, VercelHosting } from './publishDestinationReplies';
 import { checkDeployScript } from './publishCustom';
 import { linkedPublishProject } from './publishLinkedProject';
 import { deployLinkBinding } from './deployLinkStore';
@@ -200,7 +201,7 @@ async function checkPagesPreview(job: DestinationJob, branch: string, services: 
   assert(hosting.provider === 'cloudflare', 'A Pages preview belongs to Pages production');
   let production: string;
   try {
-    production = (await services.pagesProject(job.root, hosting)).productionBranch;
+    production = await services.pagesProductionBranch(job.root, hosting);
   } catch {
     return err(described('publish.destination.error.pagesUnconfirmed', { label: job.destination.label }));
   }
@@ -237,20 +238,19 @@ async function checkOwnProject(
     }
   }
   const project = await readOwnProject(job.root, hosting, services);
-  if (!project.ok) {
-    return err(described('publish.destination.error.hostUnconfirmed', { label: job.destination.label }));
-  }
-  return checkProject(job, project.value);
+  return project.ok ? checkProject(job, project.value) : err(unconfirmed(job));
 }
 
-type ReadProject = HostProject & { readonly productionBranch?: string };
+function unconfirmed(job: DestinationJob): Described {
+  return described('publish.destination.error.hostUnconfirmed', { label: job.destination.label });
+}
 
 async function readOwnProject(
   root: string,
   hosting: PagesHosting | VercelHosting | NetlifyHosting,
   services: DestinationServices,
-): Promise<Result<ReadProject, 'unconfirmed'>> {
-  const read = (): Promise<ReadProject> => {
+): Promise<Result<HostProject, 'unconfirmed'>> {
+  const read = (): Promise<HostProject> => {
     switch (hosting.provider) {
       case 'cloudflare':
         return services.pagesProject(root, hosting);
@@ -264,21 +264,40 @@ async function readOwnProject(
 }
 
 /** What the host said about a destination's own project, held against production and the other destinations. */
-async function checkProject(job: DestinationJob, project: ReadProject): Promise<Checked> {
+async function checkProject(job: DestinationJob, project: HostProject): Promise<Checked> {
   const protectedHosts = [...(await knownProductionHosts(job.config, job.project)), ...destinationSiteHosts(job.others)];
-  const aliases = await vercelAliases(job);
-  const domains = checkDomains(job, [...project.domains, ...aliases], protectedHosts);
-  if (!domains.ok) {
-    return domains;
+  // With no hostname to protect, there is nothing the domains could clash with.
+  if (protectedHosts.length > 0) {
+    if (project.domains.kind === 'unread') {
+      return err(unconfirmed(job));
+    }
+    const domains = checkDomains(job, [...project.domains.hosts, ...(await vercelAliases(job))], protectedHosts);
+    if (!domains.ok) {
+      return domains;
+    }
   }
   // Where Stacki does not deploy production itself, a project that builds from this repository may be production.
-  if (job.config.hosting.provider !== 'none' || project.repository === undefined) {
-    return ok(undefined);
+  return job.config.hosting.provider === 'none' ? checkRepository(job, project.repository) : ok(undefined);
+}
+
+async function checkRepository(job: DestinationJob, connected: HostRepository): Promise<Checked> {
+  switch (connected.kind) {
+    case 'not-connected':
+    case 'elsewhere':
+      return ok(undefined);
+    case 'unread':
+      return err(unconfirmed(job));
+    case 'github': {
+      const { repository } = await deployLinkBinding(job.project);
+      return repository.toLowerCase() === connected.repository
+        ? err(described('publish.destination.error.sameRepository', { label: job.destination.label }))
+        : ok(undefined);
+    }
+    default: {
+      const exhaustive: never = connected;
+      return exhaustive;
+    }
   }
-  const { repository } = await deployLinkBinding(job.project);
-  return repository.toLowerCase() === project.repository.toLowerCase()
-    ? err(described('publish.destination.error.sameRepository', { label: job.destination.label }))
-    : ok(undefined);
 }
 
 /** Domains a `vercel.json` hands to a production deploy of whatever project it is run against. */

@@ -10,6 +10,7 @@ import { PUBLISH_TEMPORARY_SEAMS } from '#dist/electron/project/publishTemporary
 import type { DeployTransport } from '#dist/electron/project/deployRequest.js';
 import { DEFAULT_PUBLISH_CONFIG, type Hosting, type PublishConfig } from '#dist/shared/properties/publishConfig.js';
 import type { DestinationTarget } from '#dist/shared/properties/publishDestinations.js';
+import type { HostProject } from '#dist/electron/project/publishDestinationReplies.js';
 import { fakeLinkStore, finished, publishSite, write, type SiteOptions } from './publishSite.ts';
 
 export type Site = Awaited<ReturnType<typeof publishSite>>;
@@ -31,17 +32,24 @@ export function destinationsFile(destinations: readonly Readonly<Record<string, 
   return { version: 1, destinations };
 }
 
-const NOTHING_SERVED = { domains: [], repository: undefined };
+/** A project that serves nothing anyone else does and is connected to no repository. */
+export function answered(hosts: readonly string[] = [], repository?: string): HostProject {
+  return {
+    domains: { kind: 'listed', hosts },
+    repository: repository === undefined ? { kind: 'not-connected' } : { kind: 'github', repository },
+  };
+}
 
 /** Every question answered the safe way, unless a test answers otherwise. No question reaches a real host. */
 export function services(changes: ServiceAnswers = {}): DestinationServices {
   return {
     ...DESTINATION_SERVICES,
     workerToolInstalled: () => true,
-    pagesProject: async () => ({ ...NOTHING_SERVED, productionBranch: 'main' }),
+    pagesProductionBranch: async () => 'main',
+    pagesProject: async () => ({ ...answered(), productionBranch: 'main' }),
     vercelHasProduction: async () => true,
-    vercelProject: async () => NOTHING_SERVED,
-    netlifyProject: async () => NOTHING_SERVED,
+    vercelProject: async () => answered(),
+    netlifyProject: async () => answered(),
     workerHostnames: async () => [],
     netlifySite: async () => undefined,
     ...changes,

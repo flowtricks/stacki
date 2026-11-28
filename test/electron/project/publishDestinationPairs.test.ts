@@ -10,12 +10,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readPublishAvailability } from '#dist/electron/project/publishAvailability.js';
 import { readDeploymentReceipt } from '#dist/electron/project/publishReceipt.js';
-import { parseNetlifyProject, parsePagesProject, parseVercelProject, parseWorkerHostnames } from '#dist/electron/project/publishDestinationHost.js';
 import type { DeployTransport } from '#dist/electron/project/deployRequest.js';
 import type { Hosting } from '#dist/shared/properties/publishConfig.js';
 import type { DestinationTarget } from '#dist/shared/properties/publishDestinations.js';
 import { deployCalls, fakeLinkStore, finished, publishSite, scriptsRun, write, type SiteOptions } from '../../helpers/publishSite.ts';
 import {
+  answered,
   destinationsFile,
   destinationSite,
   entry,
@@ -42,8 +42,6 @@ const ownPages: DestinationTarget = {
 };
 const ownWorker: DestinationTarget = { kind: 'host', hosting: { provider: 'cloudflare-workers', accountId: 'account-2', project: 'review' } };
 const ASTRO = { 'astro.config.mjs': 'export default {};' };
-
-const served = (domains: readonly string[], repository?: string) => ({ domains, repository });
 
 async function site(context: TestContext, hosting: Hosting, entries: readonly ReturnType<typeof entry>[], files: SiteOptions['files'] = ASTRO) {
   return destinationSite(context, hosting, destinationsFile(entries), { files: files ?? {} });
@@ -134,7 +132,7 @@ test('an own Vercel project deploys to its own project, and tells Vercel’s bui
 
 test('an own Pages project deploys the branch Cloudflare says is its live one', async (context) => {
   const project = await site(context, PAGES, [entry('review', ownPages)]);
-  const publisher = answering({ pagesProject: async () => ({ ...served([]), productionBranch: 'live' }) });
+  const publisher = answering({ pagesProject: async () => ({ ...answered(), productionBranch: 'live' }) });
   assert.equal((await publishDestination(project, publisher, 'review')).kind, 'done');
   const [deploy] = deployCalls(project.calls());
   assert.deepEqual(deploy?.argv, ['pages', 'deploy', 'dist', '--project-name', 'review-pages', '--branch', 'live', '--commit-dirty=true']);
@@ -159,7 +157,7 @@ const OWN_PROJECTS = [
 
 for (const [name, target, question] of OWN_PROJECTS) {
   const answer = (domains: readonly string[], repository?: string): ServiceAnswers => ({
-    [question]: async () => ({ ...served(domains, repository), productionBranch: 'main' }),
+    [question]: async () => ({ ...answered(domains, repository), productionBranch: 'main' }),
   });
 
   test(`an own ${name} is refused when the host cannot describe it`, async (context) => {
@@ -207,7 +205,7 @@ for (const [name, target, question] of OWN_PROJECTS) {
 test('a hostname the Wrangler file gives production protects it from an own project too', async (context) => {
   const files = { ...ASTRO, 'wrangler.json': JSON.stringify({ name: 'my-site', routes: ['example.com/*'] }) };
   const project = await site(context, WORKERS, [entry('staging', ownNetlify)], files);
-  await refusedAs(project, answering({ netlifyProject: async () => served(['example.com']) }), 'publish.destination.error.servesAddress');
+  await refusedAs(project, answering({ netlifyProject: async () => answered(['example.com']) }), 'publish.destination.error.servesAddress');
 });
 
 test('the project a folder is linked to is production while no publish settings are saved', async (context) => {
@@ -439,34 +437,4 @@ test('production’s scripts never learn of a destination, even one set on this 
 test('a destination that is not saved does nothing', async (context) => {
   const project = await site(context, NONE, [entry('qa', { kind: 'script', script: 'ship' })]);
   await refusedAs(project, publisherFor(), 'publish.destination.error.notSetUp');
-});
-
-test('a host’s reply about another project is not an answer about this one', () => {
-  const netlify = { provider: 'netlify', siteId: 'site-2' } as const;
-  assert.throws(() => parseNetlifyProject({ id: 'site-1' }, netlify));
-  assert.deepEqual(
-    parseNetlifyProject(
-      { id: 'site-2', custom_domain: 'QA.example.com', domain_aliases: ['b.example.com'], build_settings: { repo_url: 'https://github.com/Owner/Site' } },
-      netlify,
-    ),
-    { domains: ['qa.example.com', 'b.example.com'], repository: 'github.com/owner/site' },
-  );
-  const vercel = { provider: 'vercel', organizationId: 'team_2', projectId: 'prj_2' } as const;
-  assert.throws(() => parseVercelProject({ id: 'prj_1', accountId: 'team_2' }, [], vercel), 'The API also answers to a name');
-  assert.throws(() => parseVercelProject({ id: 'prj_2', accountId: 'team_1' }, [], vercel));
-  assert.deepEqual(
-    parseVercelProject({ id: 'prj_2', accountId: 'team_2', link: { type: 'github', org: 'Owner', repo: 'Site' } }, [{ name: 'A.example.com' }], vercel),
-    {
-      domains: ['a.example.com'],
-      repository: 'github.com/owner/site',
-    },
-  );
-  assert.throws(() => parsePagesProject({ domains: [] }), 'A project without a production branch is not described');
-  assert.throws(() => parsePagesProject({ production_branch: 'main', domains: Array.from({ length: 501 }, () => 'a.example.com') }));
-  const rows = [
-    { service: 'Review', hostname: 'A.example.com' },
-    { service: 'other', hostname: 'b.example.com' },
-  ];
-  assert.deepEqual(parseWorkerHostnames(rows, 'review'), ['a.example.com']);
-  assert.throws(() => parseWorkerHostnames([{ service: 'review' }], 'review'));
 });

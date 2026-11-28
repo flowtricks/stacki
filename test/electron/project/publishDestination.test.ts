@@ -331,10 +331,10 @@ test('a Pages preview deploys the staging branch of the Pages project, and nothi
 test('Pages staging asks Cloudflare which branch is production, and fails closed', async (context) => {
   // The settings say production is main; the real project's production branch is the staging one.
   const wrong = await stagingSite(context, PAGES, { kind: 'cloudflare-pages', branch: 'staging' });
-  await refusedAs(wrong, publisherFor({ services: services({ pagesProject: async () => pages('Staging') }) }), 'publish.destination.error.sameAsProduction');
+  await refusedAs(wrong, publisherFor({ services: services({ pagesProductionBranch: async () => 'Staging' }) }), 'publish.destination.error.sameAsProduction');
   const unknown = await stagingSite(context, PAGES, { kind: 'cloudflare-pages', branch: 'staging' });
   const offline = services({
-    pagesProject: async () => {
+    pagesProductionBranch: async () => {
       throw new Error('offline');
     },
   });
@@ -394,7 +394,6 @@ test('Netlify’s own build runs in the staging branch’s context, never produc
 });
 
 const OWN_HOST = { provider: 'none' } as const;
-const pages = (productionBranch: string) => ({ productionBranch, domains: [], repository: undefined });
 
 test('a staging branch receives the current files, uncommitted ones included, and nothing else moves', async (context) => {
   const site = await stagingSite(context, OWN_HOST, { kind: 'github-branch', branch: 'staging' });
@@ -463,9 +462,9 @@ for (const name of ['+main', 'main:main', '-f', 'refs/heads/main', 'a..b', 'stag
 
 test('with Pages as production, a staging branch is checked against the project’s real production branch', async (context) => {
   const site = await stagingSite(context, PAGES, { kind: 'github-branch', branch: 'release' });
-  await refusedAs(site, publisherFor({ services: services({ pagesProject: async () => pages('release') }) }), 'publish.destination.error.sameAsProduction');
+  await refusedAs(site, publisherFor({ services: services({ pagesProductionBranch: async () => 'release' }) }), 'publish.destination.error.sameAsProduction');
   const offline = services({
-    pagesProject: async () => {
+    pagesProductionBranch: async () => {
       throw new Error('offline');
     },
   });

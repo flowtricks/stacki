@@ -1867,6 +1867,35 @@ production host, stops the publish, and the other destinations are compared as t
   link is stored apart and may not equal production's or another destination's, checked when saved and
   again when sent; removing a destination removes its link.
 
+#### What a host's reply is held to
+
+`publishDestinationReplies.ts` parses every reply a check reads. A reply must name the project asked about.
+A domain list or repository link that is missing where it must be present, or has another shape, is
+`unread`: it refuses the publish (`publish.destination.error.hostUnconfirmed`) whenever there is a
+hostname or repository to compare, and is never read as "no clash". A hostname comparison applies when
+production or another destination has a known hostname; a repository comparison applies when Stacki does
+not deploy production itself. Field names come from these public references, read without signing in:
+
+| Reply | Fields read | Absent or other shape | Reference |
+|---|---|---|---|
+| Pages project | `success`, `result.name`, `result.production_branch` (both required) | refused | [get project](https://developers.cloudflare.com/api/resources/pages/subresources/projects/methods/get/) |
+| Pages project | `result.domains`, `result.subdomain` (`domains` optional) | counted when present; another shape is unread. The domain list below must answer either way | same |
+| Pages project | `result.source.type`, `.config.owner`, `.config.repo_name` (`source` optional) | no `source`, or null: not connected, as Wrangler reads it for its "Git Provider" column. Present but another shape or type: unread | same |
+| Pages domains | `success`, `result[].name`, `result_info.total_pages` and `.total_count` (`result_info` optional), `page` and `per_page` (at most 25) | unread; without counts a short page is the last | [list domains](https://developers.cloudflare.com/api/resources/pages/subresources/projects/subresources/domains/methods/list/) |
+| Worker domains, filtered by `service` | `success`, `result[].service`, `result[].hostname`, optional `result_info` counts | refused, as is a count beyond the one page | [list domains](https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/list/); the Cloudflare SDK bundled in Wrangler 4.151.1 lists it as a single page |
+| Vercel project | `id`, `accountId` (required) | refused | [find a project](https://vercel.com/docs/rest-api/projects/find-a-project-by-id-or-name) |
+| Vercel project | `link.type`, `.org`, `.repo`, `.host` (`link` optional) | no `link`: not connected. A `github` link without `org` and `repo`, or a type other than the five published (`github`, `github-limited`, `github-custom-host`, `gitlab`, `bitbucket`): unread | same |
+| Vercel domains | `domains[].name`, `domains[].projectId`, `pagination.next` (all required, `next` nullable) | unread; only `next: null` ends the list | [project domains](https://vercel.com/docs/rest-api/projects/retrieve-project-domains-by-project-by-id-or-name) |
+| Vercel deployments (`/v7`) | `deployments[].projectId`, `.readyState` (required), `.state`, `.target` (nullable) | refused; only a ready `target: "production"` entry of this project counts as a production deployment | [list deployments](https://vercel.com/docs/rest-api/deployments/list-deployments) |
+| Netlify site | `id` | refused | [open-api `swagger.yml`](https://github.com/netlify/open-api/blob/master/swagger.yml), `site` |
+| Netlify site | `custom_domain` (present; null or empty means none), `domain_aliases` (a list), and `ssl_url` or `url` | unread | same |
+| Netlify site | `build_settings.repo_url`, `.repo_path`, `.provider` (`repoInfo`) | no `build_settings`: unread. Present and naming no repository: not connected, unless another key that speaks of a repository holds a value | same |
+
+The Netlify specification marks no property as required, so the Netlify rules are stricter than it: the
+abbreviated example in Netlify's API guide, which has no `domain_aliases` or `build_settings`, is unread.
+For the optional Pages `source` and Vercel `link`, absence is the documented way of saying "not
+connected"; a host renaming either whole block could not be told apart from that.
+
 **What cannot be checked:** what a script or hook does; what a deploy link starts; which branches a host
 builds when its settings are only in its dashboard (other than Pages production branches); routes or
 domains configured only in a host's dashboard that Stacki is not told about (Cloudflare zone routes); and

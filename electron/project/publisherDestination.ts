@@ -164,7 +164,7 @@ async function productionBranchNames(publish: DestinationPublish, settings: Sett
   const names: string[] = [];
   for (const project of projects) {
     try {
-      names.push(project.branch, (await publish.services.pagesProject(publish.root, project)).productionBranch);
+      names.push(project.branch, await publish.services.pagesProductionBranch(publish.root, project));
     } catch {
       return err(described('publish.destination.error.pagesUnconfirmed', { label: settings.destination.label }));
     }
