@@ -2,7 +2,7 @@
 // of "Open in browser", no bigger than the bar's other icons, and never on top of the address: at every
 // width the address text ends before the globe (it truncates with an ellipsis instead). While on, the globe
 // has the pressed fill. Its popover opens under the globe, inside the window, at its
-// fixed width (14.5rem, or the window less its margins) with nothing scrolling sideways; it has a header with a
+// fixed width (16.25rem, or the window less its margins) with nothing scrolling sideways; it has a header with a
 // switch and no divider; a typical network address fits on one line; Copy's check swaps the icon without
 // changing the button's size; the restarting card (skeletons) is the size of the real one, so nothing jumps.
 // Every fitted tooltip, the popover's help tip included, is capped at 20rem and wraps inside the window
@@ -26,7 +26,7 @@ const { repoPath } = require('../../helpers/sources.js');
 
 const WIDTHS = [480, 900, 1600];
 const TIP_PX_MAX = 320; // 20rem at the app's 16px root.
-const POPOVER_PX = 232; // 14.5rem: the code (208px) plus 12px of popover padding on each side; there is no card inside the popover.
+const POPOVER_PX = 260; // 16.25rem: the code (236px) plus 12px of popover padding on each side; there is no card inside the popover.
 
 const HARNESS = `
 import ${JSON.stringify(repoPath('src/app/styles.css'))};
@@ -37,10 +37,10 @@ import FittedTooltip from ${JSON.stringify(repoPath('src/ui/FittedTooltip.tsx'))
 
 Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => undefined } });
 const states = {
-  on: { kind: 'on', port: 48781, addresses: [{ address: '192.168.100.135', interfaceName: 'en0' }] },
+  on: { kind: 'on', port: 48781, addresses: [{ address: '192.168.100.135', interfaceName: 'en0' }], access: { kind: 'open' } },
   changing: { kind: 'changing', toward: 'network' },
 };
-const preview = { state: states[new URLSearchParams(location.search).get('state')], toggle() {} };
+const preview = { state: states[new URLSearchParams(location.search).get('state')], toggle() {}, chooseAccess() {} };
 const LONG = 'A tooltip with a long explanation. '.repeat(12);
 function Harness() {
   return React.createElement(React.Fragment, null,

@@ -456,7 +456,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'audit:render': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/about' },
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
   // The phone preview: the project and the mode its dev server restarts in (shared/ipc/devNetwork.ts).
-  'dev:setNetwork': { projectPath: '/site', mode: 'network' },
+  'dev:setNetwork': { projectPath: '/site', mode: 'network', access: 'key' },
   // The Files panel (shared/ipc/fileExplorer.ts; its bad shapes are in fileExplorer.test.ts).
   'files:list': { projectPath: '/site', path: 'src' },
   'codeIntel:request': { projectPath: '/site', path: 'src/pages/index.astro', text: '<p></p>', query: { kind: 'hover', position: 1 } },

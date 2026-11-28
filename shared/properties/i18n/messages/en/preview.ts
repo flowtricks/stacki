@@ -108,6 +108,8 @@ export const messages = {
   'preview.phone.help': 'Connection help',
   'preview.phone.label': 'Phone preview',
   'preview.phone.qr': 'QR code for {url}',
+  'preview.phone.scannedOnly': 'Only via this code',
+  'preview.phone.settings': 'Phone preview settings',
   'preview.phone.toggle': 'Open on local network',
   'preview.phone.url': 'Address for your phone',
   'preview.reload': 'Reload preview',

@@ -164,8 +164,13 @@ failure from a previous navigation cannot reload the new page.
 
 `dev:network` and `dev:setNetwork` (`shared/ipc/devNetwork.ts`) carry the phone preview: whether the
 project's dev server listens on the local network (`--host 0.0.0.0`) or on 127.0.0.1 only. The request
-names the project and a mode, `local` or `network`; the state is `off`, or `on` with the server's port and
-at most eight IPv4 addresses with their interface names; a refused change is one of five failure codes
+names the project and a mode, `local` or `network`, and on the network an access, `open` (anyone on it) or
+`key` (only the devices that scan the code); the state is `off`, or `on` with the server's port, at most
+eight IPv4 addresses with their interface names and the access, which for `key` carries the key the code
+holds (43 base64url characters). Main makes a new key each time `key` is chosen, keeps it in memory only
+and gives it to the dev server in `STACKI_PREVIEW_KEY`; the guard answers the code's address with an
+`HttpOnly` cookie and a redirect without the key, lets that cookie in, and refuses every other request
+from the network with 403, Vite's live-reload WebSocket included. A refused change is one of five failure codes
 (`no-address`, `no-server`, `external`, `busy`, `restart-failed`), each a toast in the renderer. The mode
 lives in main for the running app only: it is never written, it is off at launch, and `stop()` (project
 close, quit) clears it. The canvas, thumbnails and main's own requests keep the loopback address in both

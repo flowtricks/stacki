@@ -108,6 +108,8 @@ export const messages = {
   'preview.phone.help': 'कनेक्शन सहायता',
   'preview.phone.label': 'फ़ोन प्रीव्यू',
   'preview.phone.qr': '{url} का QR कोड',
+  'preview.phone.scannedOnly': 'केवल इस कोड से',
+  'preview.phone.settings': 'फ़ोन प्रीव्यू सेटिंग्स',
   'preview.phone.toggle': 'लोकल नेटवर्क पर खोलें',
   'preview.phone.url': 'आपके फ़ोन के लिए पता',
   'preview.reload': 'प्रीव्यू रीलोड करें',

@@ -1,7 +1,10 @@
 // Goal: the phone preview works end to end on a real Astro dev server, and only the site reaches the network.
 // With the mode on, a second client using this machine's LAN address gets the page, renders it in Chromium
 // without errors from Stacki's scripts, and receives a live edit over the HMR socket; the same client is
-// refused (403) on /__avb/*, /studio and /__open-in-editor, while 127.0.0.1 still reaches /__avb/*. With the
+// refused (403) on /__avb/*, /studio and /__open-in-editor, while 127.0.0.1 still reaches /__avb/*. Turned to
+// "only devices that scan this code", the server restarts with a key: a client without it gets 403, a browser
+// opening the code's address gets the page with the key gone from its address and its live reload working,
+// and the canvas address needs no key. With the
 // mode off again, the LAN address no longer answers at all and the canvas address still does.
 //
 // Method: a generated fixture project (never the owner's) with the Studio fixture's packages cloned beside it
@@ -124,7 +127,7 @@ async function inElectron() {
     // exit it does not know to stop the daemon with `dev stop`, and a restart in that moment would find
     // the port still held. A person cannot toggle that fast; the test waits for main to know.
     await until('main to see the daemon', 30000, () => (devServers.current()?.daemon === true ? true : undefined));
-    const on = await invoke('dev:setNetwork', { projectPath: project, mode: 'network' });
+    const on = await invoke('dev:setNetwork', { projectPath: project, mode: 'network', access: 'open' });
     assert.equal(on.ok, true, JSON.stringify(on));
     assert.equal(on.value.kind, 'on');
     assert.equal(devServers.current().url, local, 'the canvas keeps its address');
@@ -182,6 +185,40 @@ async function inElectron() {
     assert.deepEqual(problems, [], 'no script errors on the phone (the morph client included)');
     say('a live edit reached the phone over HMR');
     phone.destroy();
+
+    // Only the devices that scan the code: a restart with a key; a device without it is refused, the code's
+    // address lets a browser in with a cookie and drops the key from its address, and live reload follows.
+    const keyed = await invoke('dev:setNetwork', { projectPath: project, mode: 'network', access: 'key' });
+    assert.equal(keyed.ok, true, JSON.stringify(keyed));
+    assert.equal(keyed.value.access.kind, 'key');
+    const key = keyed.value.access.key;
+    await until('the keyed server to refuse a device without the code', 60000, async () => ((await status(`${network}/`)) === 403 ? true : undefined));
+    assert.equal(await status(`${local}/`), 200, 'the canvas needs no key');
+    assert.equal(await status(`${network}/?stacki-key=${key.slice(1)}x`), 403, 'a wrong key is refused');
+    assert.equal(await status(`${network}/?stacki-key=${key}`), 303, 'the code’s address is let in');
+    const scanned = new BrowserWindow({ show: false, webPreferences: { backgroundThrottling: false } });
+    let scannedConnected = false;
+    scanned.webContents.on('console-message', (event) => {
+      if ((event.message ?? '').includes('[vite] connected')) {
+        scannedConnected = true;
+      }
+    });
+    await scanned.loadURL(`${network}/?stacki-key=${key}`);
+    const scannedHeading = () => scanned.webContents.executeJavaScript("document.querySelector('h1')?.textContent ?? ''");
+    await until('the page on the scanned device', 30000, async () => ((await scannedHeading()) === 'Edited' ? true : undefined));
+    assert.equal(scanned.webContents.getURL(), `${network}/`, 'the key left the address bar');
+    await until('the HMR socket of the scanned device', 30000, () => (scannedConnected ? true : undefined));
+    const cookies = await scanned.webContents.session.cookies.get({ url: `${network}/` });
+    const cookie = cookies.map((entry) => `${entry.name}=${entry.value}`).join('; ');
+    assert.equal(await status(`${network}/`), 403, 'still refused without the cookie');
+    const withCookie = await fetch(`${network}/__avb/paths?p=src/pages/index.astro`, {
+      headers: { cookie },
+      signal: AbortSignal.timeout(5000),
+      redirect: 'manual',
+    });
+    assert.equal(withCookie.status, 403, 'Stacki routes stay closed to a scanned device');
+    scanned.destroy();
+    say('only scanned devices: 403 without the code, in with it (key gone from the address, HMR connected)');
 
     const off = await invoke('dev:setNetwork', { projectPath: project, mode: 'local' });
     assert.deepEqual(off, { ok: true, value: { kind: 'off' } });

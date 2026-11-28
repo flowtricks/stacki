@@ -109,6 +109,8 @@ export const messages = {
   'preview.phone.help': 'Bağlantı yardımı',
   'preview.phone.label': 'Telefon önizlemesi',
   'preview.phone.qr': '{url} için QR kodu',
+  'preview.phone.scannedOnly': 'Yalnızca bu kodla',
+  'preview.phone.settings': 'Telefon önizlemesi ayarları',
   'preview.phone.toggle': 'Yerel ağda aç',
   'preview.phone.url': 'Telefonunuz için adres',
   'preview.reload': 'Önizlemeyi yenile',

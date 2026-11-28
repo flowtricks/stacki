@@ -109,6 +109,8 @@ export const messages = {
   'preview.phone.help': 'Помощь с подключением',
   'preview.phone.label': 'Предпросмотр на телефоне',
   'preview.phone.qr': 'QR-код для {url}',
+  'preview.phone.scannedOnly': 'Только по этому коду',
+  'preview.phone.settings': 'Настройки предпросмотра на телефоне',
   'preview.phone.toggle': 'Открыть в локальной сети',
   'preview.phone.url': 'Адрес для телефона',
   'preview.reload': 'Перезагрузить предпросмотр',
