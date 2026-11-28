@@ -129,7 +129,7 @@
     "@xterm/xterm": "^6.0.0",
     "codemirror": "^6.0.2",
     "concurrently": "^9.1.0",
-    "electron": "44.9.0",
+    "electron": "44.11.6",
     "electron-builder": "26.15.3",
     "esbuild": "0.25.12",
     "eslint": "^9.39.5",
@@ -168,6 +168,12 @@
       "**/node_modules/@img/sharp-wasm32/**"
     ],
     "npmRebuild": false,
+    "electronFuses": {
+      "runAsNode": true,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true
+    },
     "directories": {
       "buildResources": "resources",
       "output": "release"

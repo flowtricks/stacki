@@ -5,7 +5,8 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { isAllowedMedia, isAppPage, isBrowserLink, isPrivatePermission } = require('#dist/electron/app/windowSecurity.js');
+const { allowsPermission, guardSessionPermissions, isAllowedMedia, isAppPage, isBrowserLink } = require('#dist/electron/app/windowSecurity.js');
+const { keepOnAppPage } = require('#dist/electron/app/appPageNavigation.js');
 
 const PACKAGED_PAGE = 'file:///Applications/Stacki.app/Contents/Resources/app.asar/index.html';
 const DEV_PAGE = 'http://localhost:5173/';
@@ -60,7 +61,12 @@ test("the app's window may not leave its own page", () => {
   }
 });
 
-test('permissions that reveal the user or reach their devices are refused', () => {
+const SITE = 'http://localhost:4321/';
+const EMBED = 'https://embed.example.com/player';
+
+const ask = (permission, requestingUrl, more = {}) => allowsPermission({ permission, requestingUrl, appUrl: PACKAGED_PAGE, pages: 'seen', ...more });
+
+test('a permission not allowed by name is refused to every page, Stacki’s own included', () => {
   for (const permission of [
     'geolocation',
     'geolocation-approximate',
@@ -71,15 +77,122 @@ test('permissions that reveal the user or reach their devices are refused', () =
     'serial',
     'usb',
     'idle-detection',
+    'unknown',
+    'a-permission-a-later-electron-adds',
   ]) {
-    assert.equal(isPrivatePermission(permission), true, permission);
+    for (const page of [PACKAGED_PAGE, SITE, EMBED, '']) {
+      assert.equal(ask(permission, page), false, `${permission} for ${page}`);
+    }
   }
 });
 
-test('the permissions Stacki relies on, and other harmless ones, stay granted', () => {
-  for (const permission of ['clipboard-sanitized-write', 'fullscreen', 'notifications', 'pointerLock', 'openExternal']) {
-    assert.equal(isPrivatePermission(permission), false, permission);
+test('what sites and Stacki use in ordinary browsing stays granted, in nested frames too', () => {
+  for (const permission of [
+    'clipboard-sanitized-write',
+    'fullscreen',
+    'pointerLock',
+    'keyboardLock',
+    'mediaKeySystem',
+    'fileSystem',
+    'persistent-storage',
+    'storage-access',
+    'screen-wake-lock',
+  ]) {
+    for (const page of [PACKAGED_PAGE, SITE, EMBED]) {
+      assert.equal(ask(permission, page), true, `${permission} for ${page}`);
+    }
   }
+});
+
+test('previews keep what they were always granted; a hidden window’s pages do without it', () => {
+  for (const permission of ['notifications', 'midi', 'midiSysex', 'local-fonts', 'window-management', 'sensors', 'speaker-selection']) {
+    for (const page of [PACKAGED_PAGE, SITE, EMBED]) {
+      assert.equal(ask(permission, page), true, `${permission} for ${page}`);
+      assert.equal(ask(permission, page, { pages: 'unseen' }), false, `${permission} for a hidden ${page}`);
+    }
+  }
+  for (const permission of ['geolocation', 'display-capture', 'clipboard-read', 'usb']) {
+    assert.equal(ask(permission, SITE), false, `${permission} was refused before and stays so`);
+  }
+  assert.equal(ask('media', SITE, { mediaTypes: ['video'] }), false, 'the camera stays refused');
+});
+
+test('a frame may hand only an email, phone or text link to another app', () => {
+  for (const externalURL of ['mailto:someone@example.com', 'MAILTO:someone@example.com', 'tel:+15550100', 'sms:+15550100']) {
+    assert.equal(ask('openExternal', EMBED, { externalURL }), true, externalURL);
+  }
+  for (const externalURL of [
+    'vscode://file/etc/hosts',
+    'zoommtg://zoom.us/join',
+    'file:///Applications/Calculator.app',
+    'smb://server/share',
+    'x-apple.systempreferences:com.apple.preference.security',
+    'ms-msdt:/id',
+    'not a url',
+    '',
+    undefined,
+  ]) {
+    for (const page of [PACKAGED_PAGE, SITE, EMBED]) {
+      assert.equal(ask('openExternal', page, { externalURL }), false, `${externalURL} from ${page}`);
+    }
+  }
+});
+
+test('the local network is for pages on this computer or its network, not the web’s', () => {
+  for (const permission of ['local-network-access', 'local-network', 'loopback-network']) {
+    for (const page of [PACKAGED_PAGE, 'file:///', SITE, 'http://127.0.0.1:4321/', 'http://[::1]:4321/', 'http://192.168.1.20:4321/', 'http://studio.local/']) {
+      assert.equal(ask(permission, page), true, `${permission} for ${page}`);
+    }
+    for (const page of [EMBED, 'http://localhost.evil.com/', 'http://10.evil.com/', 'http://172.32.0.1/', '']) {
+      assert.equal(ask(permission, page), false, `${permission} for ${page}`);
+    }
+  }
+});
+
+test('a session answers its requests and its checks from the same rules', () => {
+  let request;
+  let check;
+  guardSessionPermissions(
+    {
+      setPermissionRequestHandler: (handler) => (request = handler),
+      setPermissionCheckHandler: (handler) => (check = handler),
+    },
+    { appUrl: PACKAGED_PAGE, pages: 'seen' },
+  );
+  const requested = (permission, details) => {
+    let answer;
+    request(undefined, permission, (granted) => (answer = granted), details);
+    return answer;
+  };
+  assert.equal(requested('openExternal', { requestingUrl: EMBED, externalURL: 'vscode://x', isMainFrame: false }), false);
+  assert.equal(requested('openExternal', { requestingUrl: EMBED, externalURL: 'mailto:a@example.com', isMainFrame: false }), true);
+  assert.equal(requested('media', { requestingUrl: PACKAGED_PAGE, mediaTypes: ['audio'] }), true);
+  assert.equal(requested('media', { requestingUrl: EMBED, mediaTypes: ['audio'] }), false);
+  assert.equal(requested('notifications', { requestingUrl: EMBED }), true);
+  assert.equal(requested('geolocation', { requestingUrl: EMBED }), false);
+  assert.equal(check(undefined, 'fullscreen', 'https://embed.example.com', {}), true);
+  assert.equal(check(undefined, 'notifications', 'https://embed.example.com', {}), true);
+  assert.equal(check(undefined, 'geolocation', 'https://embed.example.com', {}), false);
+  assert.equal(check(undefined, 'media', 'file:///', { requestingUrl: PACKAGED_PAGE, mediaType: 'audio' }), true);
+  assert.equal(check(undefined, 'media', 'file:///', { requestingUrl: PACKAGED_PAGE, mediaType: 'video' }), false);
+});
+
+test('the app’s window is held on its page through navigations and redirects alike', () => {
+  const listeners = new Map();
+  const opened = [];
+  keepOnAppPage({ on: (name, listener) => listeners.set(name, listener) }, DEV_PAGE, (url) => opened.push(url));
+  for (const name of ['will-navigate', 'will-redirect']) {
+    const held = (url, isMainFrame = true) => {
+      let prevented = false;
+      listeners.get(name)({ url, isMainFrame, preventDefault: () => (prevented = true) });
+      return prevented;
+    };
+    assert.equal(held(DEV_PAGE), false, `${name} on the page`);
+    assert.equal(held('https://example.com/'), true, `${name} away`);
+    assert.equal(held('file:///etc/hosts'), true, `${name} to a file`);
+    assert.equal(held('https://example.com/', false), false, `${name} in a frame`);
+  }
+  assert.deepEqual(opened, ['https://example.com/', 'https://example.com/']);
 });
 
 test('the microphone is allowed for dictation: audio only, from Stacki’s own page', () => {
@@ -97,5 +210,4 @@ test('the camera, an unnamed request and any other page are refused the micropho
   assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: 'https://example.com/', appUrl: DEV_PAGE }), false, 'the web');
   assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: 'stacki-app://abc/', appUrl: DEV_PAGE }), false, 'an installed app');
   assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: '', appUrl: DEV_PAGE }), false, 'no address');
-  assert.equal(isPrivatePermission('media'), false, 'media is decided by isAllowedMedia, not the blanket list');
 });

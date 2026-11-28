@@ -14,8 +14,17 @@
 // - `.stacki/apps/` outside the app's own folder (the lockfile, the settings
 //   file, other apps' bundles), and other apps' stored data in
 //   `.stacki/app-data/`.
-// The same rules run again on the real path once symbolic links resolve, so a
-// link cannot lead out of the project or into a refused folder.
+//
+// What an app may read but never change, outside its own folder: files that make
+// the computer run code just by being there (`appFileChangeRefusal`). Why: an
+// app runs in a sandbox, and writing a package script, a build config or an
+// agent's hook would let it leave that sandbox the next time the dev server,
+// an install, Git, an editor or an agent reads the file.
+//
+// Every name is compared as the file system may see it (`foldSegment`): macOS and
+// Windows disks ignore letter case. The same rules run again on the real path
+// once symbolic links resolve, so a link cannot lead out of the project or into
+// a refused folder.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
@@ -136,7 +145,8 @@ export function parseAppFilePath(input: unknown, appId: string | undefined, opti
     throw new Error('path is nested too deeply');
   }
   for (const segment of segments) {
-    if (segment === '' || segment === '.' || segment === '..') {
+    // Windows drops trailing dots and spaces, so a name of nothing else there is `.` or `..` under another spelling.
+    if (trimmedSegment(segment) === '') {
       throw new Error('path names a file without ., .. or empty segments');
     }
     if (SEGMENT_FORBIDDEN.test(segment) || /[\u0000-\u001f]/.test(segment)) {
@@ -157,36 +167,163 @@ export function parseAppFilePath(input: unknown, appId: string | undefined, opti
  * Run on the path as named and again on its real path (appFilesStore.ts).
  */
 export function appFilePathRefusal(path: string, appId: string | undefined): string | undefined {
-  const segments = path.split('/');
-  if (segments.some((segment) => segment.toLowerCase() === '.git')) {
+  const segments = path.split('/').map(foldSegment);
+  if (segments.includes('.git')) {
     return 'Apps cannot read or change Git’s own files (.git/)'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
-  if (segments.some((segment) => segment === 'node_modules')) {
+  if (segments.includes('node_modules')) {
     return 'Apps cannot read or change installed packages (node_modules/)'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   const name = segments[segments.length - 1] ?? '';
-  if (/^\.env(?:\..*)?$/i.test(name)) {
+  if (/^\.env(?:\..*)?$/.test(name)) {
     return 'Apps cannot read or change the project’s .env secrets; use app settings'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   if (appId === undefined) {
     return undefined;
   }
   const id = parseAppId(appId);
+  const folded = segments.join('/');
   const appsPrefix = `${APPS_DIRECTORY}/`;
-  if (path === APPS_DIRECTORY) {
+  if (folded === APPS_DIRECTORY) {
     return 'Apps can reach only their own folder in .stacki/apps/'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
-  if (path.startsWith(appsPrefix)) {
-    const owner = path.slice(appsPrefix.length).split('/')[0];
+  if (folded.startsWith(appsPrefix)) {
+    const owner = folded.slice(appsPrefix.length).split('/')[0];
     if (owner !== id) {
       return 'Apps can reach only their own folder in .stacki/apps/'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
     }
   }
   const dataPrefix = '.stacki/app-data/';
-  if (path.startsWith(dataPrefix) && path !== `${dataPrefix}${id}.json`) {
+  if (folded.startsWith(dataPrefix) && folded !== `${dataPrefix}${id}.json`) {
     return 'Apps cannot read or change another app’s stored data; use stacki.storage'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   return undefined;
+}
+
+// Folders whose contents tools run: agent and editor settings (hooks, tasks, tool servers), Git hook runners,
+// Yarn's own releases and plugins.
+const RUN_FOLDERS: ReadonlySet<string> = new Set([
+  '.claude',
+  '.codex',
+  '.pi',
+  '.agents',
+  '.cursor',
+  '.gemini',
+  '.opencode',
+  '.windsurf',
+  '.continue',
+  '.roo',
+  '.vscode',
+  '.zed',
+  '.idea',
+  '.devcontainer',
+  '.husky',
+  '.githooks',
+  '.yarn',
+]);
+// The same, at one place in the project: CI workflows, and what Stacki generates or trusts there (the dev
+// server's preview and canvas files, write staging and the CLI undo journal, Studio's server state).
+const RUN_PATHS = [
+  '.github/workflows',
+  '.github/actions',
+  '.github/hooks',
+  '.stacki/cli.json',
+  '.stacki/preview',
+  '.stacki/canvas',
+  '.stacki/io',
+  '.stacki/studio',
+] as const;
+
+// Files tools run, or that say what to run: package manifests and lockfiles (install and run scripts),
+// package manager settings, and agent and Git hook settings.
+const RUN_FILES: ReadonlySet<string> = new Set([
+  'package.json',
+  'package.json5',
+  'package.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'bun.lock',
+  'bun.lockb',
+  'bunfig.toml',
+  'deno.json',
+  'deno.jsonc',
+  'deno.lock',
+  '.npmrc',
+  '.yarnrc',
+  '.yarnrc.yml',
+  '.pnpmfile.cjs',
+  '.pnpmfile.mjs',
+  'pnpmfile.js',
+  'pnpmfile.cjs',
+  '.envrc',
+  '.mcp.json',
+  'opencode.json',
+  'opencode.jsonc',
+  '.cursorrules',
+  '.pre-commit-config.yaml',
+  'lefthook.yml',
+  'lefthook.yaml',
+  '.lefthook.yml',
+  '.lefthook.yaml',
+]);
+
+// The configs the dev server and the build load as code, wherever they sit: a monorepo keeps them in each package.
+const RUN_CONFIG =
+  /^(?:astro|vite|vitest|postcss|tailwind|svelte|vue|uno|unocss|babel|eslint|prettier|stylelint|rollup|webpack|playwright|mdx|markdoc|keystatic|drizzle)\.config(?:\.[a-z0-9_-]+)*\.(?:[cm]?[jt]sx?|json)$/;
+// The same tools' dot files, which may be code or name code to load.
+const RUN_RC = /^\.(?:postcssrc|babelrc|eslintrc|prettierrc|stylelintrc|lintstagedrc|huskyrc)(?:\.(?:[cm]?[jt]s|json|ya?ml|toml))?$/;
+// Any other tool's config at the project's top: `<tool>.config.js` and its kin.
+const ROOT_CONFIG = /^[^/]+\.config\.[cm]?[jt]s$/;
+
+/**
+ * Why an app may read a path but not change it, or undefined when it may change it (the header). An app's own
+ * folder is its own. Run, as `appFilePathRefusal` is, on the path as named and again on its real path.
+ */
+export function appFileChangeRefusal(path: string, appId: string): string | undefined {
+  const segments = path.split('/').map(foldSegment);
+  const folded = segments.join('/');
+  if (folded.startsWith(`${APPS_DIRECTORY}/${parseAppId(appId)}/`)) {
+    return undefined;
+  }
+  const name = segments[segments.length - 1] ?? '';
+  const inRunFolder = segments.some((segment) => RUN_FOLDERS.has(segment));
+  const atRunPath = RUN_PATHS.some((entry) => folded === entry || folded.startsWith(`${entry}/`));
+  const runFile = RUN_FILES.has(name) || RUN_CONFIG.test(name) || RUN_RC.test(name);
+  const rootConfig = segments.length === 1 && ROOT_CONFIG.test(name);
+  if (inRunFolder || atRunPath || runFile || rootConfig) {
+    return 'Apps cannot change files that run code on this computer: package files, build and tool configs, and agent, editor, Git hook and CI settings'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
+  }
+  return undefined;
+}
+
+// A segment without the trailing dots and spaces Windows drops.
+function trimmedSegment(segment: string): string {
+  return segment.replace(/[. ]+$/, '');
+}
+
+// A name as a forgiving file system reads it: one spelling for every letter case and Unicode compatibility form
+// (macOS and Windows disks), without invisible characters or the trailing dots and spaces Windows drops.
+function foldSegment(segment: string): string {
+  return trimmedSegment(
+    segment
+      .normalize('NFKC')
+      .replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+      .toUpperCase()
+      .toLowerCase(),
+  );
+}
+
+// A path an operation changes: well formed, one the app may reach, and one it may change.
+function parseAppFileChangePath(input: unknown, appId: string): string {
+  const path = parseAppFilePath(input, appId, { allowRoot: false });
+  const refusal = appFileChangeRefusal(path, appId);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+  return path;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,23 +364,26 @@ export function parseAppFileOperation(input: unknown, appId: string): AppFileOpe
     case 'read':
       return { kind: 'read', path: parseAppFilePath(value['path'], appId, { allowRoot: false }) };
     case 'write':
-      return { kind: 'write', path: parseAppFilePath(value['path'], appId, { allowRoot: false }), ...parseAppFileContent(value['content'], value['encoding']) };
+      return { kind: 'write', path: parseAppFileChangePath(value['path'], appId), ...parseAppFileContent(value['content'], value['encoding']) };
     case 'delete':
-      return { kind: 'delete', path: parseAppFilePath(value['path'], appId, { allowRoot: false }) };
+      return { kind: 'delete', path: parseAppFileChangePath(value['path'], appId) };
     case 'move': {
-      const from = parseAppFilePath(value['from'], appId, { allowRoot: false });
-      const to = parseAppFilePath(value['to'], appId, { allowRoot: false });
+      const from = parseAppFileChangePath(value['from'], appId);
+      const to = parseAppFileChangePath(value['to'], appId);
       if (from === to) {
         throw new Error('from and to name the same path');
       }
       return { kind: 'move', from, to };
     }
     case 'mkdir':
-      return { kind: 'mkdir', path: parseAppFilePath(value['path'], appId, { allowRoot: false }) };
+      return { kind: 'mkdir', path: parseAppFileChangePath(value['path'], appId) };
     case 'restore': {
       const states = parseAppFileStates(value['states'], appId);
       if (states.length === 0) {
         throw new Error('An undo step restores at least one path');
+      }
+      for (const state of states) {
+        parseAppFileChangePath(state.path, appId);
       }
       return { kind: 'restore', states };
     }

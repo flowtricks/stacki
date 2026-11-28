@@ -19,6 +19,7 @@ import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import {
   APP_FILE_LIMITS,
+  appFileChangeRefusal,
   appFilePathRefusal,
   type AppFileAnswer,
   type AppFileContent,
@@ -79,7 +80,7 @@ export function runAppFileOperation(
   host: { readonly budget: AppFileBudget; readonly writeFile: AppFileWriter },
 ): AppsResult<AppFileAnswer> {
   try {
-    const root = fs.realpathSync(projectRoot);
+    const root = fs.realpathSync.native(projectRoot);
     return { ok: true, value: dispatch(root, appId, operation, host) };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
@@ -102,7 +103,7 @@ function dispatch(
       return { kind: 'content', content: readFile(root, appId, operation.path) };
     case 'write': {
       const bytes = operation.encoding === 'base64' ? Buffer.from(operation.content, 'base64') : Buffer.from(operation.content, 'utf8');
-      const target = resolveInside(root, appId, operation.path);
+      const target = resolveForChange(root, appId, operation.path);
       if (isDirectory(target)) {
         throw new Error(`${operation.path} is a folder`);
       }
@@ -113,7 +114,7 @@ function dispatch(
       });
     }
     case 'delete': {
-      const target = resolveInside(root, appId, operation.path);
+      const target = resolveForChange(root, appId, operation.path);
       const stats = lstatOf(target);
       if (stats === undefined) {
         throw new Error(`${operation.path} does not exist`);
@@ -125,8 +126,8 @@ function dispatch(
       return change(root, appId, [operation.path], () => removePath(target));
     }
     case 'move': {
-      const source = resolveInside(root, appId, operation.from);
-      const target = resolveInside(root, appId, operation.to);
+      const source = resolveForChange(root, appId, operation.from);
+      const target = resolveForChange(root, appId, operation.to);
       if (!lstatOf(source)?.isFile()) {
         throw new Error(`${operation.from} is not a file; apps move one file at a time`);
       }
@@ -140,7 +141,7 @@ function dispatch(
       });
     }
     case 'mkdir': {
-      const target = resolveInside(root, appId, operation.path);
+      const target = resolveForChange(root, appId, operation.path);
       const existing = lstatOf(target);
       if (existing !== undefined && !existing.isDirectory()) {
         throw new Error(`${operation.path} is a file`);
@@ -186,7 +187,7 @@ function restoreStates(root: string, appId: string, states: readonly AppFileStat
   const creations = states.filter((state) => state.kind !== 'absent').sort((left, right) => depth(left) - depth(right));
   assert(removals.length + creations.length === states.length, 'Every state is restored once');
   for (const state of removals) {
-    const target = resolveInside(root, appId, state.path);
+    const target = resolveForChange(root, appId, state.path);
     const stats = lstatOf(target);
     if (stats?.isDirectory() === true && fs.readdirSync(target).length > 0) {
       throw new Error(`${state.path} now holds other files; it was left as it is`);
@@ -196,7 +197,7 @@ function restoreStates(root: string, appId: string, states: readonly AppFileStat
     }
   }
   for (const state of creations) {
-    const target = resolveInside(root, appId, state.path);
+    const target = resolveForChange(root, appId, state.path);
     if (state.kind === 'directory') {
       fs.mkdirSync(target, { recursive: true });
     } else if (state.kind === 'file') {
@@ -270,6 +271,16 @@ function readFile(root: string, appId: string, relative: string): AppFileContent
     : { path: relative, encoding: 'utf8', content: text, sizeBytes: bytes.byteLength };
 }
 
+// A path about to change: resolved as every path is, and its real path one the app may change.
+function resolveForChange(root: string, appId: string, relative: string): string {
+  const resolved = resolveInside(root, appId, relative);
+  const refusal = appFileChangeRefusal(path.relative(root, resolved).split(path.sep).join('/'), appId);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
+  }
+  return resolved;
+}
+
 /**
  * The absolute path of `relative`, after checking its real path: the deepest
  * part that exists resolves inside the project's real path, and the path it
@@ -287,7 +298,8 @@ function resolveInside(root: string, appId: string, relative: string): string {
       break;
     }
   }
-  const real = fs.realpathSync(existing);
+  // The native form answers with the names as the disk holds them: letter case, and Windows' long names.
+  const real = fs.realpathSync.native(existing);
   const resolved = path.join(real, ...rest);
   const inside = path.relative(root, resolved);
   if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) {

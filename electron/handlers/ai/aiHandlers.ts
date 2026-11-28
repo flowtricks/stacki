@@ -17,6 +17,7 @@ import { sameFilesystemPath } from '../../lib/platform';
 import { LoginShellSettings } from '../../lib/loginShellSettings';
 import { buildShellEnv } from '../../lib/shellEnvironment';
 import type { MainHost } from '../mainHost';
+import type { AppIpc } from '../../lib/ipcSenders';
 import { AgentHost, NEW_CHAT_TITLE, type AgentHostDeps } from './agentHost';
 import { AgentSetup } from './agentSetup';
 import { findCli } from './agentRegistry';
@@ -384,7 +385,7 @@ function sameProject(root: string, projectPath: string): boolean {
 }
 
 /** `ai:ack`: a one-way send, parsed before it reaches the event pump. */
-export function registerAiSendChannels(ipcMain: Pick<Electron.IpcMain, 'on'>, agents: () => AgentHost): void {
+export function registerAiSendChannels(ipcMain: Pick<AppIpc, 'on'>, agents: () => AgentHost): void {
   ipcMain.on('ai:ack', (_event: unknown, input: unknown) => {
     const payload = parseSendPayload('ai:ack', input);
     if (payload !== undefined) {

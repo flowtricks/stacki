@@ -1467,7 +1467,17 @@ type AppFileOutcome = { applied: true; paths: string[] } | { applied: false; rea
   resolve: absolute paths, `..`, anything under `.git/` or `node_modules/`, `.env` files (use
   [settings](#app-settings) for secrets), `.stacki/apps/` except the app's own folder
   `.stacki/apps/<id>/`, and other apps' stored data in `.stacki/app-data/` (use
-  [storage](#storage)). A listing leaves refused entries and links out.
+  [storage](#storage)). A listing leaves refused entries and links out. Letter case does not matter
+  to these rules.
+- **Files that run code** can be read but not changed (`write`, `delete`, `move` from or to,
+  `mkdir`), as named and again once symbolic links resolve, anywhere outside the app's own folder:
+  `package.json` and lockfiles; package manager settings (`.npmrc`, `.yarnrc*`, `.yarn/`, pnpm and
+  Bun files, `deno.json`); build and tool configs (`astro.config.*`, `vite.config.*`,
+  `postcss.config.*`, `tailwind.config.*` and their kin, tool rc files, and any `*.config.js` or
+  `*.config.ts` at the project's top); agent and editor settings (`.claude/`, `.codex/`, `.cursor/`,
+  `.vscode/`, `.mcp.json` and the like); Git hook runners and `.envrc`; CI workflows in `.github/`;
+  and Stacki's `.stacki/cli.json`, `preview/`, `canvas/`, `io/` and `studio/`. Source files under
+  `src/` and `public/`, `src/content.config.ts` included, stay writable.
 - **Text or binary.** `files.read` answers UTF-8 text when the file is valid text, else `base64`;
   `files.write` takes either.
 - **Bounds.** One file is at most 5 MiB; a listing answers at most 1000 entries (`truncated` says
