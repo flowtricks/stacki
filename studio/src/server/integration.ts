@@ -40,6 +40,7 @@ import { ReferencedError } from '../shared/referencedError';
 import { fileStamps, parseFileStampRequest } from '../features/apps/pageFileStamps';
 import { saveAsset } from '../features/storage/assetStorage';
 import { interceptBrowserReloads } from '../features/preview/browserReloads';
+import { slashRedirect } from './pageNavigation';
 import { assertRouteAllowed, connectionRole, requestRole, RoleRefusal, routeRule } from '../features/roles/serverAccess';
 import type { RoleView } from '../../vendor/stacki/shared/properties/projectRoles';
 import { assertEditorRequest, routeReadsBody } from '../features/roles/editorRoutes';
@@ -609,6 +610,16 @@ function configureStudioRequests(
       url.pathname = options.trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
       request.url = url.pathname + url.search;
       next();
+      return;
+    }
+    const fetchMode = request.headers['sec-fetch-mode'];
+    const slashed = slashRedirect(
+      { method: request.method ?? 'GET', pathname, search: url.search, fetchMode: typeof fetchMode === 'string' ? fetchMode : undefined },
+      options.trailingSlash,
+    );
+    if (slashed !== undefined) {
+      response.writeHead(302, { Location: slashed, 'Cache-Control': 'no-store' });
+      response.end();
       return;
     }
     if (pathname !== '/studio' && !pathname.startsWith('/studio/')) {
