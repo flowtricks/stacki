@@ -194,6 +194,13 @@ export function loopbackGuard(key: PreviewKey | undefined): LoopbackGuard {
   };
 }
 
+/** What a device without the key sees: the way in is the code, which a typed address does not carry. */
+export const SCAN_THE_CODE_PAGE =
+  '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+  '<title>Scan the code</title><body style="font:17px/1.5 system-ui;padding:24px">' +
+  '<h1 style="font-size:22px">Scan the code to open this site</h1>' +
+  '<p>On your computer, open Phone preview in Stacki and scan its QR code with this device. Typing the address is not enough.</p>';
+
 const SERVER_GUARD = loopbackGuard(SERVER_KEY);
 /** The dev server middleware: registered first, before any Stacki route and before Vite's own. */
 export const loopbackGuardMiddleware = SERVER_GUARD.middleware;
@@ -220,8 +227,14 @@ function guardMiddleware(key: PreviewKey | undefined, request: IncomingMessage, 
       return;
     }
     case 'refuse': {
+      if (verdict.reason === 'key') {
+        // A person reads this one, on a phone: sized for its screen. It is fixed text, with nothing of the request in it.
+        response.writeHead(403, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+        response.end(SCAN_THE_CODE_PAGE);
+        return;
+      }
       response.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
-      response.end(verdict.reason === 'key' ? 'Forbidden: scan the preview code in Stacki to open this page on this device.' : 'Forbidden');
+      response.end('Forbidden');
       return;
     }
     default: {

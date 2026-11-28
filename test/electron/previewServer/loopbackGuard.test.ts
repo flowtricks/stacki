@@ -275,7 +275,9 @@ test('a real server with a key: the code lets a device in with a cookie, every o
     context.diagnostic('This machine has no network address: the key was checked on the pure verdict only.');
     return;
   }
-  assert.equal((await ask(lan.address, '/blog')).status, 403, 'a device that did not scan the code');
+  const typed = await ask(lan.address, '/blog');
+  assert.equal(typed.status, 403, 'a device that did not scan the code');
+  assert.equal(typed.cookie, undefined, 'and is given nothing');
   assert.match(await upgrade(lan.address, undefined), /403/, 'nor its live-reload socket');
   const admitted = await ask(lan.address, `/blog?${PREVIEW_KEY_PARAM}=${KEY}`);
   assert.equal(admitted.status, 303);
@@ -286,4 +288,27 @@ test('a real server with a key: the code lets a device in with a cookie, every o
   assert.match(await upgrade(lan.address, cookie), /101/, 'and its live reload');
   assert.equal((await ask(lan.address, '/blog', { cookie: `${PREVIEW_KEY_COOKIE}=${OTHER_KEY}` })).status, 403, 'an older code’s cookie');
   assert.equal((await ask(lan.address, '/__avb/paths', { cookie })).status, 403, 'Stacki’s routes stay closed to it');
+});
+
+test('a device without the key reads how to get in, on a page sized for a phone, with nothing of its request in it', () => {
+  let status = 0;
+  let type = '';
+  let body = '';
+  const request = { url: '/<script>', method: 'GET', socket: { remoteAddress: '192.168.1.40' }, headers: { host: '192.168.1.23:4321' } };
+  const response = {
+    writeHead(code: number, headers: Readonly<Record<string, string>>) {
+      status = code;
+      type = headers['content-type'] ?? '';
+    },
+    end(text: string) {
+      body = text;
+    },
+  };
+  // @ts-expect-error The middleware reads only url, method, socket.remoteAddress and headers, and calls only writeHead and end.
+  loopbackGuard(KEY).middleware(request, response, () => assert.fail('refused'));
+  assert.equal(status, 403);
+  assert.match(type, /^text\/html/);
+  assert.match(body, /name="viewport"/);
+  assert.match(body, /scan its QR code/);
+  assert.doesNotMatch(body, /<script|192\.168/);
 });

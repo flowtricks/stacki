@@ -92,7 +92,7 @@ export const messages = {
   'preview.pane.empty': 'プレビューする項目が選択されていません。左側でページを選んでください。',
   'preview.pane.starting': 'Astro 開発サーバーを起動中…',
   'preview.pane.title': 'サイトのプレビュー',
-  'preview.phone.confirm.body': 'オンのあいだは、同じ Wi-Fi にいる誰でもこのサイトを開けます。',
+  'preview.phone.confirm.body': 'オンの間は、同じ Wi-Fi でコードを読み取った端末がこのサイトを開けます。',
   'preview.phone.confirm.title': 'プレビューをローカルネットワークで開きますか？',
   'preview.phone.confirm.turnOn': 'オンにする',
   'preview.phone.copied': 'アドレスをコピーしました',
@@ -106,8 +106,10 @@ export const messages = {
   'preview.phone.error.noServer': '先にプレビューを起動してください。',
   'preview.phone.error.restart':
     'ローカルネットワークでプレビューを再起動できなかったため、このコンピュータのみに戻しました。理由はプレビューのログに記載されています。',
-  'preview.phone.firewall': '同じ Wi-Fi に接続してください。確認されたら Node.js をファイアウォールで許可してください。',
+  'preview.phone.firewall':
+    '同じ Wi-Fi に接続し、コードを読み取るかアドレスをコピーしてください。確認されたら、ファイアウォールで Node.js を許可してください。',
   'preview.phone.help': '接続のヘルプ',
+  'preview.phone.keyedAddress': 'コードを読み取るか「コピー」を使ってください。このアドレスを入力するだけでは開けません。',
   'preview.phone.label': 'スマートフォンでプレビュー',
   'preview.phone.qr': '{url} の QR コード',
   'preview.phone.scannedOnly': 'このコード経由のみ',

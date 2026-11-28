@@ -92,7 +92,7 @@ export const messages = {
   'preview.pane.empty': 'Нечего показывать. Выберите страницу слева.',
   'preview.pane.starting': 'Запуск сервера разработки Astro…',
   'preview.pane.title': 'Предпросмотр сайта',
-  'preview.phone.confirm.body': 'Пока это включено, любой в вашей сети Wi-Fi может открыть этот сайт.',
+  'preview.phone.confirm.body': 'Пока это включено, устройства в вашей сети Wi-Fi, отсканировавшие код, могут открыть этот сайт.',
   'preview.phone.confirm.title': 'Открыть предпросмотр в локальной сети?',
   'preview.phone.confirm.turnOn': 'Включить',
   'preview.phone.copied': 'Адрес скопирован',
@@ -105,8 +105,10 @@ export const messages = {
   'preview.phone.error.noServer': 'Сначала запустите предпросмотр.',
   'preview.phone.error.restart':
     'Предпросмотр не перезапустился в локальной сети, поэтому снова доступен только на этом компьютере. Причина указана в журнале предпросмотра.',
-  'preview.phone.firewall': 'Подключитесь к той же Wi-Fi. Разрешите Node.js в брандмауэре, если спросят.',
+  'preview.phone.firewall':
+    'Подключитесь к той же сети Wi-Fi, затем отсканируйте код или скопируйте адрес. Если появится запрос, разрешите Node.js в брандмауэре.',
   'preview.phone.help': 'Помощь с подключением',
+  'preview.phone.keyedAddress': 'Отсканируйте код или нажмите «Копировать»: просто ввести этот адрес недостаточно.',
   'preview.phone.label': 'Предпросмотр на телефоне',
   'preview.phone.qr': 'QR-код для {url}',
   'preview.phone.scannedOnly': 'Только по этому коду',

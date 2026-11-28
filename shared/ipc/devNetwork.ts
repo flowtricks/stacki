@@ -9,8 +9,8 @@
 // who may open it. All are checked here, at the boundary, in both directions (main builds them, the renderer
 // reads them).
 //
-// Who may open it is optional and off by default: anyone on the network, or only the devices that scanned
-// the code. For the second, main makes a random key when it is turned on and keeps it in memory only, never
+// Who may open it: only the devices that scanned the code, which is how the app turns the preview on every time,
+// or anyone on the network, chosen in the card's setting. For the first, main makes a random key when it is turned on and keeps it in memory only, never
 // in settings or `.stacki`; the dev server gets it in its environment (PREVIEW_KEY_ENV). The code carries
 // it as a query parameter; the dev server answers that request with a cookie and a redirect to the page
 // without it, and from then on the cookie is the device's way in (electron/previewServer/loopbackGuard.ts).

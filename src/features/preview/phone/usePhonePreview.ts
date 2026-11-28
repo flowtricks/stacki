@@ -5,8 +5,8 @@
 // a restart, a branch switch) and after every change it asks for, so the toolbar always shows the running
 // server's mode, never a guess. Turning it on asks once per window session, in the app's own dialog, because
 // it exposes the site to everyone on the Wi-Fi; nothing about it is ever saved, so every launch starts off.
-// While on, the card's settings can let in only the devices that scan its code (chooseAccess): another restart,
-// with a new key from main. Turning the preview on always starts open to anyone, so nothing is remembered.
+// Turning the preview on lets in only the devices that scan its code (main makes a new key each time); while on, the
+// card's settings can open it to anyone on the Wi-Fi (chooseAccess), another restart. Every "on" starts keyed again.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import type { DevNetworkAccess, DevNetworkFailure, DevNetworkMode, DevNetworkRequest, DevNetworkState } from '../../../../shared/ipc/devNetwork';
@@ -108,8 +108,9 @@ export function usePhonePreview({ projectPath, devUrl, showToast, translate }: P
     if (current.kind === 'changing') {
       return; // One restart at a time; main refuses a second one too.
     }
-    // Turned on, it is open to anyone on the network: the key is an option chosen each time, never remembered.
-    change(current.kind === 'on' ? { projectPath, mode: 'local' } : { projectPath, mode: 'network', access: 'open' });
+    // Turned on, only the devices that scan its code get in, with a new key from main; the card's setting can open
+    // it to anyone on the network, and that is never remembered. One restart either way.
+    change(current.kind === 'on' ? { projectPath, mode: 'local' } : { projectPath, mode: 'network', access: 'key' });
   }, [projectPath, change]);
 
   const chooseAccess = useCallback(

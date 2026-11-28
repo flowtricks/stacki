@@ -6,9 +6,10 @@
 // fill and turns the primary blue. Desktop only: the address bar is Desktop's own (AppShell UrlGroup takes it
 // as `trailing`); Studio and the demo have no dev server of their own to restart, so they never get it.
 //
-// Beside Copy, a gear opens the card's one setting: "Only devices that scan this code". Off by default and
-// never remembered; on, the code and the copied address carry a key (shared/ipc/devNetwork.ts), and every
-// other device on the Wi-Fi is refused. The address under the code is always shown without the key.
+// Beside Copy, a gear opens the card's one setting: "Only via this code". On each time the preview is turned
+// on, and never remembered: the code and the copied address carry a key (shared/ipc/devNetwork.ts), and every
+// other device on the Wi-Fi is refused. The address under the code is always shown without the key, so while a
+// key is needed its tooltip says that typing it is not enough.
 //
 // Fills, never borders or dividers: the card is a fill on the popover's surface.
 import { useEffect, useRef, useState } from 'react';
@@ -167,7 +168,14 @@ function PhonePreviewCard({ preview, route, onCopyFailed }: { readonly preview: 
     <div className="phone-preview-card" aria-busy={restarting !== undefined} data-restarting={restarting === undefined ? undefined : ''}>
       <PhoneQr url={url} shown={shown} />
       {on.addresses.length > 1 && <AddressPicker addresses={on.addresses} chosen={address} onChoose={setChosen} />}
-      <PhoneAddress url={url} shown={shown} settingsOpen={settingsOpen} onSettings={() => setSettingsOpen(!settingsOpen)} onCopyFailed={onCopyFailed} />
+      <PhoneAddress
+        url={url}
+        shown={shown}
+        access={on.access.kind}
+        settingsOpen={settingsOpen}
+        onSettings={() => setSettingsOpen(!settingsOpen)}
+        onCopyFailed={onCopyFailed}
+      />
       {settingsOpen && (
         <div className="phone-preview-settings">
           <SwitchRow
@@ -207,12 +215,14 @@ function PhonePreviewSkeleton() {
 function PhoneAddress({
   url,
   shown,
+  access,
   settingsOpen,
   onSettings,
   onCopyFailed,
 }: {
   readonly url: string;
   readonly shown: string;
+  readonly access: DevNetworkAccess;
   readonly settingsOpen: boolean;
   readonly onSettings: () => void;
   readonly onCopyFailed: () => void;
@@ -234,7 +244,7 @@ function PhoneAddress({
   const copyLabel = copied ? translate('preview.phone.copied') : translate('preview.phone.copy');
   return (
     <div className="phone-preview-address" role="group" aria-label={translate('preview.phone.url')}>
-      <span className="phone-preview-url" title={shown}>
+      <span className="phone-preview-url" title={access === 'key' ? translate('preview.phone.keyedAddress') : shown}>
         <CodeInline text={phoneAddressText(shown)} language="shell" />
       </span>
       <button type="button" className="phone-preview-icon-button" aria-label={copyLabel} data-copied={copied || undefined} onClick={copy}>

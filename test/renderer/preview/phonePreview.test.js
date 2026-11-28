@@ -4,9 +4,10 @@
 // in the same button. No divider anywhere. The first "on" of the session asks in the app's own dialog; off
 // never asks; while the server restarts the switch is disabled and the card shows skeletons; a failure is a
 // toast and the switch shows what main runs; the address picker appears only with several addresses.
-// Beside Copy, a gear opens the card's one setting, "Only devices that scan this code": off by default, and on
-// it asks main for a keyed restart; the code's label and the shown address never carry the key, Copy does, and
-// turning the preview off and on again starts open.
+// Turning the preview on asks main for a keyed restart, once. Beside Copy, a gear opens the card's one setting,
+// "Only via this code": on by default, and off it asks for a restart open to anyone. The code's label and the shown
+// address never carry the key, Copy does, the shown address's tooltip says typing it is not enough, and turning
+// the preview off and on again starts keyed.
 // Method: the Desktop button (src/features/preview/phone) is bundled with the confirmation host
 // (test/helpers/phonePreviewEntry.tsx) and mounted in jsdom. window.avb is a fake main that records every
 // dev:setNetwork and answers from a script, and can hold a reply to show the restarting state; the clipboard
@@ -172,7 +173,7 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     // The first "on" of the session asks, and Cancel changes nothing.
     await click(window, toggle());
     await until(() => byText('button', 'Turn on') !== undefined, 'the confirmation');
-    assert.ok(dialog().textContent.includes('Anyone on your Wi-Fi can open this site while this is on.'));
+    assert.ok(dialog().textContent.includes('Devices on your Wi-Fi that scan the code can open this site while this is on.'));
     assert.equal(byText('button', 'Turn on').className, 'primary', 'the blue primary button');
     await click(window, byText('.confirm-dialog button', 'Cancel'));
     await until(() => dialog() === undefined, 'the dialog to close');
@@ -192,13 +193,14 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     main.held = undefined;
     release();
     await until(() => url() !== undefined, 'the address');
-    assert.deepEqual(main.calls, [{ projectPath: '/site', mode: 'network', access: 'open' }], 'turned on, open to anyone');
+    assert.deepEqual(main.calls, [{ projectPath: '/site', mode: 'network', access: 'key' }], 'turned on keyed, in one restart');
     assert.equal(
       url(),
       '192.168.1.23:4321/bl…st',
       'the address of the page the canvas shows, on one line without the scheme, a path that does not fit cut in its middle',
     );
-    assert.equal(document.querySelector('.phone-preview-url').getAttribute('title'), 'http://192.168.1.23:4321/blog/post');
+    const TYPING = 'Scan the code or use Copy: typing this address isn’t enough.';
+    assert.equal(document.querySelector('.phone-preview-url').getAttribute('title'), TYPING);
     assert.equal(toggle().disabled, false);
     assert.equal(button().className, 'titlebar-btn url-phone on');
     assert.equal(document.querySelector('.phone-preview-picker') ?? undefined, undefined, 'no picker with one address');
@@ -212,12 +214,12 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     assert.equal(qr.getAttribute('aria-label'), 'QR code for http://192.168.1.23:4321/blog/post');
     assert.ok(qr.querySelector('rect.phone-preview-qr-tile'), 'a light tile behind the modules');
 
-    // Copy: the full URL on the clipboard, and the check in the same button; a refusal is a toast.
+    // Copy: the code's own address, the key with it, and the check in the same button; a refusal is a toast.
     const copy = copyButton();
     assert.equal(copy.getAttribute('aria-label'), 'Copy address');
     await click(window, copy);
     await until(() => clipboard.written.length === 1, 'the copy');
-    assert.deepEqual(clipboard.written, ['http://192.168.1.23:4321/blog/post']);
+    assert.deepEqual(clipboard.written, [`http://192.168.1.23:4321/blog/post?stacki-key=${KEY}`], 'Copy copies what the code holds');
     await until(() => copyButton().getAttribute('aria-label') === 'Address copied', 'the copied state');
     assert.equal(copyButton(), copy, 'the same button, its icon swapped');
     clipboard.refuse = true;
@@ -226,7 +228,7 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     assert.deepEqual(toasts, [{ message: 'Couldn’t copy the address.', kind: 'error' }]);
     clipboard.refuse = false;
 
-    // The gear beside Copy opens the card's one setting, off; on, it asks main for a keyed restart.
+    // The gear beside Copy opens the card's one setting, on; off, it asks main to open the preview to anyone.
     const gear = () => document.querySelector('.phone-preview-address [aria-label="Phone preview settings"]') ?? undefined;
     const scannedOnly = () => document.querySelector('.phone-preview-settings [role="switch"]') ?? undefined;
     assert.ok(gear(), 'the gear sits beside Copy');
@@ -236,36 +238,35 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     await until(() => scannedOnly() !== undefined, 'the setting');
     assert.equal(gear().getAttribute('aria-expanded'), 'true');
     assert.equal(scannedOnly().getAttribute('aria-label'), 'Only via this code');
-    assert.equal(scannedOnly().getAttribute('aria-checked'), 'false', 'off by default');
-    // Held mid-restart: the card keeps its place (no skeletons), dimmed and busy, the setting already on and waiting.
-    let releaseKeyed;
-    main.held = new Promise((resolve) => (releaseKeyed = resolve));
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'true', 'on by default');
+    assert.equal(
+      card().querySelector('svg.phone-preview-qr').getAttribute('aria-label'),
+      'QR code for http://192.168.1.23:4321/blog/post',
+      'the code’s label never carries the key',
+    );
+    // Held mid-restart: the card keeps its place (no skeletons), dimmed and busy, the setting already off and waiting.
+    let releaseOpen;
+    main.held = new Promise((resolve) => (releaseOpen = resolve));
     await click(window, scannedOnly());
     await until(() => card()?.getAttribute('aria-busy') === 'true', 'the restarting card');
     assert.equal(card().querySelectorAll('.ui-skeleton').length, 0, 'no skeletons: the card does not redraw');
     assert.ok(card().querySelector('svg.phone-preview-qr'), 'the code stays in place');
     assert.equal(card().hasAttribute('data-restarting'), true);
-    assert.equal(scannedOnly().getAttribute('aria-checked'), 'true', 'the setting shows what was asked');
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'false', 'the setting shows what was asked');
     assert.equal(scannedOnly().disabled, true, 'and waits for the restart');
     main.held = undefined;
-    releaseKeyed();
-    await until(() => main.calls.length === 2 && card()?.getAttribute('aria-busy') === 'false' && scannedOnly()?.disabled === false, 'the keyed restart');
-    assert.equal(scannedOnly().getAttribute('aria-checked'), 'true');
-    assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'key' });
-    assert.equal(dialog(), undefined, 'no second question: the preview is already on');
-    assert.equal(url(), '192.168.1.23:4321/bl…st', 'the shown address never carries the key');
-    assert.equal(document.querySelector('.phone-preview-url').getAttribute('title'), 'http://192.168.1.23:4321/blog/post');
-    assert.equal(
-      card().querySelector('svg.phone-preview-qr').getAttribute('aria-label'),
-      'QR code for http://192.168.1.23:4321/blog/post',
-      'nor the code’s label',
-    );
-    await click(window, copyButton());
-    await until(() => clipboard.written.length === 2, 'the keyed copy');
-    assert.equal(clipboard.written[1], `http://192.168.1.23:4321/blog/post?stacki-key=${KEY}`, 'Copy copies what the code holds, the key with it');
-    await click(window, scannedOnly());
-    await until(() => main.calls.length === 3 && scannedOnly()?.getAttribute('aria-checked') === 'false', 'open again');
+    releaseOpen();
+    await until(() => main.calls.length === 2 && card()?.getAttribute('aria-busy') === 'false' && scannedOnly()?.disabled === false, 'the open restart');
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'false');
     assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'open' });
+    assert.equal(dialog(), undefined, 'no second question: the preview is already on');
+    assert.equal(document.querySelector('.phone-preview-url').getAttribute('title'), 'http://192.168.1.23:4321/blog/post');
+    await click(window, copyButton());
+    await until(() => clipboard.written.length === 2, 'the open copy');
+    assert.equal(clipboard.written[1], 'http://192.168.1.23:4321/blog/post');
+    await click(window, scannedOnly());
+    await until(() => main.calls.length === 3 && scannedOnly()?.getAttribute('aria-checked') === 'true', 'keyed again');
+    assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'key' });
 
     // Another page on the canvas: the address follows it.
     await render('on', '/about');
@@ -283,6 +284,7 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     await click(window, toggle());
     await until(() => url() !== undefined, 'the address without a question');
     assert.equal(dialog(), undefined);
+    assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'key' }, 'every "on" starts keyed');
     const picker = document.querySelector('.phone-preview-picker');
     assert.ok(picker, 'a picker with several addresses');
     await click(window, picker.matches('button') ? picker : picker.querySelector('button'));
