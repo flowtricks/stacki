@@ -24,6 +24,7 @@ export function installCanvasText(
     editing: session.editing,
     editingElement: session.editingElement,
     focus: session.focus,
+    focusCopy: session.focusCopy,
     visible: selects,
     post,
   });

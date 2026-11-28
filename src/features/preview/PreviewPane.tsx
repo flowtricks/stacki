@@ -116,7 +116,7 @@ export default function PreviewPane(hostProps: PreviewPaneProps) {
   const props: PreviewPaneProps = bar ? hostProps : { ...hostProps, device: 'desktop' };
   const url = props.devUrl && props.route ? props.devUrl + props.route : undefined;
   const runtime = usePreviewRuntime({ ...props, selPath: props.selPath }, url);
-  useCanvasText({ document: props.textDocument, frame: runtime.iframeRef, url, ...runtime });
+  useCanvasText({ document: props.textDocument, frame: runtime.iframeRef, url, occurrence: runtime.selOcc, ...runtime });
   const interaction = useCanvasInteraction({
     projectKey: props.projectPath,
     url,

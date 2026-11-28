@@ -98,6 +98,7 @@ const redraw = installTextMarks({
   editing: () => editing,
   editingElement: () => editingElement,
   focus: () => focus,
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });
@@ -123,9 +124,12 @@ test('hovering and clicking report the text the way the app names elements', () 
   select('0.3', '0.4');
   move(50, 60);
   const hovered = posted.at(-1);
-  assert.equal(hovered.hover, undefined, "a component's own words draw no hover of their own");
+  assert.deepEqual([hovered.hover.label, hovered.hover.kind, hovered.hover.y], ['Heading', 'component', 40], 'the marked words are hovered and named');
   assert.equal(hovered.picked, undefined);
-  assert.equal(layer().children.length, 1, 'the dash stays at rest under the pointer');
+  assert.equal(layer().children.length, 1, 'the hovered text leaves its dash to the app; the other keeps it');
+  move(700, 380);
+  assert.equal(posted.at(-1).hover, undefined);
+  assert.equal(layer().children.length, 2, 'moving away brings the dash back');
   click(50, 60);
   assert.deepEqual(
     [posted.at(-1).picked.label, posted.at(-1).picked.kind, posted.at(-1).picked.y],
@@ -151,7 +155,7 @@ test('the text being typed in stays picked while the editor is open', () => {
   move(50, 60);
   const typing = posted.at(-1);
   assert.equal(typing.picked.label, 'Heading', 'its parent keeps the picked look');
-  assert.equal(typing.hover, undefined, 'the pointer over the editor draws no hover');
+  assert.deepEqual(typing.hover, typing.picked, 'the pointer over the editor is on the picked text, which the app draws once');
   assert.equal(layer().children.length, 0, 'no dash under the editor');
   editing = undefined;
   editingElement.firstChild.data = 'Here for you.';

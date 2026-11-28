@@ -36,10 +36,16 @@ file's path (`File.astro|0.1`). A closed component has no way to produce a blue 
   answers through its nearest tagged ancestor. `opacity: 0` stays hittable, as in a browser. Words are hovered or picked only when
   the top hit is their element or inside it, or lies inside their own instance (a stretched link over a card's words)
   (`reachable` in `frameTextMarks.ts`; `pointTarget` in `frameTargets.ts`; corpus case `covered-by-higher-z-sibling`).
-- **A component's own direct text draws no outline of its own on hover.** Prop text, slot text its root or its wrapper (`.text`,
+- **A selected instance's dashed marks turn solid under the pointer.** The words a selected instance marks dashed become, one at a
+  time, the app's hover outline with its tag; moving away brings the dash back. The instance keeps its selected outline and tag.
+  Nested words (a `strong` inside a marked paragraph) hover the innermost mark.
+- **Only the selected copy is marked.** An instance in a loop renders once per item and every copy has the same path, so
+  `avb:text-focus` also carries the copy the selection outline is drawn on (`occurrence`, the overlay's `selOcc`; a Navigator
+  pick is the first copy). The frame marks, hovers and picks in that copy alone (`copyNodesOf`).
+- **An unselected instance's own direct text draws no outline of its own on hover.** Prop text, slot text its root or its wrapper (`.text`,
   `.heading`, `.button_main_text`) prints: the pointer on it is the **instance's** hover (green outline, component tag), and the
-  frame reports no text hover (`avb:text-marks` carries `hover` only for refused prop text, which says why a double click does
-  nothing). A click still picks the words and a double click still edits them. Only a **separate child tag** the page wrote into the
+  frame reports no text hover (for such an instance `avb:text-marks` carries `hover` only for refused prop text, which says why a
+  double click does nothing). A click still picks the words and a double click still edits them. Only a **separate child tag** the page wrote into the
   slot (`strong`, `em`, `span`, `a`, `br`) has an outline of its own, and it is blue (page-owned) with its own tag.
 - **Bare text among tagged siblings is no hover target.** In `Our wild<br><strong>work</strong>` the plain words have no tag: a
   hover on them is their owner's (`textOwner` in `nodeAt`, `reportHover` in `frameTargets.ts`; corpus case

@@ -97,6 +97,7 @@ installTextMarks({
   editing: () => undefined,
   editingElement: () => undefined,
   focus: () => focus,
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });
@@ -143,9 +144,11 @@ test('a root with neither padding nor a border is its words: no outline of their
 
 test('with the Button selected its words are still hovered and marked at rest at their own size', () => {
   focus = new Set(['0.0']);
-  const hover = hoverAt(100, 48);
+  window.dispatchEvent(new window.MouseEvent('click', { clientX: 5000, clientY: 5000 }));
+  window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 100, clientY: 48 }));
+  const hover = posted.at(-1)?.hover;
   assert.deepEqual({ x: hover?.x, w: hover?.w, scope: hover?.scope }, { x: 48, w: 244, scope: '0.0' });
-  hoverAt(5000, 5000);
+  window.dispatchEvent(new window.MouseEvent('pointermove', { clientX: 5000, clientY: 5000 }));
   const mark = document.querySelector('[data-avb-text-marks]')?.children[0];
   assert.ok(mark, 'the selected Button marks its words');
   assert.equal(mark.style.left, '48px');

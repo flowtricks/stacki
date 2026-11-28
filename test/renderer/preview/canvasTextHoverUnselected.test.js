@@ -90,6 +90,7 @@ installTextMarks({
   editing: () => undefined,
   editingElement: () => undefined,
   focus: () => focus,
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });
@@ -101,7 +102,8 @@ const clickAt = (x, y) => {
   move(500, 250);
   window.dispatchEvent(new window.MouseEvent('click', { clientX: 500, clientY: 250 }));
   move(x, y);
-  assert.equal(posted.at(-1).hover, undefined, "no hover outline over a component's own words");
+  // Only a selected instance's words carry a dashed mark, which turns into a hover outline; any other words draw none.
+  assert.equal(posted.at(-1).hover !== undefined, focus.has('0.1'), "a hover outline over a component's words only while it is selected");
   window.dispatchEvent(new window.MouseEvent('click', { clientX: x, clientY: y }));
   return posted.at(-1).picked;
 };

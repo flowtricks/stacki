@@ -1,8 +1,11 @@
 // Text a page hands to a component instance — its slot content, or one of its
 // props — marked on the canvas with a dashed outline while that instance is
 // selected, so it reads as editable before anything is clicked. A double
-// click types in it (frameText.ts). Its hover needs no selection: pointing at
-// the words of any instance outlines them and names them at once.
+// click types in it (frameText.ts).
+//
+// An instance in a loop renders once per item and every copy has the same path,
+// so the selection also names its copy, the number the solid selection outline
+// is drawn on: only that copy's words are marked (copyNodesOf).
 //
 // Under the pointer it behaves like an element: the app draws its hover
 // outline, and once clicked its selection outline, with the instance's own
@@ -18,7 +21,7 @@ import type { CanvasTextBlocked, CanvasTextCatalog, CanvasTextTarget } from '../
 import { assert } from '../../shared/core/assert';
 import { ownershipOf, type Ownership } from '../../shared/properties/outlineOwnership';
 import { isEditableThroughProps, textReach } from '../../shared/properties/closedComponentReach';
-import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
+import { copyNodesOf, elementsWithPath, pathsOf, runsOf } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 import { ownClasses } from './frameMeasure';
 import { elementsAt, matchCanvasText } from './frameTextMatch';
@@ -32,6 +35,8 @@ interface MarkSource {
   /** The element of the text being typed in: its words no longer match the catalog's. */
   readonly editingElement: () => Element | undefined;
   readonly focus: () => ReadonlySet<string>;
+  /** The selected copy of the focused node, numbered as its outline is; undefined means every copy. */
+  readonly focusCopy: () => number | undefined;
   readonly visible: () => boolean;
   readonly post: (message: unknown) => void;
 }
@@ -52,11 +57,11 @@ export function installTextMarks(source: MarkSource): () => void {
   // A button held while the pointer moves is a drag or a resize in flight: nothing is hovered until it ends. (The interaction
   // module's own drag flag stays set after a click's pointer has moved on, so it cannot say whether a drag is going on now.)
   let held = false;
-  // The text clicked while its instance stays selected, by catalog key.
-  let picked: string | undefined;
-  // A click on prop text whose instance is not yet the selection: the click selects the instance and picks the words at once, but
-  // the app's selection arrives a message later, so the pick waits for it instead of being dropped by the next frame.
-  let awaiting: { readonly key: string; readonly scope: string } | undefined;
+  // The text clicked while its instance stays selected: its catalog key, and the element clicked, since every copy shares the key.
+  let picked: (Pick<TextMatchAt, 'element'> & { readonly key: string }) | undefined;
+  // A click on prop text whose instance (or whose copy of it) is not yet the selection: the click selects the instance and picks the
+  // words at once, but the app's selection arrives a message later, so the pick waits for it instead of being dropped by the next frame.
+  let awaiting: { readonly key: string; readonly scope: string; readonly element: Element } | undefined;
   let reported = '';
   const draw = () => {
     frame = 0;
@@ -64,21 +69,19 @@ export function installTextMarks(source: MarkSource): () => void {
     // The text being typed in is the picked one for as long as the editor is
     // open: the app draws it and its parent in their editing look.
     const editing = source.editing();
-    const typing = shown.some(({ target }) => sameKey(target.key, editing));
-    if (awaiting !== undefined && source.focus().has(awaiting.scope)) {
+    const typing = shown.find(({ target }) => sameKey(target.key, editing));
+    if (awaiting !== undefined && isSelected(source, awaiting.scope, awaiting.element)) {
       awaiting = undefined; // The selection arrived: the words are among the instance's marked ones now.
     }
-    picked = typing
-      ? shown.find(({ target }) => sameKey(target.key, editing))?.target.key
-      : shown.some(({ target }) => target.key === picked) || awaiting?.key === picked
-        ? picked
-        : undefined;
+    // Words clicked in a copy that is not the selection yet: shown as picked there, never in the copy still marked.
+    const pending = awaiting === undefined ? undefined : matchClicked(source.catalog(), awaiting);
+    const kept = typing ?? (awaiting === undefined ? keptPick(shown, picked) : pending);
+    picked = kept === undefined ? awaiting : { key: kept.target.key, element: kept.element };
     const at = held ? undefined : pointer;
     // The selected instance's marked words first; otherwise any prop text under the pointer, selected or not.
-    const hover = at ? (shown.find((match) => holds(wordsBox(match), at) && reachable(match, at)) ?? hoverBeforeSelect(source, at)) : undefined;
-    const chosen =
-      shown.find(({ target }) => target.key === picked) ??
-      (awaiting === undefined ? undefined : matchesWhere(source.catalog(), (target) => target.key === awaiting?.key)[0]);
+    const marked = at ? markedUnder(shown, at) : undefined;
+    const hover = marked ?? (at ? hoverBeforeSelect(source, at) : undefined);
+    const chosen = kept;
     if (!layer.isConnected) {
       document.documentElement.appendChild(layer);
     }
@@ -91,11 +94,11 @@ export function installTextMarks(source: MarkSource): () => void {
       ...shown.filter((match) => match !== hover && match !== chosen).map((match) => dashedMark(wordsBox(match))),
       ...bound.map(dashedMark),
     );
-    // Hovering words draws no outline of their own: a component's own direct text (prop text, slot text its root or its wrapper prints)
-    // is the component's, so the pointer on it is the instance's hover, and only a separate child tag the page wrote (a `strong`)
-    // is outlined, as the node it is. The words stay hit-testable here for the click, which picks them. A refused prop text is the
-    // one hover reported, because it says why a double click opens nothing.
-    const message = { type: 'avb:text-marks', hover: refused, picked: report(chosen) };
+    // A dashed mark under the pointer turns solid and named: its dash gives way to the app's hover outline, so it is reported.
+    // Words of an instance that is not selected carry no dash and draw no outline of their own: the pointer on them is the
+    // instance's hover (they stay hit-testable here for the click, which picks them). A refused prop text is reported either way,
+    // because it says why a double click opens nothing.
+    const message = { type: 'avb:text-marks', hover: refused ?? report(marked), picked: report(chosen) };
     const text = JSON.stringify(message);
     if (text !== reported) {
       reported = text;
@@ -124,10 +127,11 @@ export function installTextMarks(source: MarkSource): () => void {
     'click',
     (event) => {
       const at = { x: event.clientX, y: event.clientY };
-      const hit = markedNow(source).find((match) => holds(wordsBox(match), at) && reachable(match, at)) ?? hoverBeforeSelect(source, at);
-      picked = hit?.target.key;
+      const hit = markedUnder(markedNow(source), at) ?? hoverBeforeSelect(source, at);
+      picked = hit === undefined ? undefined : { key: hit.target.key, element: hit.element };
       const scope = hit?.target.scope;
-      awaiting = hit !== undefined && scope !== undefined && !source.focus().has(scope) ? { key: hit.target.key, scope } : undefined;
+      awaiting =
+        hit !== undefined && scope !== undefined && !isSelected(source, scope, hit.element) ? { key: hit.target.key, scope, element: hit.element } : undefined;
       schedule();
     },
     true,
@@ -151,13 +155,59 @@ function markedNow(source: MarkSource): TextMatchAt[] {
   const typed = source.catalog()?.targets.find((target) => sameKey(target.key, editing));
   // Whether its instance is the selection yet or not (the app's selection can arrive after the editor opens), the words being typed in are picked.
   const typing = typed && element ? [{ target: typed, element, nodes: [] }] : [];
-  const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && !sameKey(target.key, editing));
+  const others = matchesWhere(source.catalog(), (target) => marked(target, focus) && !sameKey(target.key, editing), selectedCopy(source));
   // Text whose element is the instance's own root — a Heading's words in its
   // <h2> — is the selection itself, not something inside it: no second
   // outline or tag is drawn over the selection's. A root that frames its words
   // (a Button's `<a>` with padding around its slot) is not its words: they get
   // their own outline, hugging them.
   return [...typing, ...others].filter((match) => !isInstanceRoot(match.element, match.target.scope) || drawnAsRun(match));
+}
+
+// Whether an element lies in the selected copy of the focused instance `scope`. Each path's copy is looked up once per use.
+function selectedCopy(source: MarkSource): (element: Element, scope: string | undefined) => boolean {
+  const copies = new Map<string, readonly Node[] | undefined>();
+  return (element, scope) => {
+    if (scope === undefined) {
+      return true;
+    }
+    if (!copies.has(scope)) {
+      copies.set(scope, copyNodesOf(scope, source.focusCopy()));
+    }
+    const nodes = copies.get(scope);
+    return nodes === undefined || nodes.some((node) => node === element || node.contains(element));
+  };
+}
+
+function isSelected(source: MarkSource, scope: string, element: Element): boolean {
+  return source.focus().has(scope) && selectedCopy(source)(element, scope);
+}
+
+// The marked words under the pointer. Nested words (a `strong` inside a paragraph): the innermost is the one under the pointer.
+function markedUnder(shown: readonly TextMatchAt[], at: { readonly x: number; readonly y: number }): TextMatchAt | undefined {
+  let best: TextMatchAt | undefined;
+  for (const match of shown) {
+    if (holds(wordsBox(match), at) && reachable(match, at)) {
+      if (best === undefined || best.element.contains(match.element)) {
+        best = match;
+      }
+    }
+  }
+  return best;
+}
+
+// The picked words among the marked ones: the element clicked, else (a patch replaced it) the first that reads the same text.
+function keptPick(shown: readonly TextMatchAt[], picked: { readonly key: string; readonly element: Element } | undefined): TextMatchAt | undefined {
+  const same = shown.filter(({ target }) => target.key === picked?.key);
+  return same.find(({ element }) => element === picked?.element) ?? same[0];
+}
+
+function matchClicked(catalog: CanvasTextCatalog | undefined, clicked: { readonly key: string; readonly element: Element }): TextMatchAt | undefined {
+  return matchesWhere(
+    catalog,
+    (target) => target.key === clicked.key,
+    (element) => element === clicked.element,
+  )[0];
 }
 
 // Whether the pointer's real target (the browser's own hit test, which knows z-index, stacking, pointer-events, clipping and
@@ -242,13 +292,18 @@ function isPropBlocked(entry: CanvasTextBlocked): boolean {
 
 // The elements that print a blocked text, one per copy of its instance: found by the source path of the words, since the words
 // themselves are unknown (data) or differ per copy (a loop).
-function blockedElements(entry: CanvasTextBlocked): Element[] {
+function blockedElements(entry: CanvasTextBlocked, accept: (element: Element) => boolean = () => true): Element[] {
   const found: Element[] = [];
   const runs = [...(runsOf(entry.path) ?? []), ...inlineTextRuns(entry.path)];
-  for (const run of runs.slice(0, MATCHES_MAX)) {
+  // Bounded by the page's own copies; the marks kept stop at their bound, counted after `accept`, so a late copy of a long loop is found.
+  for (const run of runs) {
+    if (found.length >= MATCHES_MAX) {
+      break;
+    }
     const element = run[0]?.parentElement;
     if (
       element &&
+      accept(element) &&
       element.getBoundingClientRect().width > 0 &&
       run.every((node) => node.parentElement === element) &&
       (entry.scope === undefined || insideScope(element, entry.scope)) &&
@@ -261,19 +316,21 @@ function blockedElements(entry: CanvasTextBlocked): Element[] {
   return found;
 }
 
-// The dashed boxes of the selected instance's data-bound prop text: every copy of it that is on the page.
+// The dashed boxes of the selected instance's data-bound prop text, in the selected copy of it.
 function boundBoxesNow(source: MarkSource): DOMRect[] {
   const catalog = source.catalog();
   if (!catalog?.blocked || !source.visible()) {
     return [];
   }
   const focus = source.focus();
+  const inCopy = selectedCopy(source);
   const boxes: DOMRect[] = [];
   for (const entry of catalog.blocked.filter(isPropBlocked)) {
     if (entry.scope === undefined || !focus.has(entry.scope)) {
       continue;
     }
-    for (const element of blockedElements(entry)) {
+    const scope = entry.scope;
+    for (const element of blockedElements(entry, (candidate) => inCopy(candidate, scope))) {
       if (boxes.length < MATCHES_MAX) {
         boxes.push(element.getBoundingClientRect());
       }
@@ -373,7 +430,11 @@ function labelOf(element: Element): { readonly label: string; readonly kind: str
 
 // Where each accepted target's text renders: the element holding it, found
 // the way a double click on the words finds it, once per element.
-function matchesWhere(catalog: CanvasTextCatalog | undefined, accept: (target: CanvasTextTarget) => boolean): TextMatchAt[] {
+function matchesWhere(
+  catalog: CanvasTextCatalog | undefined,
+  accept: (target: CanvasTextTarget) => boolean,
+  within: (element: Element, scope: string | undefined) => boolean = () => true,
+): TextMatchAt[] {
   const found: TextMatchAt[] = [];
   const seen = new Set<Element>();
   for (const target of catalog?.targets ?? []) {
@@ -389,7 +450,7 @@ function matchesWhere(catalog: CanvasTextCatalog | undefined, accept: (target: C
       }
       const match = matchCanvasText(target, wordsIn(parent, target) ?? parent);
       const element = match?.element;
-      if (!element || seen.has(element) || !hasBox(element)) {
+      if (!element || seen.has(element) || !hasBox(element) || !within(element, target.scope)) {
         continue;
       }
       seen.add(element);

@@ -31,6 +31,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
   // What is being typed in, and where: its words may no longer match the catalog's.
   let typing: { readonly key: string; readonly element: Element } | undefined;
   let focus: ReadonlySet<string> = new Set();
+  let focusCopy: number | undefined;
   let openedAtMs = -Infinity;
   let rich: ReturnType<typeof openCanvasRich>;
   const finish = (action: 'apply' | 'cancel') => {
@@ -40,6 +41,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
   return {
     catalog: () => catalog,
     focus: () => focus, // The selected node's page path.
+    focusCopy: () => focusCopy, // Which of its copies is selected; undefined when the selection is of every copy.
     editing: () => (active ? typing?.key : undefined),
     editingElement: () => (active ? typing?.element : undefined),
     contains: (event: MouseEvent) => (rich ? rich.contains(event) : (active?.editor.contains(event) ?? false)),
@@ -88,6 +90,7 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       }
       if (request.kind === 'focus') {
         focus = new Set(request.value.paths);
+        focusCopy = request.value.occurrence;
         return;
       }
       if (request.kind === 'close') {

@@ -178,6 +178,7 @@ const redraw = installTextMarks({
   editing: () => undefined,
   editingElement: () => undefined,
   focus: () => focus,
+  focusCopy: () => undefined,
   visible: () => true,
   post: (message) => posted.push(message),
 });

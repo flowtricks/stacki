@@ -85,6 +85,8 @@ interface Options {
   readonly frame: RefObject<HTMLIFrameElement>;
   readonly url: string | undefined;
   readonly post: (message: unknown) => void;
+  /** The selected node's copy, as the selection outline is drawn on (PreviewOverlays `selOcc`); undefined means every copy. */
+  readonly occurrence: number | undefined;
   readonly subscribeLoad: (listener: () => void) => () => void;
   /** Words the notices this module raises; English when absent (tests). */
   readonly translate?: Translator | undefined;
@@ -105,14 +107,15 @@ export function useCanvasText(options: Options): void {
   const settings = document?.settings;
   useEffect(() => startCanvasText(current, richSaver), [file, source, components, settings, richSaver]);
   const focus = (document?.focus ?? []).join('\n');
-  useEffect(() => startCanvasFocus(current, focus), [focus]);
+  const occurrence = options.occurrence;
+  useEffect(() => startCanvasFocus(current, focus, occurrence), [focus, occurrence]);
 }
 
 // The frame learns the selection separately from the catalog: selecting is
 // frequent, and rebuilding the catalog would reread every component.
-function startCanvasFocus(current: RefObject<Options>, focus: string) {
+function startCanvasFocus(current: RefObject<Options>, focus: string, occurrence: number | undefined) {
   const paths = focus === '' ? [] : focus.split('\n');
-  const message = canvasTextFocus(paths.slice(0, CANVAS_FOCUS_PATHS_MAX));
+  const message = canvasTextFocus(paths.slice(0, CANVAS_FOCUS_PATHS_MAX), occurrence);
   const send = () => current.current?.post(message);
   send();
   return current.current?.subscribeLoad(send);

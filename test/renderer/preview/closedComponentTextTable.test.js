@@ -7,7 +7,7 @@
 // frame code (`installTextMarks`) is driven by pointer events over the first line of every text-bearing element; and the
 // overlays the app would draw (`PreviewOverlays`) are rendered for each state the frame's messages produce. The table that
 // results, one row per component, is printed and every row is asserted. Words a prop or the slot of the instance reaches get a
-// click pick (no outline of their own on hover) and a double click that edits them; words the component writes itself (hardcoded or computed, no prop reaches
+// click pick (no outline of their own on hover until their instance is selected and marks them) and a double click that edits them; words the component writes itself (hardcoded or computed, no prop reaches
 // them) get no text hover, no text outline and no editor, only the component's own hover (closedComponentReach.ts). An
 // element that breaks either side fails the test, as does any state whose classes differ from the machine's.
 const test = require('node:test');
@@ -150,6 +150,7 @@ function startFrame() {
     editing: () => undefined,
     editingElement: () => undefined,
     focus: () => focus,
+    focusCopy: () => undefined,
     visible: () => true,
     post: (message) => posted.push(message),
   });
@@ -372,15 +373,15 @@ test('every text-bearing element of the real page follows the state machine', as
     move(second.at.x, second.at.y);
     const other = last();
     const otherOutlines = outlines({ scope, selected: scope, hoverPath: scope, marks: { hover: other.hover, picked: other.picked } });
-    // The pointer on other words of the picked owner is the pointer on the owner itself: its plain green hover (body-hover).
-    if (!(other.hover === undefined && other.picked && otherOutlines.owner?.includes('tinted') && !otherOutlines.owner.includes('text-owner'))) {
+    // The selected owner's other marked words turn into a hover outline beside the picked ones; the owner rests with its tag.
+    if (!(other.hover && other.picked && otherOutlines.owner?.includes('text-owner') && otherOutlines.owner.includes('owner-tag'))) {
       failures.push(`${first.label} selected, ${second.label} hovered: owner is ${otherOutlines.owner}`);
     }
     settle();
     move(first.at.x, first.at.y);
     const same = last();
     const sameOutlines = outlines({ scope, selected: scope, hoverPath: scope, marks: { hover: same.hover, picked: same.picked } });
-    if (!sameOutlines.owner?.includes('tinted')) {
+    if (!sameOutlines.owner?.includes('owner-tag')) {
       failures.push(`${first.label} selected and hovered: owner is ${sameOutlines.owner}`);
     }
   }
