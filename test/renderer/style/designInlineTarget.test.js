@@ -15,13 +15,16 @@
 // fixture project's own, and Grid and Heading with the combining edit undone. Selections are made with the canvas
 // answering at once, and held then released in reverse, so the rendered style and the classes land in either
 // order. What was written is read from the writes the host got (the instance's attribute) and the files written
-// (stylesheets and components). Dispatched events only; fixtures only.
+// (stylesheets and components). The CSS code editors save what they show after a pause, so a control's edit must
+// be in the shown code at once: text kept from before it is what the pause would save over it.
+// Dispatched events only; fixtures only.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { mountStylePanel, press } = require('../../helpers/stylePanelHarness.js');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const fixtureSource = (rel) => fs.readFileSync(repoPath(`test/fixtures/lumos/components/${rel}`), 'utf8');
 const GRID = fixtureSource('wrapper/Grid.astro');
@@ -155,6 +158,7 @@ const classChip = (panel, selector) =>
   [...panel.container.querySelectorAll('button.embed-editor_selector-chip:not(.is-inline)')].find((chip) => chip.textContent.trim() === selector);
 const pressed = (panel) =>
   [...panel.container.querySelectorAll('button.embed-editor_selector-chip[aria-pressed="true"]')].map((chip) => chip.textContent.trim());
+const codeShown = (panel) => panel.container.querySelector('.embed-editor_css-code-body .cm-content')?.textContent ?? '';
 const button = (panel, label) => [...panel.container.querySelectorAll('button')].find((candidate) => candidate.textContent.trim() === label);
 
 async function choose(panel, label, options) {
@@ -269,6 +273,8 @@ for (const id of ['grid-set', 'heading']) {
     await step(panel, 'pick the chip', () => press(panel, inlineChip(panel)));
     assert.equal(controls(panel).disabled, false);
     await choose(panel, 'Flex');
+    // The code editor takes the control's edit: text it kept from before is what it would save after its pause.
+    assert.match(codeShown(panel), /display: flex/);
     assert.deepEqual(inlineWrites, [[id, 'display: flex']]);
     assert.deepEqual(panel.writes, []);
   });
@@ -283,4 +289,29 @@ test('editor: a Heading that does not combine still edits the component’s own 
   await choose(panel, 'Flex');
   assert.deepEqual(inlineWrites, []);
   assert.match(panel.writes.map((write) => write.css).join('\n'), /--_mw: \$\{maxWidth\}ch;\s*display: flex/);
+});
+
+// Typed as the editor takes it, then the pause's save: from here on the editor has state of its own, as it has
+// for anyone who used it, and React no longer applies its next draft at once.
+async function typeInCode(panel, find, replacement) {
+  const view = panel.codeViewOf(panel.container.querySelector('.embed-editor_css-code-body .cm-editor'));
+  const from = view.state.doc.toString().indexOf(find);
+  assert.notEqual(from, -1, `the code shows ${find}`);
+  await step(panel, 'type', () => view.dispatch({ changes: { from, to: from + find.length, insert: replacement }, userEvent: 'input.type' }));
+  await waitFor({ what: 'the typed text saved', read: () => panel.writes.at(-1)?.css ?? '', until: (css) => css.includes(replacement) });
+}
+
+test('editor: after typing in a rule’s code, a control’s edit shows in the code and is not saved over', async (context) => {
+  const { panel } = await mount(context, 'selector');
+  await step(panel, 'select it', () => select(panel, 'plain'));
+  await step(panel, 'open CSS code', () => press(panel, panel.container.querySelector('button.embed-editor_css-code-toggle')));
+  await typeInCode(panel, '2rem', '5rem');
+  for (const [label, declared] of [
+    ['Flex', /display: flex/],
+    ['Grid', /display: grid/],
+  ]) {
+    await choose(panel, label);
+    assert.match(codeShown(panel), declared, label);
+    assert.match(panel.writes.at(-1).css, declared, label);
+  }
 });

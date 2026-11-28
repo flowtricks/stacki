@@ -51,7 +51,8 @@ function entryPath() {
     const dependencies = [];
     for (const [index, renderer] of servers.entries()) {
       const cacheDirectory = renderer.server.config.cacheDir;
-      assert.ok(cacheDirectory.startsWith(runs[index] + path.sep), `run ${index} writes its cache inside its own directory, not ${cacheDirectory}`);
+      // Vite reports the directory with forward slashes on every platform, so the two are compared as paths, not text.
+      assert.equal(path.relative(runs[index], cacheDirectory), 'vite-cache', `run ${index} writes its cache inside its own directory, not ${cacheDirectory}`);
       const url = await dependencyUrl(renderer);
       // The optimizer may still be writing: the request is what a page would make, polled (bounded).
       const served = await pollUntil({
@@ -64,7 +65,8 @@ function entryPath() {
       dependencies.push(url);
     }
     await servers[0].server.close();
-    fs.rmSync(runs[0], { recursive: true, force: true });
+    // Windows holds files a moment after the server closes.
+    fs.rmSync(runs[0], { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     const after = await get(dependencies[1]);
     assert.equal(after.status, 200, 'the second run still serves its dependency after the first run is removed');
     console.log('ok - each soak run pre-bundles into a cache of its own');

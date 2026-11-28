@@ -206,6 +206,9 @@ const PAGE_SOURCE = [
          for (let attempt = 0; attempt < attempts && picked === undefined; attempt += 1) {
            point(away);
            press(away);
+           // Input reaches the page after these calls return. Clearing the posts before it does lets the pointer's way out report
+           // the earlier pick again, to be read as this click's: so the frame is first heard to hold none.
+           await waitFor({ what: 'the earlier pick dropped (' + what + ')', read: posts, until: (list) => list.filter((m) => m.type === 'avb:text-marks').at(-1)?.picked === undefined });
            await run('window.posts.length = 0');
            point(at);
            out.hoversOnWords.push(await waitFor({ what: 'the hover settled (' + what + ')', read: posts, until: (list) => list.some((m) => m.type === 'avb:text-marks'), pollCountMax: 4 }).then((list) => list.filter((m) => m.type === 'avb:text-marks').at(-1)?.hover).catch(() => undefined));

@@ -3,6 +3,7 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { check as centralCheck, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import type { InlineChip, InlineCodeView } from './useInlineTarget';
 import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
+import { useDraftOverSource } from './useDraftOverSource';
 import { CodeBlock } from '../../../ui/CodeBlock';
 import Popup from '../../../ui/Popup';
 import TipAnchor from '../../../ui/TipAnchor';
@@ -606,16 +607,10 @@ export function EditableCssRule({
   // so a change to one is not an edit of this rule. A save writes the rule alone.
   const chain = ruleChainText(rule.node);
   const sourceCss = chain.text;
-  const [draft, setDraft] = useState(sourceCss);
-  const attemptedDraftRef = useRef<string | undefined>(undefined);
-  const previousSourceRef = useRef(sourceCss);
-
   // External style-panel edits replace a clean draft, while text currently being
   // authored stays untouched. After our own autosave, draft already equals sourceCss.
-  useEffect(() => {
-    setDraft((current) => (current === previousSourceRef.current ? sourceCss : current));
-    previousSourceRef.current = sourceCss;
-  }, [sourceCss]);
+  const [draft, setDraft] = useDraftOverSource(sourceCss);
+  const attemptedDraftRef = useRef<string | undefined>(undefined);
 
   // A short pause is the commit boundary. Busy saves serialize naturally: if a
   // newer draft arrives during one write, busy clearing schedules that latest text.
