@@ -282,6 +282,7 @@ same bytes for the same source; `test/electron/project/cli/cliAgents.test.ts` co
 | `.stacki/folders.json` | version, folders, cms | folders add/remove/reset | `settings:folders` |
 | `.stacki/pages.json` | version, entries | config | `panel:pages` |
 | `.stacki/publish.json` | version, defaultTarget, githubAccount, hosting, buildScript, beforePublish, afterPublish, githubWorkflow, publishedSite | config | `publish` |
+| `.stacki/publish-destinations.json` | version, destinations (id, label, target and its hosting, buildScript, beforePublish, afterPublish, siteUrl; at most ten) | config | `publish` |
 | `.stacki/styles.json` | version, keep, lockedStylesheets, newStyleTag (`version` 2, `attributes`, `content`; version 1 `isGlobal` is read), newStyleLocations (`page` and `component`, each `use` tag or file, `file`, `tag`) | config | `panel:selectors` |
 | `.stacki/variables.json` | version, hiddenFromSuggestions | config | `panel:style` |
 | `.stacki/audits.json` | version, ignored, ignoredPages, checks, tokens, placeholders, customAudits | audits add/update/remove, config | `panel:audits` |
