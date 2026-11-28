@@ -15,7 +15,6 @@
 const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -55,7 +54,7 @@ function treeDigest(root) {
 }
 
 async function orchestrate() {
-  const { cloneModules, copySite, removeWithRetries, soakUnavailableReason } = require('../../../helpers/e2e/soakLaunch.js');
+  const { cloneModules, copySite, removeWithRetries, soakUnavailableReason, startRendererServer } = require('../../../helpers/e2e/soakLaunch.js');
   const { RUN_DIRECTORY_PREFIX, stopRun, writeRegistry } = require('../../../helpers/e2e/soakProcesses.js');
   // It drives the real pointer, so like every pointer probe it runs on macOS only (docs/release-runbook.md).
   const unavailable = process.platform === 'darwin' ? soakUnavailableReason() : 'a pointer probe, macOS only';
@@ -85,30 +84,12 @@ async function orchestrate() {
     copySite(project);
     cloneModules(project);
     fs.writeFileSync(path.join(project, '.env'), 'SECRET=kept-in-the-project\n');
-    const { createServer } = await import('vite');
-    const port = await new Promise((resolve) => {
-      const probe = net.createServer();
-      probe.listen(0, '127.0.0.1', () => {
-        const address = probe.address();
-        probe.close(() => resolve(address.port));
-      });
-    });
-    // eslint-disable-next-line stacki/no-null -- Vite's documented value for "no file watcher".
-    const noWatcher = null;
-    server = await createServer({
-      configFile: repoPath('vite.config.mjs'),
-      root: ROOT,
-      cacheDir: repoPath('node_modules/.stacki-test/soak-vite'),
-      logLevel: 'warn',
-      clearScreen: false,
-      optimizeDeps: { entries: ['index.html'] },
-      server: { port, strictPort: true, host: '127.0.0.1', hmr: false, watch: noWatcher },
-    });
-    await server.listen();
+    const renderer = await startRendererServer(ROOT, directory);
+    server = renderer.server;
     const launch = (phase) => {
       const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
       delete env.ELECTRON_RUN_AS_NODE;
-      env.VITE_DEV_SERVER_URL = `http://127.0.0.1:${port}/`;
+      env.VITE_DEV_SERVER_URL = renderer.url;
       env.STACKI_SOAK_PROJECT = project;
       env.STACKI_SOAK_USER_DATA = userData;
       env.STACKI_SOAK_SCENARIO = __filename;

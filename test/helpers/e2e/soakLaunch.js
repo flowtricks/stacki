@@ -9,9 +9,12 @@
 //   resolves its packages by walking up from the project, and a symlinked node_modules breaks
 //   that (electron/preview/previewWorktree.ts says why), so node_modules is cloned instead:
 //   copy-on-write on macOS (`cp -c`), hard links on Linux (`cp -al`), a plain copy elsewhere.
-// - The renderer comes from a private Vite server on a free port with its own cache directory,
-//   no file watcher and no HMR: a person's running `npm run dev` keeps its port, its dependency
-//   cache and its reloads, and other people's edits during a run cannot reload this one.
+// - The renderer comes from a private Vite server on a free port, with a dependency cache of
+//   its own inside the run directory, no file watcher and no HMR: a person's running
+//   `npm run dev` keeps its port, its dependency cache and its reloads, and other people's
+//   edits during a run cannot reload this one. Runs never share a cache either: one server
+//   optimizing replaced the chunks another was serving, and with no HMR to reload it that app
+//   drew nothing ("the canvas never rendered the fixture") or lost a panel it imports later.
 // - Electron runs `electronEntry.js`, which gives the app an isolated user-data directory and
 //   the fixture as the project to reopen (the dev reopen file main.ts reads in dev mode), then
 //   loads dist/electron/main.js unchanged and hands the window to the scenario module.
@@ -20,6 +23,7 @@
 // - The temporary directory is removed with bounded retries (Windows holds files a moment
 //   after a process exits).
 
+const assert = require('node:assert/strict');
 const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const net = require('node:net');
@@ -38,6 +42,7 @@ const CLONE_TIMEOUT_MS = 180000;
 const RENDERER_TREE = Object.freeze(['src', 'shared', 'index.html', 'vite.config.mjs', 'tsconfig.json']);
 const ARCHIVE_BYTES_MAX = 512 * 1024 * 1024;
 const SIGNAL_EXIT_CODE = 130;
+const RENDERER_CACHE_NAME = 'vite-cache';
 
 /** Why the soak cannot run here, or undefined when it can. */
 function soakUnavailableReason() {
@@ -124,8 +129,11 @@ function exportRendererTree(revision, target) {
   return target;
 }
 
-// The renderer as `npm run dev` serves it, from a server of our own.
-async function startRendererServer(root) {
+// The renderer as `npm run dev` serves it, from a server of our own, which writes its
+// pre-bundled dependencies under `runDirectory` and nowhere another run can reach.
+async function startRendererServer(root, runDirectory) {
+  assert.ok(path.isAbsolute(runDirectory), 'startRendererServer: the run directory is an absolute path');
+  const cacheDirectory = path.join(runDirectory, RENDERER_CACHE_NAME);
   const { createServer } = await import('vite');
   const port = await freePort();
   // eslint-disable-next-line stacki/no-null -- Vite's documented value for "no file watcher".
@@ -133,7 +141,7 @@ async function startRendererServer(root) {
   const server = await createServer({
     configFile: path.join(root, 'vite.config.mjs'),
     root,
-    cacheDir: repoPath('node_modules/.stacki-test/soak-vite'),
+    cacheDir: cacheDirectory,
     logLevel: 'warn',
     clearScreen: false,
     // Vite's dependency scan reads every .html file under the root when none are named, and
@@ -141,7 +149,8 @@ async function startRendererServer(root) {
     // on a cold cache the scan failed with an unresolved import and the page never loaded (the 1.4.4
     // release run, on all three platforms). The renderer's one entry is all this server serves.
     optimizeDeps: { entries: ['index.html'] },
-    server: { port, strictPort: true, host: '127.0.0.1', hmr: false, watch: noWatcher, fs: { strict: root === ROOT } },
+    // The cache is outside the root, so the strict file check is told of it beside the root.
+    server: { port, strictPort: true, host: '127.0.0.1', hmr: false, watch: noWatcher, fs: { strict: root === ROOT, allow: [root, cacheDirectory] } },
   });
   await server.listen();
   return { server, url: `http://127.0.0.1:${port}/` };
@@ -195,7 +204,7 @@ async function runSoak({ scenarioModule, options, keepDirectory, scrollbars = 'a
     copySite(project);
     cloneModules(project);
     const rendererRoot = options.rendererRevision ? exportRendererTree(options.rendererRevision, path.join(directory, 'renderer-tree')) : ROOT;
-    renderer = await startRendererServer(rendererRoot);
+    renderer = await startRendererServer(rendererRoot, directory);
     const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
     delete env.ELECTRON_RUN_AS_NODE;
     env.VITE_DEV_SERVER_URL = renderer.url;
@@ -238,4 +247,4 @@ async function runSoak({ scenarioModule, options, keepDirectory, scrollbars = 'a
   }
 }
 
-module.exports = { cloneModules, copySite, removeWithRetries, runSoak, soakUnavailableReason };
+module.exports = { cloneModules, copySite, removeWithRetries, runSoak, soakUnavailableReason, startRendererServer };

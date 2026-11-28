@@ -10,6 +10,10 @@
 // The probe types into the editor and scrolls it, then drives each change with real input events
 // (sendInputEvent mouse presses at the button's centre, a resize of the window) and polls the page
 // state after each one (test/helpers/waitFor.js, no fixed pauses) before reading the window back.
+// The baseline is taken only once the editor has measured itself at full size: the window opens by
+// scaling up, CodeMirror measures lines in screen pixels from an animation frame, and its next
+// measure moves the scroll position to keep the same line in place. A baseline read before that
+// frame (starved on a loaded runner) reported the correction as a change made by the first step.
 //
 // Run it with `node test/renderer/code/codeWindowStaysChromium.test.js`.
 const fs = require('node:fs');
@@ -79,6 +83,16 @@ window.center = (selector) => {
   const box = document.querySelector(selector).getBoundingClientRect();
   return { x: Math.round(box.left + box.width / 2), y: Math.round(box.top + box.height / 2) };
 };
+// Resolves after a CodeMirror measure cycle has run, so no measurement is still waiting for a frame.
+window.measured = () => new Promise((resolve) => {
+  const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+  view.requestMeasure({ read: () => view.defaultLineHeight, write: () => resolve(true) });
+});
+// The editor's idea of a line's height, against the height of a line as drawn.
+window.lineHeights = () => {
+  const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
+  return { measured: view.defaultLineHeight, drawn: document.querySelector('.cm-line').getBoundingClientRect().height };
+};
 window.prepare = () => {
   const view = EditorView.findFromDOM(document.querySelector('.cm-editor'));
   view.dispatch({ changes: { from: view.state.doc.length, insert: '\\n/* unsaved */' }, userEvent: 'input.type' });
@@ -93,12 +107,16 @@ const HOST =
   '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/harness.css"><style>html,body{margin:0;background:#161616}</style></head>' +
   '<body><div id="root"></div><script src="/harness.js"></script></body></html>';
 
+// The editor's measured line height and a drawn line agree to within layout rounding; a line
+// measured while the window was still scaling differs by more (0.15 px at a scale of 0.99).
+const LINE_HEIGHT_TOLERANCE_PX = 0.05;
+
 const PROBE = (directory) => `
 const { app, BrowserWindow } = require('electron');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
-const { waitFor, waitForSteady } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+const { MOTION_SETTLED_EXPRESSION, waitFor, waitForSteady } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
 const DIRECTORY = ${JSON.stringify(directory)};
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 app.on('window-all-closed', () => {});
@@ -125,8 +143,17 @@ app.whenReady().then(async () => {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/');
     await host('window.mount()');
     await until('the code window to draw', 'window.read()', (state) => state.shown && state.phase === 'open');
+    // The window opens by scaling up: nothing is typed or scrolled until that motion is over and
+    // the editor has measured its lines at the size they are drawn.
+    await until('the opening motion over', MOTION_SETTLED_EXPRESSION, (settled) => settled === true);
+    await waitFor({
+      what: 'the editor to measure its lines at full size',
+      read: async () => { await host('window.measured()'); return host('window.lineHeights()'); },
+      until: (heights) => Math.abs(heights.measured - heights.drawn) <= ${LINE_HEIGHT_TOLERANCE_PX},
+    });
     await host('window.prepare()');
-    // The window opens with a motion and the editor measures its lines after it: the start is what stopped changing.
+    // The scroll draws new lines, which the editor measures a frame later.
+    await host('window.measured()');
     const start = await waitForSteady({ what: 'the window at rest', read: () => host('window.read()'), until: (state) => state.shown && state.phase === 'open' });
     output.start = start;
     const record = async (name, ready) => {

@@ -143,10 +143,14 @@ const check = (what, condition, detail) => {
        };
      })()\`;
      // Every wait is on observable state, bounded (test/helpers/waitFor.js), never a fixed
-     // pause: a hidden window on a slow runner mounts, lays out and opens the popup late, and
-     // GitHub's Linux runner (xvfb) can drop a press or close the popup on a window event, so
-     // the press is repeated, at most pressCountMax times, until the rows are there.
+     // pause: a hidden window on a slow runner mounts, lays out and opens the popup late.
+     // GitHub's Linux and Windows runners can drop a press, or send a window event that
+     // closes a popup already seen open, so what is awaited is a menu still open once its
+     // motion is over. The press is repeated, at most pressCountMax times, until then.
      const pressCountMax = 5;
+     const menuOpen = (seen) => seen.rows === 2 && Boolean(seen.popup);
+     // True once no popup is opening or closing and nothing is animating.
+     const motionOver = 'document.querySelector(\\'[data-popup-phase="opening"], [data-popup-phase="closing"]\\') === null && document.getAnimations().length === 0';
      async function session(file) {
        const win = new BrowserWindow({ show: false, width: 400, height: 500 });
        await win.loadFile(path.join(__dirname, file));
@@ -156,16 +160,19 @@ const check = (what, condition, detail) => {
          read: () => js(read),
          until: (seen) => seen.primary !== undefined && seen.tab !== undefined && seen.trigger !== undefined && seen.trigger.height > 0,
        });
-       let opened = { kind: 'timedOut', value: await js(readMenu), pollCount: 0 };
-       for (let press = 0; press < pressCountMax && opened.kind === 'timedOut'; press += 1) {
+       let menu = await js(readMenu);
+       for (let press = 0; press < pressCountMax && !menuOpen(menu); press += 1) {
          win.webContents.sendInputEvent({ type: 'mouseDown', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x: rest.at.x, y: rest.at.y, button: 'left', clickCount: 1 });
-         opened = await pollUntil({ what: file + ': the menu open', read: () => js(readMenu), until: (seen) => seen.rows === 2 && Boolean(seen.popup), pollCountMax: 40 });
+         const opened = await pollUntil({ what: file + ': the menu open', read: () => js(readMenu), until: menuOpen, pollCountMax: 40 });
+         // The popup scales open; its size is read once its motion is over, or at the bound
+         // (the check keeps its one-pixel tolerance for a runner that never finishes it).
+         // A popup that was closed meanwhile reads as closed here, and is pressed open again.
+         if (opened.kind === 'reached') {
+           await pollUntil({ what: file + ': the motion over', read: () => js(motionOver), until: (over) => over === true, pollCountMax: 40 });
+         }
+         menu = await js(readMenu);
        }
-       // The popup scales open; its size is read once its motion is over, or at the bound
-       // (the check keeps its one-pixel tolerance for a runner that never finishes it).
-       await pollUntil({ what: file + ': the opening motion over', read: () => js('document.getAnimations().length'), until: (count) => count === 0, pollCountMax: 40 });
-       const menu = await js(readMenu);
        win.destroy();
        return { rest, menu };
      }
