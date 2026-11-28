@@ -40,6 +40,7 @@ will not start a changed binary without it. A signed release is signed after the
 ## Permissions and messages
 
 A page is granted a permission only when `electron/app/windowSecurity.ts` allows it by name, in
-every session and nested frame. An embedded page may pass only `mailto:`, `tel:` and `sms:` links
-to another app. IPC channels answer only the app window's top frame (`electron/lib/ipcSenders.ts`);
+every session and nested frame. Previews keep notifications, MIDI, local fonts, window management,
+motion sensors and speaker selection; a hidden window's own session does without them. An embedded
+page may pass only `mailto:`, `tel:` and `sms:` links to another app. IPC channels answer only the app window's top frame (`electron/lib/ipcSenders.ts`);
 register new ones on the guarded `ipcMain` that `main.ts` hands out.

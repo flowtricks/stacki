@@ -305,8 +305,8 @@ function registerAssetProtocol() {
 // measuring window, handlers/auditMeasure.ts) is guarded as its session is made.
 function guardPermissions() {
   const appUrl = appPageUrl();
-  guardSessionPermissions(session.defaultSession, appUrl);
-  app.on('session-created', (created) => guardSessionPermissions(created, appUrl));
+  guardSessionPermissions(session.defaultSession, { appUrl, pages: 'seen' });
+  app.on('session-created', (created) => guardSessionPermissions(created, { appUrl, pages: 'unseen' }));
 }
 
 // The page the main window shows: the dev server in development, the built file when packaged.

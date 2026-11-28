@@ -64,7 +64,7 @@ test("the app's window may not leave its own page", () => {
 const SITE = 'http://localhost:4321/';
 const EMBED = 'https://embed.example.com/player';
 
-const ask = (permission, requestingUrl, more = {}) => allowsPermission({ permission, requestingUrl, appUrl: PACKAGED_PAGE, ...more });
+const ask = (permission, requestingUrl, more = {}) => allowsPermission({ permission, requestingUrl, appUrl: PACKAGED_PAGE, pages: 'seen', ...more });
 
 test('a permission not allowed by name is refused to every page, Stacki’s own included', () => {
   for (const permission of [
@@ -77,12 +77,6 @@ test('a permission not allowed by name is refused to every page, Stacki’s own 
     'serial',
     'usb',
     'idle-detection',
-    'notifications',
-    'midi',
-    'midiSysex',
-    'window-management',
-    'local-fonts',
-    'sensors',
     'unknown',
     'a-permission-a-later-electron-adds',
   ]) {
@@ -108,6 +102,19 @@ test('what sites and Stacki use in ordinary browsing stays granted, in nested fr
       assert.equal(ask(permission, page), true, `${permission} for ${page}`);
     }
   }
+});
+
+test('previews keep what they were always granted; a hidden window’s pages do without it', () => {
+  for (const permission of ['notifications', 'midi', 'midiSysex', 'local-fonts', 'window-management', 'sensors', 'speaker-selection']) {
+    for (const page of [PACKAGED_PAGE, SITE, EMBED]) {
+      assert.equal(ask(permission, page), true, `${permission} for ${page}`);
+      assert.equal(ask(permission, page, { pages: 'unseen' }), false, `${permission} for a hidden ${page}`);
+    }
+  }
+  for (const permission of ['geolocation', 'display-capture', 'clipboard-read', 'usb']) {
+    assert.equal(ask(permission, SITE), false, `${permission} was refused before and stays so`);
+  }
+  assert.equal(ask('media', SITE, { mediaTypes: ['video'] }), false, 'the camera stays refused');
 });
 
 test('a frame may hand only an email, phone or text link to another app', () => {
@@ -150,7 +157,7 @@ test('a session answers its requests and its checks from the same rules', () => 
       setPermissionRequestHandler: (handler) => (request = handler),
       setPermissionCheckHandler: (handler) => (check = handler),
     },
-    PACKAGED_PAGE,
+    { appUrl: PACKAGED_PAGE, pages: 'seen' },
   );
   const requested = (permission, details) => {
     let answer;
@@ -161,9 +168,11 @@ test('a session answers its requests and its checks from the same rules', () => 
   assert.equal(requested('openExternal', { requestingUrl: EMBED, externalURL: 'mailto:a@example.com', isMainFrame: false }), true);
   assert.equal(requested('media', { requestingUrl: PACKAGED_PAGE, mediaTypes: ['audio'] }), true);
   assert.equal(requested('media', { requestingUrl: EMBED, mediaTypes: ['audio'] }), false);
-  assert.equal(requested('notifications', { requestingUrl: EMBED }), false);
+  assert.equal(requested('notifications', { requestingUrl: EMBED }), true);
+  assert.equal(requested('geolocation', { requestingUrl: EMBED }), false);
   assert.equal(check(undefined, 'fullscreen', 'https://embed.example.com', {}), true);
-  assert.equal(check(undefined, 'notifications', 'https://embed.example.com', {}), false);
+  assert.equal(check(undefined, 'notifications', 'https://embed.example.com', {}), true);
+  assert.equal(check(undefined, 'geolocation', 'https://embed.example.com', {}), false);
   assert.equal(check(undefined, 'media', 'file:///', { requestingUrl: PACKAGED_PAGE, mediaType: 'audio' }), true);
   assert.equal(check(undefined, 'media', 'file:///', { requestingUrl: PACKAGED_PAGE, mediaType: 'video' }), false);
 });

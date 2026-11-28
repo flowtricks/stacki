@@ -47,6 +47,22 @@ const OPEN_PERMISSIONS: ReadonlySet<string> = new Set([
   'top-level-storage-access',
 ]);
 
+// What a page in a window the person sees may also be granted: the app's window and the previews in it, which
+// have always had these. A page nobody sees (a session of its own, as the audits' measuring window has) has no use
+// for them, and a notification from it would come from nowhere.
+const SEEN_PAGE_PERMISSIONS: ReadonlySet<string> = new Set([
+  'local-fonts',
+  'midi',
+  'midiSysex',
+  'notifications',
+  'sensors',
+  'speaker-selection',
+  'window-management',
+]);
+
+/** Whose pages a session holds: those the person looks at, or a hidden window's. */
+export type SessionPages = 'seen' | 'unseen';
+
 // Reaching servers on this computer or its network: for pages that are themselves there.
 const LOCAL_NETWORK_PERMISSIONS: ReadonlySet<string> = new Set(['local-network', 'local-network-access', 'loopback-network']);
 
@@ -64,6 +80,7 @@ export interface PermissionAsk {
   readonly requestingUrl: string;
   /** Stacki's own page. */
   readonly appUrl: string;
+  readonly pages: SessionPages;
   /** What a 'media' ask names. */
   readonly mediaTypes?: readonly string[] | undefined;
   /** Where an 'openExternal' ask leads. */
@@ -71,7 +88,7 @@ export interface PermissionAsk {
 }
 
 /** Whether a page is granted a permission: only what is allowed by name (above). */
-export function allowsPermission({ permission, requestingUrl, appUrl, mediaTypes, externalURL }: PermissionAsk): boolean {
+export function allowsPermission({ permission, requestingUrl, appUrl, pages, mediaTypes, externalURL }: PermissionAsk): boolean {
   if (OPEN_PERMISSIONS.has(permission)) {
     return true;
   }
@@ -81,8 +98,8 @@ export function allowsPermission({ permission, requestingUrl, appUrl, mediaTypes
   if (permission === 'openExternal') {
     return isExternalAppLink(externalURL ?? '');
   }
-  if (permission === 'speaker-selection') {
-    return isAppPage(requestingUrl, appUrl);
+  if (SEEN_PAGE_PERMISSIONS.has(permission)) {
+    return pages === 'seen';
   }
   if (LOCAL_NETWORK_PERMISSIONS.has(permission)) {
     return isAppPage(requestingUrl, appUrl) || isLocalPage(requestingUrl);
@@ -110,13 +127,17 @@ function isLocalPage(url: string): boolean {
  * Answers both of a session's permission questions with `allowsPermission`: the request a page makes, and the
  * check Chromium runs before using what it holds. Every frame of every window asks here, nested ones too.
  */
-export function guardSessionPermissions(target: Pick<Session, 'setPermissionRequestHandler' | 'setPermissionCheckHandler'>, appUrl: string): void {
+export function guardSessionPermissions(
+  target: Pick<Session, 'setPermissionRequestHandler' | 'setPermissionCheckHandler'>,
+  { appUrl, pages }: Pick<PermissionAsk, 'appUrl' | 'pages'>,
+): void {
   target.setPermissionRequestHandler((_contents, permission, callback, details) => {
     callback(
       allowsPermission({
         permission,
         requestingUrl: details.requestingUrl,
         appUrl,
+        pages,
         mediaTypes: 'mediaTypes' in details ? details.mediaTypes : undefined,
         externalURL: 'externalURL' in details ? details.externalURL : undefined,
       }),
@@ -125,7 +146,7 @@ export function guardSessionPermissions(target: Pick<Session, 'setPermissionRequ
   target.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
     // A check names one kind at a time; 'unknown' is the system asking whether any device exists.
     const mediaTypes = 'mediaType' in details && details.mediaType !== 'video' ? ['audio'] : undefined;
-    return allowsPermission({ permission, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl, mediaTypes });
+    return allowsPermission({ permission, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl, pages, mediaTypes });
   });
 }
 
