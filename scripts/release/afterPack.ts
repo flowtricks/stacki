@@ -7,7 +7,7 @@ import type { AfterPackContext } from 'app-builder-lib';
 import { Arch } from 'builder-util';
 import { fixNodePtyPermissions } from '../install/fixNodePtyPermissions';
 import { verifyLinuxNativeBinding } from './linuxNativeBinding';
-import { verifyMacNativeBindings } from './macNativeBindings';
+import { removeIntelBindings, verifyMacNativeBindings } from './macNativeBindings';
 
 function packageArchitecture(architecture: Arch): 'arm64' | 'x64' {
   if (architecture === Arch.arm64) {
@@ -51,8 +51,10 @@ export default function afterPack(context: AfterPackContext): void {
     return;
   }
 
+  const architecture = packageArchitecture(context.arch);
+  removeIntelBindings(nodePtyDirectory, architecture);
   const fixed = fixNodePtyPermissions(nodePtyDirectory);
-  verifyMacNativeBindings(nodePtyDirectory, packageArchitecture(context.arch));
+  verifyMacNativeBindings(nodePtyDirectory, architecture);
   console.log(
     fixed.length > 0
       ? `  • afterPack: restored exec bit on ${fixed.length} node-pty spawn-helper(s)`

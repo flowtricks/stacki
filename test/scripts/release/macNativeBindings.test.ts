@@ -2,11 +2,34 @@
 // Methodology: exercise the packaging verifier with bounded Mach-O fixtures,
 // including missing, foreign, truncated, and non-executable native files.
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { verifyMacNativeBindings } from '#dist/scripts/release/macNativeBindings.js';
+import { removeIntelBindings, verifyMacNativeBindings } from '#dist/scripts/release/macNativeBindings.js';
+
+test('only the Apple silicon package leaves out the Intel terminal binaries', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'stacki-mac-intel-'));
+  try {
+    const folders = ['darwin-arm64', 'darwin-x64'].map((name) => join(directory, 'prebuilds', name));
+    for (const folder of folders) {
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, 'pty.node'), '');
+    }
+    const [arm, intel] = folders.map((folder) => join(folder, 'pty.node'));
+    assert.ok(arm !== undefined && intel !== undefined);
+    removeIntelBindings(directory, 'x64');
+    assert.ok(existsSync(arm));
+    assert.ok(existsSync(intel));
+    removeIntelBindings(directory, 'arm64');
+    assert.ok(existsSync(arm));
+    assert.ok(!existsSync(intel));
+    // A package that never held them is accepted.
+    assert.doesNotThrow(() => removeIntelBindings(directory, 'arm64'));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 for (const architecture of ['x64', 'arm64'] as const) {
   // Windows cannot represent the Unix execute bits this packaging check enforces.

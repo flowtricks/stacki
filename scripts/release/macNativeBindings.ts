@@ -16,6 +16,17 @@ export function verifyMacNativeBindings(directory: string, architecture: 'arm64'
   }
 }
 
+// The Apple silicon package leaves out node-pty's Intel binaries. It never loads them, and macOS warns that an app
+// holding Intel code will stop working. The Intel package is left as it is. This runs before signing.
+export function removeIntelBindings(directory: string, architecture: 'arm64' | 'x64'): void {
+  if (architecture === 'x64') {
+    return;
+  }
+  const intel = path.join(directory, 'prebuilds', 'darwin-x64');
+  fs.rmSync(intel, { recursive: true, force: true });
+  assert.ok(!fs.existsSync(intel), 'The Apple silicon package must not carry Intel node-pty binaries');
+}
+
 function verifyMacNativeHeader(file: string, cpuType: number): void {
   assert.ok(fs.existsSync(file), `Missing Mac node-pty binary: ${file}`);
   const header = Buffer.alloc(8);
