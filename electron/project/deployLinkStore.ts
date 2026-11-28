@@ -241,9 +241,13 @@ export function repositoryIdentity(origin: string): string {
   return match?.[1] === undefined ? origin : `github.com/${match[1].toLowerCase()}`;
 }
 
+// One folder must give one key however it was spelled. The publisher resolves a project with the operating system's
+// resolver (`fs/promises.realpath`), so this asks the same one. Node's JavaScript `fs.realpathSync` keeps the spelling
+// it was given for a Windows short (8.3) name, a mapped or substituted drive, and the letter case on a disk that
+// ignores case: a link saved through it would then be reported missing at publishing.
 function realProject(projectRoot: string): string {
   assert(path.isAbsolute(projectRoot), 'A project root is absolute');
-  return fs.realpathSync(projectRoot);
+  return fs.realpathSync.native(projectRoot);
 }
 
 function linkKey(project: string, destination: DeployLinkDestination): string {

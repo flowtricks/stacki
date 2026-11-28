@@ -184,6 +184,30 @@ test('one repository has one identity however its address is spelled', () => {
   assert.notEqual(repositoryIdentity('https://github.com.evil.example/owner/site.git'), expected);
 });
 
+// The publisher resolves a project with the operating system's own resolver. On Windows, Node's JavaScript
+// `fs.realpathSync` can answer differently for the same folder: it keeps a short (8.3) name such as RUNNER~1 and a
+// mapped or substituted drive letter. A link junction stands for the other spelling, and the JavaScript resolver is
+// replaced with one that keeps it, so every platform takes the Windows path.
+test('a link saved under another spelling of the project folder is still the one publishing sends', async (context) => {
+  const site = await publishSite(context, { publish: custom({ deploy: 'link' }, { beforePublish: [], afterPublish: [] }) });
+  const spelled = path.join(site.directory, 'SITE~1');
+  fs.symlinkSync(site.root, spelled, 'junction');
+  const keepsSpelling = Object.assign((target: fs.PathLike) => String(target), { native: fs.realpathSync.native });
+  context.mock.method(fs, 'realpathSync', keepsSpelling);
+  const store = fakeLinkStore(site.userData);
+  assert.equal((await store.save(spelled, LINK)).ok, true);
+  assert.equal((await store.state(site.root)).kind, 'saved', 'Both spellings are one project');
+  await edit(site.root);
+  const network = transport([200]);
+  const publisher = new DesktopPublisher(PUBLISH_TEMPORARY_SEAMS, { deployLinks: store, transport: network.send });
+  publisher.start(spelled, 'all', 'Update');
+  assert.deepEqual(await finished(publisher, spelled), { kind: 'done', github: true, hosting: true, handoff: 'link' });
+  assert.deepEqual(network.sent, [{ address: LINK, method: 'POST' }]);
+  // Removing under either spelling removes the one saved link.
+  assert.equal(store.remove(spelled).ok, true);
+  assert.deepEqual(await store.state(site.root), { kind: 'none' });
+});
+
 test('without the computer’s encryption nothing is kept', async (context) => {
   const site = await publishSite(context, { publish: custom({ deploy: 'link' }) });
   const store = fakeLinkStore(site.userData, { available: false });
