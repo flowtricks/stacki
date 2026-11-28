@@ -84,7 +84,7 @@ async function orchestrate() {
     copySite(project);
     cloneModules(project);
     fs.writeFileSync(path.join(project, '.env'), 'SECRET=kept-in-the-project\n');
-    const renderer = await startRendererServer(ROOT, directory);
+    const renderer = await startRendererServer(ROOT, directory, { preTransformRequests: true });
     server = renderer.server;
     const launch = (phase) => {
       const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };

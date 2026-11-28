@@ -131,8 +131,11 @@ function exportRendererTree(revision, target) {
 
 // The renderer as `npm run dev` serves it, from a server of our own, which writes its
 // pre-bundled dependencies under `runDirectory` and nowhere another run can reach.
-async function startRendererServer(root, runDirectory) {
+// `preTransformRequests` is Vite's reading ahead of what a served module imports: a page wants it, and a
+// server asked for a few modules and closed does not, since closing waits for every request still in hand.
+async function startRendererServer(root, runDirectory, { preTransformRequests }) {
   assert.ok(path.isAbsolute(runDirectory), 'startRendererServer: the run directory is an absolute path');
+  assert.equal(typeof preTransformRequests, 'boolean', 'startRendererServer: the caller says whether the server reads ahead');
   const cacheDirectory = path.join(runDirectory, RENDERER_CACHE_NAME);
   const { createServer } = await import('vite');
   const port = await freePort();
@@ -150,7 +153,15 @@ async function startRendererServer(root, runDirectory) {
     // release run, on all three platforms). The renderer's one entry is all this server serves.
     optimizeDeps: { entries: ['index.html'] },
     // The cache is outside the root, so the strict file check is told of it beside the root.
-    server: { port, strictPort: true, host: '127.0.0.1', hmr: false, watch: noWatcher, fs: { strict: root === ROOT, allow: [root, cacheDirectory] } },
+    server: {
+      port,
+      strictPort: true,
+      host: '127.0.0.1',
+      hmr: false,
+      watch: noWatcher,
+      preTransformRequests,
+      fs: { strict: root === ROOT, allow: [root, cacheDirectory] },
+    },
   });
   await server.listen();
   return { server, url: `http://127.0.0.1:${port}/` };
@@ -204,7 +215,7 @@ async function runSoak({ scenarioModule, options, keepDirectory, scrollbars = 'a
     copySite(project);
     cloneModules(project);
     const rendererRoot = options.rendererRevision ? exportRendererTree(options.rendererRevision, path.join(directory, 'renderer-tree')) : ROOT;
-    renderer = await startRendererServer(rendererRoot, directory);
+    renderer = await startRendererServer(rendererRoot, directory, { preTransformRequests: true });
     const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
     delete env.ELECTRON_RUN_AS_NODE;
     env.VITE_DEV_SERVER_URL = renderer.url;
