@@ -16,7 +16,15 @@ export function usePopupLifecycle({ open }: { readonly open: boolean }, onClose:
     setPhase('closing');
   }, []);
   const close = useCallback(() => finish(() => callback.current()), [finish]);
+  // Only a change of `open` restarts or ends the popup, never the mount: a passive effect runs after the popup is on
+  // screen, so a close asked for in between would lose its action to it. The popup then left the screen without
+  // `onClose`, and its owner kept a dialog nobody could see (the next question never appeared).
+  const wasOpen = useRef(open);
   useEffect(() => {
+    if (wasOpen.current === open) {
+      return;
+    }
+    wasOpen.current = open;
     completion.current = undefined;
     setPhase((current) => (open ? 'opening' : current === 'closed' ? 'closed' : 'closing'));
   }, [open]);

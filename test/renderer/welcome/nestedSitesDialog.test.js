@@ -86,6 +86,25 @@ const nested = (sites, more = {}) => ({ kind: 'nestedSites', folderPath: FOLDER,
   const toasts = [];
   const container = dom.window.document.getElementById('root');
   const screen = createRoot(container);
+  // The launch question is cancelled the moment it is in the document: after React's commit and before its passive
+  // effects, which a mutation observer reaches first (a microtask, against the effects' later task). A poll lands there
+  // only now and then (it did on a loaded CI runner), and the popup then lost the Cancel: the dialog left the screen
+  // but kept its question, so the next one never appeared.
+  const cancelledOnArrival = new Promise((resolve) => {
+    const observer = new dom.window.MutationObserver(() => {
+      const question = dom.window.document.querySelector('.nested-sites-dialog');
+      const button = question?.querySelector('.modal-footer button');
+      if (button) {
+        observer.disconnect();
+        const body = question.querySelector('.modal-body').textContent;
+        button.click();
+        resolve(body);
+      }
+    });
+    observer.observe(dom.window.document.body, { childList: true, subtree: true });
+  });
+  let launchBody;
+  void cancelledOnArrival.then((body) => (launchBody = body));
   screen.render(
     React.createElement(
       React.Fragment,
@@ -113,9 +132,8 @@ const nested = (sites, more = {}) => ({ kind: 'nestedSites', folderPath: FOLDER,
   };
 
   // --- a folder handed over at launch -------------------------------------------
-  await shown();
-  check('a folder waiting at launch asks too', text('.modal-body').includes('waiting/site'), text('.modal-body'));
-  cancel();
+  await until('the question waiting at launch', () => launchBody);
+  check('a folder waiting at launch asks too', launchBody.includes('waiting/site'), launchBody);
   await closed();
   check('and Cancel opens nothing', opened.length === 0, opened.join());
 
