@@ -221,6 +221,8 @@ export interface AiState {
   readonly agents: readonly AgentAvailability[];
   /** Each agent's settings as it last reported them (models, efforts), for a chat not started yet. */
   readonly agentOptions: ReadonlyMap<AgentId, readonly ChatOption[]>;
+  /** The agents whose own CLI is being updated now. */
+  readonly updating: ReadonlySet<AgentId>;
   /** The settings last used per agent (mode, model, effort, switches): what a new chat starts with and shows in its first frame. */
   readonly remembered: RememberedSettings;
   /** The project's chats in display order (pinned first within a section, then by rank), archived ones included. */
@@ -268,6 +270,7 @@ const INITIAL: AiState = {
   trusted: false,
   agents: [],
   agentOptions: new Map(),
+  updating: new Set(),
   remembered: NO_REMEMBERED_SETTINGS,
   chats: [],
   sections: [],
@@ -1345,6 +1348,40 @@ async function settleSignedIn(next: SetupState): Promise<void> {
     agents: fresh ?? current.agents,
     setups: new Map([...current.setups, [next.agent, next]]),
   }));
+}
+
+/** `outdated`: the update ran, or ended, and the CLI in use is still too old to list today's models. */
+export type CliUpdateOutcome = 'updated' | 'outdated';
+
+/**
+ * Updates the agent's own CLI, then reads the agents again: the app reads the installed version to say whether it
+ * worked, and asks an updated CLI for its models. undefined: nothing to say (one is running, or the failure is shown).
+ */
+export async function updateAgentCli(agent: AgentId): Promise<CliUpdateOutcome | undefined> {
+  const projectPath = requireProject();
+  if (state.updating.has(agent)) {
+    return undefined;
+  }
+  update((current) => ({ ...current, updating: new Set([...current.updating, agent]) }));
+  const reply = await aiSetup({ projectPath, agent, action: { kind: 'update' } });
+  const agents = reply.ok ? await aiAgents(projectPath) : undefined;
+  update((current) => ({ ...current, updating: new Set([...current.updating].filter((id) => id !== agent)) }));
+  if (state.projectPath !== projectPath) {
+    return undefined; // Another project opened meanwhile.
+  }
+  if (!reply.ok) {
+    fail(reply.error);
+    return undefined;
+  }
+  setSetup(reply.value);
+  if (agents?.ok !== true) {
+    return 'outdated';
+  }
+  for (const availability of agents.value.agents) {
+    setAgent(availability);
+  }
+  const now = agents.value.agents.find((entry) => entry.agent === agent);
+  return now?.state === 'ready' && now.outdatedCli === undefined ? 'updated' : 'outdated';
 }
 
 function setSetup(next: SetupState): void {

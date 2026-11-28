@@ -13,6 +13,7 @@ import type { ChatId, ChatOption } from '../../../../shared/properties/ai/chatMo
 import { usableSettings } from '../../../../shared/properties/ai/rememberedSettings';
 import { agentBadge } from '../agentSwitch';
 import { rememberChoice, resetRememberedSettings, setChatOption, type AiState } from '../aiStore';
+import { useCliUpdate } from './useCliUpdate';
 import type { ChatView } from '../chatReducer';
 import { AccountMenu } from './AccountMenu';
 import { ContextRing } from './ContextRing';
@@ -58,7 +59,19 @@ export function ComposerStatusLine({
       return badge === undefined ? [] : [[id, badge]];
     }),
   );
-  const settings: ComposerSettings = { agent, chat: chatId, started, running, options, pick, reset, canReset: rememberedForAgent.length > 0, agentBadges };
+  const cliUpdate = useCliUpdate(state, agent);
+  const settings: ComposerSettings = {
+    agent,
+    chat: chatId,
+    started,
+    running,
+    options,
+    pick,
+    reset,
+    canReset: rememberedForAgent.length > 0,
+    agentBadges,
+    ...(cliUpdate === undefined ? {} : { cliUpdate }),
+  };
   const summary = state.chats.find((candidate) => candidate.id === chatId);
   const usage = view.usage ?? summary?.context;
   const modeKnown = optionById(options, AGENT_PRESENTATION[agent].modes.optionId) !== undefined;

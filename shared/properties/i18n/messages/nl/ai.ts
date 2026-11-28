@@ -147,6 +147,12 @@ export const messages = {
   'ai.composer.attach.remove': 'Bijlage verwijderen',
   'ai.composer.attach.total': 'Deze afbeeldingen zijn samen te groot om te versturen. Verwijder er eerst een.',
   'ai.composer.attach.unsupported': 'Voeg afbeeldingen of bestanden uit dit project bij.', // same
+  'ai.composer.cli.howTo': 'Zo werk je bij',
+  'ai.composer.cli.stillOld': 'Claude Code is nog steeds verouderd. Werk het bij op de manier waarop je het hebt geïnstalleerd.',
+  'ai.composer.cli.update': 'Claude Code bijwerken',
+  'ai.composer.cli.updateHint': 'Claude Code {version} is verouderd, daarom ontbreken de nieuwste modellen',
+  'ai.composer.cli.updated': 'Claude Code is bijgewerkt. Nieuwe chats tonen de nieuwste modellen.',
+  'ai.composer.cli.updating': 'Claude Code wordt bijgewerkt…',
   'ai.composer.commands': 'Opdrachten',
   'ai.composer.default': 'Standaard',
   'ai.composer.dictate': 'Dicteren',

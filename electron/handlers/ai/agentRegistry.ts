@@ -16,6 +16,7 @@ import { AGENTS, AGENT_IDS, type AgentId } from '../../../shared/properties/ai/a
 import type { ChatOption } from '../../../shared/properties/ai/chatModel';
 import { pathEnvironmentValue } from '../../lib/platform';
 import { resourcePath } from '../../lib/runtimePaths';
+import { claudeInstalledVersion, isOlderVersion } from './cliVersion';
 import { pathExtensions } from './windowsCommand';
 
 export interface AdapterSpec {
@@ -34,6 +35,12 @@ export interface AdapterSpec {
   readonly cliVariable: 'CLAUDE_CODE_EXECUTABLE' | 'CODEX_PATH';
   /** The mode a new chat starts in: the one that asks before every edit and command. */
   readonly askMode: string;
+  /**
+   * The oldest CLI that lists today's models: the one this adapter's agent SDK was made for. The model list is the
+   * CLI's own, so an older one shows older models, and the panel then offers to update it. It moves only with the
+   * adapter's version (the test holds it to the lockfile). undefined: the CLI is not checked.
+   */
+  readonly cliVersionMin: string | undefined;
 }
 
 export const ADAPTERS: Readonly<Record<AgentId, AdapterSpec>> = {
@@ -48,6 +55,7 @@ export const ADAPTERS: Readonly<Record<AgentId, AdapterSpec>> = {
     installMegabytes: 75,
     cliVariable: 'CLAUDE_CODE_EXECUTABLE',
     askMode: 'default',
+    cliVersionMin: '2.1.322',
   },
   codex: {
     agent: 'codex',
@@ -60,6 +68,7 @@ export const ADAPTERS: Readonly<Record<AgentId, AdapterSpec>> = {
     installMegabytes: 21,
     cliVariable: 'CODEX_PATH',
     askMode: 'read-only',
+    cliVersionMin: undefined,
   },
 };
 
@@ -122,6 +131,8 @@ export function adapterPackageJson(spec: AdapterSpec): string {
 export interface CliFileSystem {
   /** The candidate resolved through links when it is a file, or undefined when it is not one. */
   readonly resolveFile: (candidate: string) => string | undefined;
+  /** A small text file, or undefined when it cannot be read: where an install records its version. Absent: nothing is read. */
+  readonly readText?: (file: string) => string | undefined;
 }
 
 export interface FindCliOptions {
@@ -130,6 +141,9 @@ export interface FindCliOptions {
   readonly platform?: NodeJS.Platform;
   readonly fileSystem?: CliFileSystem;
 }
+
+/** Far above a real package.json; a larger file is not read for a version. */
+const PACKAGE_JSON_BYTES_MAX = 256 * 1024;
 
 export const realCliFileSystem: CliFileSystem = {
   resolveFile: (candidate) => {
@@ -140,7 +154,21 @@ export const realCliFileSystem: CliFileSystem = {
       return undefined;
     }
   },
+  readText: (file) => {
+    try {
+      const stat = fs.statSync(file);
+      return stat.isFile() && stat.size <= PACKAGE_JSON_BYTES_MAX ? fs.readFileSync(file, 'utf8') : undefined;
+    } catch {
+      return undefined;
+    }
+  },
 };
+
+/** The version of the CLI at `file` (as `findCli` answered it), when its install says it. Only Claude Code's is read. */
+export function installedCliVersion(agent: AgentId, file: string, fileSystem: CliFileSystem = realCliFileSystem): string | undefined {
+  const readText = fileSystem.readText;
+  return agent !== 'claude' || readText === undefined ? undefined : claudeInstalledVersion(file, readText);
+}
 
 /**
  * The person's own CLI for `agent` on the PATH of `options.environment` (as the
@@ -150,6 +178,12 @@ export const realCliFileSystem: CliFileSystem = {
  * plain object, and a bare `['PATH']` read on it misses `Path`, which made every
  * installed CLI look missing (issue 82). On Windows the file names come from
  * PATHEXT (always with the .exe and .cmd kinds), as the system's own lookup does.
+ *
+ * The first one on the PATH is used, with one exception: when its version is known and a later one is newer, the
+ * newest is used. Why: an app opened from the Dock searches the usual tool folders in its own order
+ * (lib/shellEnvironment.ts), not the order the person's terminal uses, so a copy left behind by an earlier way of
+ * installing Claude Code (npm, ~/.claude/local) could win over the up to date one, and the panel then showed that
+ * copy's old models. A first one whose version cannot be read (a wrapper of the person's own) is kept.
  */
 export function findCli(agent: AgentId, options: FindCliOptions): string | undefined {
   const platform = options.platform ?? process.platform;
@@ -163,15 +197,25 @@ export function findCli(agent: AgentId, options: FindCliOptions): string | undef
     .filter((directory) => directory.length > 0);
   assert(directories.length <= 4_096, 'findCli: a PATH is bounded');
   assert(names.length > 0, 'findCli: at least one file name is tried');
+  let best: { readonly file: string; readonly version: string } | undefined;
   for (const directory of directories) {
     for (const name of names) {
       const found = fileSystem.resolveFile(api.join(directory, name));
-      if (found !== undefined) {
-        return found;
+      if (found === undefined) {
+        continue;
+      }
+      const version = installedCliVersion(agent, found, fileSystem);
+      if (best === undefined) {
+        if (version === undefined) {
+          return found;
+        }
+        best = { file: found, version };
+      } else if (version !== undefined && isOlderVersion(best.version, version)) {
+        best = { file: found, version };
       }
     }
   }
-  return undefined;
+  return best?.file;
 }
 
 export function adapterSpecs(): readonly AdapterSpec[] {
@@ -186,11 +230,14 @@ export function adapterSpecs(): readonly AdapterSpec[] {
 /**
  * The settings a new chat offers before its agent has reported its own (it does
  * the first time a session starts, or when the host probes it; agentHost.ts).
- * Claude: the current model ids and Claude Code's effort levels, from the Claude
- * Code model configuration docs (https://code.claude.com/docs/en/model-config);
- * the adapter's live list replaces them, with the names and descriptions Claude
- * Code's own /model picker shows. Codex: its reasoning efforts; its models come
- * only from the agent (`model/list` behind codex-acp's config options).
+ * Claude: Claude Code's own model aliases and effort levels
+ * (https://code.claude.com/docs/en/model-config). Why aliases without versions,
+ * never model ids: an alias runs the newest model of its family that the
+ * person's CLI knows, so this list cannot go stale or name a model the CLI
+ * cannot run, and a pick made from it is the same value the CLI's own list uses,
+ * so it still holds once that list arrives. The versions shown are only ever the
+ * ones the CLI reports. Codex: its reasoning efforts; its models come only from
+ * the agent (`model/list` behind codex-acp's config options).
  */
 export const FALLBACK_OPTIONS: Readonly<Record<AgentId, readonly ChatOption[]>> = {
   claude: [
@@ -201,10 +248,10 @@ export const FALLBACK_OPTIONS: Readonly<Record<AgentId, readonly ChatOption[]>> 
       currentValue: 'default',
       choices: [
         { value: 'default', name: 'Default (recommended)', description: 'The model Claude Code picks for your plan' },
-        { value: 'claude-fable-5-2', name: 'Fable 5.2', description: undefined },
-        { value: 'claude-opus-5-5', name: 'Opus 5.5', description: undefined },
-        { value: 'claude-sonnet-5-5', name: 'Sonnet 5.5', description: undefined },
-        { value: 'claude-haiku-5-5', name: 'Haiku 5.5', description: undefined },
+        { value: 'opus', name: 'Opus', description: undefined },
+        { value: 'fable', name: 'Fable', description: undefined },
+        { value: 'sonnet', name: 'Sonnet', description: undefined },
+        { value: 'haiku', name: 'Haiku', description: undefined },
       ],
     },
     {
