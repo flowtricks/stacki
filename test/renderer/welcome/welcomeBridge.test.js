@@ -1,5 +1,5 @@
 // Goal: welcome-screen IPC data is parsed before it controls cards or project creation.
-// Methodology: exercise valid dialog/recent/thumbnail shapes, reject malformed and
+// Methodology: exercise valid parent-dialog/recent/thumbnail shapes, reject malformed and
 // duplicate records, and verify transport failures remain explicit Result values.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -19,7 +19,7 @@ const recent = {
   openedAt: 123,
 };
 
-test('welcome parsers preserve valid recent, thumbnail, and dialog variants', () => {
+test('welcome parsers preserve valid recent, thumbnail, and parent dialog variants', () => {
   assert.deepEqual(welcome.parseRecentProjects([recent]), [recent]);
   assert.deepEqual(welcome.parseRefreshThumb({ ok: true, thumb: 'data:image/png,x', stale: false }), {
     ok: true,
@@ -31,15 +31,6 @@ test('welcome parsers preserve valid recent, thumbnail, and dialog variants', ()
     error: 'failed',
     thumb: undefined,
     stale: true,
-  });
-  assert.deepEqual(welcome.parseProjectDialog({ canceled: true }), { canceled: true });
-  assert.deepEqual(welcome.parseProjectDialog({ canceled: false, error: 'not Astro' }), {
-    canceled: false,
-    error: 'not Astro',
-  });
-  assert.deepEqual(welcome.parseProjectDialog({ canceled: false, projectPath: '/project' }), {
-    canceled: false,
-    projectPath: '/project',
   });
   assert.deepEqual(welcome.parseParentDialog({ canceled: false, parentPath: '/sites' }), {
     canceled: false,
@@ -60,7 +51,6 @@ test('welcome parsers reject missing, duplicate, invalid, and oversized records'
     assert.throws(() => welcome.parseRecentProjects(value));
   }
   assert.throws(() => welcome.parseRefreshThumb({ ok: false, thumb: undefined, stale: true }));
-  assert.throws(() => welcome.parseProjectDialog({ canceled: false }));
   assert.throws(() => welcome.parseParentDialog({ canceled: false, parentPath: PLATFORM_NULL }));
 });
 

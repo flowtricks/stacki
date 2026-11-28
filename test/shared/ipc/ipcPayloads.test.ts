@@ -32,7 +32,6 @@ const noPayload = new Set([
   'apps:hostVersion',
   'recents:list',
   'git:repositories',
-  'project:openDialog',
   'project:openSiteDialog',
   'project:takeOpenedFolders',
   'project:parentDialog',

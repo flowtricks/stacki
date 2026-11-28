@@ -196,6 +196,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}" هو الـ branch الذي يعود إليه كل شيء. سيترك حذفه المشروع بلا خط العمل الرئيسي.',
   'git.error.deleteWorktree': '"{branch}" محمّل في worktree آخر ({path}). أغلق ذلك أو انتقل منه أولًا.',
   'git.error.detachedHead': 'أنت لست على branch، فلا يوجد ما يُرسل أو يُسحب. انتقل إلى branch أولًا.',
+  'git.error.folderNotInVersion': 'لم يكن مجلد هذا الموقع موجودًا في تلك النسخة، لذا لا يوجد ما يمكن عرضه أو استعادته.',
   'git.error.identityMissing': 'لا يعرف Git هويتك بعد. عيّن اسمك وبريدك الإلكتروني (git config --global user.name وuser.email)، ثم احفظ مرة أخرى.',
   'git.error.locked': 'ما زالت عملية Git أخرى تعمل في هذا المشروع. انتظر قليلًا وأعد المحاولة؛ وإن لم تنتهِ أبدًا فأغلق أدوات Git الأخرى.',
   'git.error.mergeBranchChanged': 'تغيّر الـ branch الحالي. أعد فتح الدمج لمراجعته مرة أخرى.',

@@ -137,4 +137,6 @@ export const messages = {
   'error.terminal.outsideProject': 'O terminal só pode ser aberto dentro do projeto atual.',
   'error.thumbnails.devServerSlow': 'o servidor de desenvolvimento não iniciou a tempo',
   'error.thumbnails.noDependencies': 'Este projeto ainda não tem dependências instaladas.',
+  'error.project.yarnPlugAndPlay':
+    'Os pacotes deste projeto foram instalados com Yarn Plug’n’Play, que o Stacki ainda não consegue pré-visualizar. Defina nodeLinker como node-modules no .yarnrc.yml, instale de novo e reabra.',
 } as const satisfies CatalogOf<MessageKey>;

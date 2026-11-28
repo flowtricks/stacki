@@ -44,6 +44,8 @@ interface ChoiceQuestion {
   readonly body: ReactNode;
   readonly choices: readonly DialogChoice[];
   readonly cancelLabel: string | undefined;
+  /** A class of the dialog's own, for one whose list of answers needs its own layout. */
+  readonly className: string | undefined;
   readonly resolve: (answer: string | undefined) => void;
 }
 let openChoice: ((question: ChoiceQuestion) => void) | undefined;
@@ -57,6 +59,7 @@ export function choiceDialog(options: {
   readonly body?: ReactNode;
   readonly choices: readonly DialogChoice[];
   readonly cancelLabel?: string;
+  readonly className?: string;
 }): Promise<string | undefined> {
   return new Promise((resolve) => {
     if (!openChoice) {
@@ -64,7 +67,8 @@ export function choiceDialog(options: {
       resolve(undefined);
       return;
     }
-    openChoice({ title: options.title, body: options.body, choices: options.choices, cancelLabel: options.cancelLabel, resolve });
+    const { title, body, choices, cancelLabel, className } = options;
+    openChoice({ title, body, choices, cancelLabel, className, resolve });
   });
 }
 
@@ -186,7 +190,11 @@ function ChoiceSurface({ question, answer }: { readonly question: ChoiceQuestion
   }, []);
   const ordered = [...question.choices].sort((first, second) => Number(second.recommended === true) - Number(first.recommended === true));
   return (
-    <Popup className="modal confirm-dialog choice-dialog" role="alertdialog" onClose={() => answer(undefined)}>
+    <Popup
+      className={`modal confirm-dialog choice-dialog${question.className === undefined ? '' : ` ${question.className}`}`}
+      role="alertdialog"
+      onClose={() => answer(undefined)}
+    >
       {({ close, finish }) => (
         <>
           <div className="modal-header">{question.title}</div>

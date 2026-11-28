@@ -18,15 +18,9 @@ import { createCoalescedRun } from '../../lib/coalescedRun';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { cleanError } from '../../lib/cleanError';
 import { toEditorPageState, carriedParse, type OpenFile } from '../../editor/pageState';
-import {
-  addRecentProject,
-  openProject,
-  pendingProject,
-  previewProjectCommit,
-  resolveProjectImport,
-  stopProjectCommitPreview,
-  watchProject,
-} from '../../ipc/appBridge';
+import { addRecentProject, pendingProject, previewProjectCommit, resolveProjectImport, stopProjectCommitPreview, watchProject } from '../../ipc/appBridge';
+import { chooseSiteFolder } from '../../features/welcome/welcomeBridge';
+import { receiveOpenedFolder } from '../../features/welcome/FolderDropHost';
 import { componentEntry } from '../model/pageGestures';
 import { offerStyleMoveRecovery } from './styleMoveRecovery';
 import { windowHeld } from '../../ui/busyLock';
@@ -172,11 +166,20 @@ export function useProjectMenu(
       }
     });
     const openFromMenu = async (): Promise<void> => {
-      const picked = await openProject();
-      const next = !picked.canceled && 'projectPath' in picked ? picked.projectPath : undefined;
-      if (!next) {
+      const picked = await chooseSiteFolder();
+      if (!picked.ok) {
+        throw new Error(picked.error);
+      }
+      const choice = picked.value;
+      if (choice.kind === 'canceled') {
         return;
       }
+      // Anything but a project of its own is answered by the screen on show, as for a dropped folder.
+      if (choice.kind !== 'astro') {
+        receiveOpenedFolder(choice);
+        return;
+      }
+      const next = choice.projectPath;
       // Nothing open yet: this IS the welcome screen's own button.
       if (!projectRef.current) {
         await loadProject(next);

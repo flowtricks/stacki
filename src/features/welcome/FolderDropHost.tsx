@@ -1,7 +1,8 @@
 // Folders from outside the app, wherever the window is: dropped on the window, or handed over by the app's
 // icon, the command line or a second launch (shared/ipc/folderOpen.ts). The welcome screen and the project
 // window each mount one host and decide what an answer does there (`onChoice`): an Astro project opens, a
-// plain website is offered an Astro copy, anything else is a toast, exactly as "Open from folder".
+// plain website is offered an Astro copy, websites found inside the folder are offered to choose from
+// (nestedSites.ts), anything else is a toast, exactly as "Open from folder".
 //
 // The drop: while a drag that may carry a folder (folderDrop.ts) is over the window and no drop target under
 // the pointer has taken it (the media browser, the AI composer and the terminal call preventDefault first),
@@ -16,6 +17,9 @@ import { FOLDER_OPEN_LIMITS, type FolderOpenChoice } from '../../../shared/ipc/f
 import { droppedFolders, folderRejectionMessageKey, mayCarryFolder, type DroppedFolders } from './folderDrop';
 import { inspectFolder, subscribeOpenedFolders, takeOpenedFolders } from './welcomeBridge';
 import type { AstroCopySource } from './AstroCopyDialog';
+import { askNestedSites } from './nestedSites';
+import type { NestedSitesChoice, SiteSearchReach } from '../../../shared/ipc/astroCopy';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 /** How long the overlay outlives the last `dragover`: the browser repeats it while the pointer rests, so a gap means the drag left. */
 const DRAG_IDLE_MS = 200;
@@ -43,8 +47,11 @@ export function useFolderChoiceRoute(routes: FolderRoutes): (choice: FolderOpenC
       case 'plainWebsite':
         routes.offerCopy({ sourcePath: choice.sourcePath, parentPath: choice.parentPath, name: choice.name, homePath: choice.homePath });
         return;
+      case 'nestedSites':
+        void routeNestedSites(choice, routes, translate);
+        return;
       case 'notWebsite':
-        routes.showToast(translate('welcome.notWebsite'), 'error');
+        routes.showToast(translate(notWebsiteMessageKey(choice.searched)), 'error');
         return;
       case 'rejected':
         routes.showToast(translate(folderRejectionMessageKey(choice.reason)), 'error');
@@ -55,6 +62,33 @@ export function useFolderChoiceRoute(routes: FolderRoutes): (choice: FolderOpenC
       }
     }
   };
+}
+
+/** What "isn't a website" says: honest about a folder too large to have been searched in full. */
+export function notWebsiteMessageKey(searched: SiteSearchReach): 'welcome.notWebsite' | 'welcome.notWebsite.partial' {
+  return searched === 'all' ? 'welcome.notWebsite' : 'welcome.notWebsite.partial';
+}
+
+// Websites inside the folder: the person picks, then the pick opens as any folder of its kind would.
+async function routeNestedSites(choice: NestedSitesChoice, routes: FolderRoutes, translate: Translator): Promise<void> {
+  if (choice.searched === 'part') {
+    routes.showToast(translate('welcome.nested.partial'), 'info');
+  }
+  const answer = await askNestedSites(choice, translate);
+  switch (answer.kind) {
+    case 'open':
+      routes.open(answer.projectPath);
+      return;
+    case 'copy':
+      routes.offerCopy(answer.offer);
+      return;
+    case 'canceled':
+      return;
+    default: {
+      const exhaustive: never = answer;
+      return exhaustive;
+    }
+  }
 }
 
 export function FolderDropHost({ onChoice, showToast }: { readonly onChoice: (choice: FolderOpenChoice) => void; readonly showToast: ShowToast }) {
@@ -219,7 +253,8 @@ function listenForOpenedFolders(handler: (choice: FolderOpenChoice) => void): ()
   };
 }
 
-function receiveOpenedFolder(choice: FolderOpenChoice): void {
+/** Hands a folder's answer to the screen on show, as for a folder that arrives from outside: File > Open Project uses it. */
+export function receiveOpenedFolder(choice: FolderOpenChoice): void {
   if (inboxHandler !== undefined) {
     inboxHandler(choice);
     return;

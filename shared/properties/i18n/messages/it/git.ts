@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}" è il branch a cui tutto ritorna. Eliminandolo il progetto rimarrebbe senza la sua linea di lavoro principale.',
   'git.error.deleteWorktree': '"{branch}" è in uso in un altro worktree ({path}). Chiudi o cambia prima quello.',
   'git.error.detachedHead': 'Non sei su un branch, quindi non c’è nulla da inviare o scaricare. Passa prima a un branch.',
+  'git.error.folderNotInVersion': 'In quella versione la cartella di questo sito non esisteva, quindi non c’è nulla da mostrare o ripristinare.',
   'git.error.identityMissing': 'Git non sa ancora chi sei. Imposta nome ed email (git config --global user.name e user.email), poi salva di nuovo.',
   'git.error.locked':
     'Un’altra operazione Git è ancora in corso in questo progetto. Attendi un momento e riprova; se non finisce mai, chiudi gli altri strumenti Git.',

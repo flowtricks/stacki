@@ -102,10 +102,6 @@ export function pendingProject(): Promise<string | undefined> {
   return window.avb.pendingProject().then((input) => optional(pathText)(input));
 }
 
-export function openProject(): Promise<IpcResults['project:openDialog']> {
-  return window.avb.openProjectDialog().then(parseProjectDialog);
-}
-
 export function readAppSettings(): Promise<{ readonly sound: boolean }> {
   return window.avb.settings().then((input) => {
     const sound = record(input)['sound'];
@@ -513,25 +509,6 @@ function parseDevProbe(input: unknown): IpcResults['dev:probe'] {
     throw new Error('Dev probe status must be an integer');
   }
   return { ok: boolean(value['ok']), status: Number(status) };
-}
-
-function parseProjectDialog(input: unknown): IpcResults['project:openDialog'] {
-  // Legacy bridges returned null when the native dialog was cancelled.
-  if (input === null) {
-    return { canceled: true };
-  }
-  const value = record(input);
-  if (value['canceled'] === true) {
-    return { canceled: true };
-  }
-  if (value['projectPath'] !== undefined) {
-    return { canceled: false, projectPath: pathText(value['projectPath']) };
-  }
-  if (value['error'] !== undefined) {
-    const errorRef = parseOptionalMessageRef(value['errorRef']);
-    return errorRef === undefined ? { canceled: false, error: text(value['error']) } : { canceled: false, error: text(value['error']), errorRef };
-  }
-  throw new Error('Project dialog result must contain a project path, error, or cancellation');
 }
 
 function parseUsageFile(input: unknown): WireUsageFile {

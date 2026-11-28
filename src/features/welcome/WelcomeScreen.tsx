@@ -11,7 +11,7 @@ import { railScrollbarFor, watchRailEdges } from './recentRail';
 import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
 import AstroCopyDialog, { announceAstroCopy, type AstroCopySource } from './AstroCopyDialog';
-import { FolderDropHost, useFolderChoiceRoute } from './FolderDropHost';
+import { FolderDropHost, notWebsiteMessageKey, useFolderChoiceRoute } from './FolderDropHost';
 
 interface WelcomeScreenProps {
   readonly onOpen: (projectPath: string) => void;
@@ -26,9 +26,9 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
   const [starterDirectory, setStarterDirectory] = useState<string | undefined>(undefined);
   const [copySource, setCopySource] = useState<AstroCopySource | undefined>(undefined);
   const recent = useRecentProjects(showToast);
-  const actions = useWelcomeActions(onOpen, setError, setNewProjectParent, setStarterDirectory, setCopySource);
   // A folder dropped on the window or on the app's icon: what "Open from folder" does with the same folder.
   const routeFolder = useFolderChoiceRoute({ open: onOpen, offerCopy: setCopySource, showToast });
+  const actions = useWelcomeActions(onOpen, routeFolder, setError, setNewProjectParent, setStarterDirectory, setCopySource);
 
   return (
     <div className="welcome">
@@ -49,6 +49,10 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           onOpen={(directory) => {
             setCloning(false);
             onOpen(directory);
+          }}
+          onNested={(choice) => {
+            setCloning(false);
+            routeFolder(choice);
           }}
         />
       )}
@@ -91,13 +95,15 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
 
 function useWelcomeActions(
   onOpen: WelcomeScreenProps['onOpen'],
+  routeFolder: ReturnType<typeof useFolderChoiceRoute>,
   setError: React.Dispatch<React.SetStateAction<string | undefined>>,
   setNewProjectParent: React.Dispatch<React.SetStateAction<string | undefined>>,
   setStarterDirectory: React.Dispatch<React.SetStateAction<string | undefined>>,
   setCopySource: React.Dispatch<React.SetStateAction<AstroCopySource | undefined>>,
 ) {
   const translate = useTranslate();
-  // An Astro project opens; a plain website folder is offered an Astro copy; anything else is a toast.
+  // An Astro project opens; websites inside the folder are offered to choose from; a plain website folder is
+  // offered an Astro copy; anything else is a toast.
   const openExisting = async (): Promise<void> => {
     setError(undefined);
     const result = await chooseSiteFolder();
@@ -115,8 +121,11 @@ function useWelcomeActions(
       case 'plainWebsite':
         setCopySource({ sourcePath: choice.sourcePath, parentPath: choice.parentPath, name: choice.name, homePath: choice.homePath });
         return;
+      case 'nestedSites':
+        routeFolder(choice);
+        return;
       case 'notWebsite':
-        setError(translate('welcome.notWebsite'));
+        setError(translate(notWebsiteMessageKey(choice.searched)));
         return;
       default: {
         const exhaustive: never = choice;

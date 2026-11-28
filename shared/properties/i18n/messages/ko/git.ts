@@ -150,6 +150,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}"은(는) 모든 작업이 다시 합쳐지는 브랜치입니다. 삭제하면 프로젝트의 메인 작업 줄기가 사라집니다.',
   'git.error.deleteWorktree': '"{branch}"이(가) 다른 worktree({path})에서 체크아웃되어 있습니다. 먼저 그 worktree를 닫거나 전환하세요.',
   'git.error.detachedHead': '브랜치에 있지 않아 보내거나 가져올 항목이 없습니다. 먼저 브랜치로 전환하세요.',
+  'git.error.folderNotInVersion': '해당 버전에는 이 웹사이트의 폴더가 없어 보여주거나 복원할 항목이 없습니다.',
   'git.error.identityMissing': 'Git이 아직 사용자를 알지 못합니다. 이름과 이메일(git config --global user.name 및 user.email)을 설정한 후 다시 저장하세요.',
   'git.error.locked': '이 프로젝트에서 다른 Git 작업이 아직 실행 중입니다. 잠시 후 다시 시도하세요. 끝나지 않으면 다른 Git 도구를 닫으세요.',
   'git.error.mergeBranchChanged': '현재 브랜치가 변경되었습니다. 병합을 다시 열어 검토하세요.',

@@ -16,7 +16,9 @@ import { commandNeedsShell, sameFilesystemPath } from '../lib/platform';
 import { createKeyedQueue } from '../lib/serialQueue';
 import type { DevServer } from '../lib/mainTypes';
 import { SHORT_COMMAND, errorMessage, parseOptionalString, parseRecord, readJson, toPosix } from '../lib/mainHelpers';
-import { localAstroBin } from '../project/projectFiles';
+import { resolveAstroBin } from '../project/projectFiles';
+import { astroManifestPath, usesYarnPlugAndPlay } from '../lib/installFolders';
+import { translateMain } from '../lib/mainLocale';
 import { findFreePort, nodeCliCommand, resolveNodeBin, run, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
 import { previewSupportFiles, renderComponentPreviewPage } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
@@ -647,20 +649,24 @@ export class DevServers {
       );
     }
 
-    if (!fs.existsSync(localAstroBin(projectPath))) {
-      // Dependencies missing or incomplete — install with the right PM first.
-      await installDependencies(this.host, projectPath);
-      assertActive();
-      this.host.send('progress', PROGRESS_CLEARED);
-      if (!fs.existsSync(localAstroBin(projectPath))) {
-        throw new Error(
-          'astro is not installed in this project (no node_modules/.bin/astro after install). ' + 'Is astro listed in package.json dependencies?',
-        );
-      }
+    const found = resolveAstroBin(projectPath);
+    if (found !== undefined) {
+      return found;
     }
-
+    // Dependencies missing or incomplete — install with the right PM first. In a workspace this installs the whole
+    // workspace, and astro may land at its root.
+    await installDependencies(this.host, projectPath);
+    assertActive();
+    this.host.send('progress', PROGRESS_CLEARED);
     // Asked again, not remembered: which file it is depends on what the install made.
-    return localAstroBin(projectPath);
+    const installed = resolveAstroBin(projectPath);
+    if (installed === undefined) {
+      if (usesYarnPlugAndPlay(projectPath)) {
+        throw new Error(translateMain('error.project.yarnPlugAndPlay'));
+      }
+      throw new Error('astro is not installed in this project (no node_modules/.bin/astro after install). ' + 'Is astro listed in package.json dependencies?');
+    }
+    return installed;
   }
 
   private async failureDetail(projectPath: string, localBin: string, startedAtMs: number): Promise<string> {
@@ -749,14 +755,16 @@ export function registerDevServerHandlers({
     let astroVersion: string | undefined = undefined;
     let requires: string | undefined = undefined;
     try {
-      const pkg = parseRecord(readJson(path.join(projectPath, 'node_modules', 'astro', 'package.json')));
+      const manifest = astroManifestPath(projectPath);
+      const pkg = manifest === undefined ? {} : parseRecord(readJson(manifest));
       astroVersion = parseOptionalString(pkg['version']) || undefined;
       requires = parseOptionalString(toRecord(pkg['engines'])?.['node']) || undefined;
     } catch {
       /* astro not installed — reported as its own kind below */
     }
 
-    const hasDeps = fs.existsSync(path.join(projectPath, 'node_modules'));
+    // The preview's own folder under node_modules is not an install, and a workspace installs at its root.
+    const hasDeps = astroManifestPath(projectPath) !== undefined;
     const nodeOk = nodeVersion ? satisfiesRange(nodeVersion, requires) : false;
 
     let kind = 'unknown';

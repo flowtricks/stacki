@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '“{branch}” is de branch waar alles naar terugkeert. Verwijderen zou het project zonder hoofdlijn van het werk achterlaten.',
   'git.error.deleteWorktree': '“{branch}” is uitgecheckt in een andere worktree ({path}). Sluit of verlaat die eerst.',
   'git.error.detachedHead': 'Je zit niet op een branch, dus er is niets om te versturen of te pullen. Schakel eerst over naar een branch.',
+  'git.error.folderNotInVersion': 'De map van deze website bestond nog niet in die versie, dus er valt niets te tonen of te herstellen.',
   'git.error.identityMissing':
     'Git weet nog niet wie je bent. Stel je naam en e-mailadres in (git config --global user.name en user.email) en sla dan opnieuw op.',
   'git.error.locked':

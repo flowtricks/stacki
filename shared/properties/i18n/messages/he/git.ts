@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}" הוא הענף שאליו הכול חוזר. מחיקתו תותיר את הפרויקט בלי קו העבודה הראשי שלו.',
   'git.error.deleteWorktree': '"{branch}" נמצא ב-checkout בעץ עבודה אחר ({path}). יש לסגור אותו או לעבור ממנו קודם.',
   'git.error.detachedHead': 'אין לך ענף נוכחי, ולכן אין מה לשלוח או למשוך. יש לעבור קודם לענף.',
+  'git.error.folderNotInVersion': 'התיקייה של האתר לא הייתה קיימת בגרסה הזו, ולכן אין מה להציג או לשחזר.',
   'git.error.identityMissing': 'Git עדיין לא יודע מי אתה. יש להגדיר שם ואימייל (git config --global user.name ו-user.email) ולשמור שוב.',
   'git.error.locked': 'פעולת Git אחרת עדיין רצה בפרויקט הזה. יש להמתין רגע ולנסות שוב; אם היא לא מסתיימת, אפשר לסגור כלי Git אחרים.',
   'git.error.mergeBranchChanged': 'הענף הנוכחי השתנה. יש לפתוח את המיזוג שוב כדי לבדוק אותו מחדש.',

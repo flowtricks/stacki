@@ -135,4 +135,6 @@ export const messages = {
   'error.terminal.outsideProject': 'ターミナルは現在のプロジェクト内でのみ開けます。',
   'error.thumbnails.devServerSlow': '開発サーバーが時間内に起動しませんでした',
   'error.thumbnails.noDependencies': 'このプロジェクトにはまだ依存関係がインストールされていません。',
+  'error.project.yarnPlugAndPlay':
+    'このプロジェクトのパッケージは Yarn Plug’n’Play でインストールされていて、Stacki はまだプレビューできません。.yarnrc.yml の nodeLinker を node-modules にして、インストールし直してから開き直してください。',
 } as const satisfies CatalogOf<MessageKey>;

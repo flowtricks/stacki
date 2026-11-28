@@ -135,4 +135,6 @@ export const messages = {
   'error.terminal.outsideProject': 'Terminal yalnızca geçerli proje içinde açılabilir.',
   'error.thumbnails.devServerSlow': 'geliştirme sunucusu zamanında başlamadı',
   'error.thumbnails.noDependencies': 'Bu projede henüz bağımlılık yüklü değil.',
+  'error.project.yarnPlugAndPlay':
+    'Bu projenin paketleri Yarn Plug’n’Play ile kurulmuş; Stacki bunun önizlemesini henüz gösteremiyor. .yarnrc.yml dosyasında nodeLinker değerini node-modules yapın, yeniden kurun ve projeyi tekrar açın.',
 } as const satisfies CatalogOf<MessageKey>;

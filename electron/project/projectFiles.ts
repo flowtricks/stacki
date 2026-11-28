@@ -5,6 +5,8 @@ import { toRecord } from '../../shared/core/record';
 import * as path from 'path';
 import { PAGE_MD_RE } from '../documents/pageRequests';
 import * as fs from 'fs';
+import * as os from 'os';
+import { installFolders } from '../lib/installFolders';
 import { toPosix, readJson, parseRecord, parseOptionalString } from '../lib/mainHelpers';
 import { ASTRO_CONFIG_FILES } from '../../shared/properties/astroSourceDirectory';
 import { walkFolderSliced, type WalkProblem } from './projectWalk';
@@ -136,6 +138,21 @@ export function localAstroBin(projectPath: string, platform: NodeJS.Platform = p
   }
   const executable = path.join(folder, 'astro.exe');
   return !fs.existsSync(shim) && fs.existsSync(executable) ? executable : shim;
+}
+
+/**
+ * The `astro` command this project runs, or undefined when none is installed for it. The project's own comes first
+ * and costs one existence check; only without one are the folders its workspace installs into asked.
+ */
+export function resolveAstroBin(projectPath: string, platform: NodeJS.Platform = process.platform, homePath: string = os.homedir()): string | undefined {
+  const own = localAstroBin(projectPath, platform);
+  if (fs.existsSync(own)) {
+    return own;
+  }
+  return installFolders(projectPath, homePath)
+    .slice(1)
+    .map((directory) => localAstroBin(directory, platform))
+    .find((candidate) => fs.existsSync(candidate));
 }
 
 // Astro has to be installed for a page to be rendered at all; without it the

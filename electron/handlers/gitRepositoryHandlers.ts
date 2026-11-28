@@ -2,12 +2,12 @@ import { mkdirSync, readdirSync, rmdirSync } from 'node:fs';
 import { readPublishConfig } from '../project/publishConfig';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { list, record } from '../../shared/core/boundary';
 import { parseGitHubRepository, parseGitHubRepositories } from '../../shared/ipc/githubRepository';
 import { run } from '../lib/nodeTools';
-import { isAstroProject } from '../project/projectFiles';
+import { siteFolderChoice } from '../project/folderOpen';
 import { connectRepository } from '../git/githubRepository';
 import { git } from '../lib/nodeTools';
 import type { MainHost } from './mainHost';
@@ -59,7 +59,12 @@ export function registerGitRepositoryHandlers({ ipcMain: plainIpcMain, showOpenD
         timeout: 180000,
       }),
     );
-    if (!isAstroProject(projectPath)) {
+    // The question "Open from folder" asks, so a repository whose site sits in a folder of its own is found.
+    const choice = await siteFolderChoice(resolve(projectPath));
+    if (choice.kind === 'nestedSites') {
+      return { canceled: false as const, nested: choice };
+    }
+    if (choice.kind !== 'astro') {
       const cloneNotAstro = described('git.error.cloneNotAstro', { path: projectPath });
       return { canceled: false as const, error: cloneNotAstro.message, errorRef: cloneNotAstro.messageRef };
     }

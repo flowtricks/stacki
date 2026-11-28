@@ -120,6 +120,7 @@ import { attachmentThumbnail } from './handlers/ai/attachmentThumbnail';
 import { DeployLinkStore } from './project/deployLinkStore';
 import { createGitHubIdentity, registerRoleHandlers } from './handlers/roleAccess';
 import { createFolderOpenQueue, folderOpenChoice, launchFolderArguments } from './project/folderOpen';
+import { createSerialQueue } from './lib/serialQueue';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
 // Desktop does not enforce project roles (.stacki/roles.json): it previews them, and only Studio enforces
@@ -964,9 +965,19 @@ function send(channel: string, payload?: unknown) {
 // Folders from outside the app: the icon, the command line, a second launch (electron/project/folderOpen.ts)
 // ---------------------------------------------------------------------------
 
+// A folder with sites inside takes a search to answer, so answers go out one at a time, in the order the folders came.
+const answerInTurn = createSerialQueue();
 const folderQueue = createFolderOpenQueue((folder) => {
-  send('project:folderOpened', folderOpenChoice(folder));
   bringWindowForward();
+  answerInTurn(async () => {
+    const choice = await folderOpenChoice(folder);
+    if (folderQueue.listening()) {
+      send('project:folderOpened', choice);
+    } else {
+      // The page went away while the folder was read: the next one takes it.
+      folderQueue.add(folder);
+    }
+  }).catch((error: unknown) => console.error('[folder-open] the folder could not be read:', folder, error));
 });
 
 function receiveFolder(folder: string): void {
@@ -1014,7 +1025,10 @@ app.on('second-instance', (_event, argv, workingDirectory) => {
 for (const folder of launchFolderArguments(process.argv, { skip: process.defaultApp ? 2 : 1, workingDirectory: process.cwd() })) {
   receiveFolder(folder);
 }
-ipcMain.handle('project:takeOpenedFolders', () => folderQueue.take().map((folder) => folderOpenChoice(folder)));
+ipcMain.handle('project:takeOpenedFolders', () => {
+  const folders = folderQueue.take();
+  return answerInTurn(() => Promise.all(folders.map((folder) => folderOpenChoice(folder))));
+});
 
 function showMessageBox(parent: Window | undefined, options: MessageBoxOptions) {
   return parent ? dialog.showMessageBox(parent, options) : dialog.showMessageBox(options);

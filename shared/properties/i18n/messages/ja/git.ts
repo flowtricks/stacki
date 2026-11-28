@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '「{branch}」はすべての作業が戻ってくるブランチです。削除するとプロジェクトのメインの作業ラインがなくなります。',
   'git.error.deleteWorktree': '「{branch}」は別のワークツリー（{path}）でチェックアウトされています。先にそちらを閉じるか切り替えてください。',
   'git.error.detachedHead': 'ブランチ上にいないため、送信するものも取得するものもありません。先にブランチへ切り替えてください。',
+  'git.error.folderNotInVersion': 'そのバージョンにはこのウェブサイトのフォルダがなかったため、表示や復元はできません。',
   'git.error.identityMissing':
     'Git がまだあなたを認識していません。名前とメールアドレス（git config --global user.name と user.email）を設定してから、もう一度保存してください。',
   'git.error.locked':

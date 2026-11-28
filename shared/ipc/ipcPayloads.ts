@@ -776,7 +776,6 @@ export const IPC_PAYLOADS = {
     packageManager: optional(parseCreatePackageManager),
   }),
   'project:injectedRoutes': object({ ...project }),
-  'project:openDialog': nothing,
   // The Welcome screen's "Open from folder" and the Astro copy of a plain website (shared/ipc/astroCopy.ts).
   'project:openSiteDialog': nothing,
   'project:checkAstroCopy': parseAstroCopyRequest,

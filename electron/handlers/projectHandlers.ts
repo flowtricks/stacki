@@ -3,14 +3,12 @@
 
 import { gitErrorDetail } from '../git/git';
 import { toRecord } from '../../shared/core/record';
-import { assert } from '../../shared/core/assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { writeNewProjectDefaults } from '../project/newProjectDefaults';
 import { createStarter, newSiteDirectory, runCreateCommand, startSiteHistory, STARTERS } from '../project/starter';
 import { ensureToolPath, run } from '../lib/nodeTools';
-import { isAstroProject } from '../project/projectFiles';
 import { detectPackageManager, installArguments } from '../project/packageManager';
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
@@ -21,31 +19,9 @@ import { ASTRO_COPY_LIMITS, type AstroCopyInstall, type AstroCopyReply, type Sit
 import { err, ok } from '../../shared/core/result';
 
 export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
-  registerProjectOpenDialogHandlers(host);
   registerProjectCreateAstroHandlers(host);
   registerProjectCreateStarterHandlers(host);
   registerAstroCopyHandlers(host);
-}
-
-function registerProjectOpenDialogHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
-  ipcMain.handle('project:openDialog', async () => {
-    const result = await showOpenDialog({
-      title: translateMain('dialog.open.project.title'),
-      properties: ['openDirectory'],
-    });
-    if (result.canceled || !result.filePaths.length) {
-      return { canceled: true as const };
-    }
-    const directory = result.filePaths[0];
-    assert(directory !== undefined, 'Accepted directory dialog must have a path');
-    if (!isAstroProject(directory)) {
-      return {
-        canceled: false as const,
-        error: 'That folder does not look like an Astro project ' + '(no astro dependency or astro.config found).',
-      };
-    }
-    return { canceled: false as const, projectPath: directory };
-  });
 }
 
 function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
@@ -129,8 +105,9 @@ function registerProjectCreateStarterHandlers({ ipcMain, send }: Pick<MainHost, 
 }
 
 function registerAstroCopyHandlers({ ipcMain, send, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
-  // The Welcome screen's "Open from folder": an Astro project opens, a plain website is offered an
-  // Astro copy (shared/ipc/astroCopy.ts), and anything else is said to be neither.
+  // "Open from folder", File > Open Project and the recovery screen: an Astro project opens, sites inside the
+  // folder are offered, a plain website is offered an Astro copy (shared/ipc/astroCopy.ts), and anything else
+  // is said to be none of these.
   ipcMain.handle('project:openSiteDialog', async (): Promise<SiteFolderChoice> => {
     const result = await showOpenDialog({
       title: translateMain('dialog.open.project.title'),

@@ -148,6 +148,7 @@ export const messages = {
   'git.error.deleteTrunk': '“{branch}”是所有工作最终汇入的分支。删除它会让项目失去主线。',
   'git.error.deleteWorktree': '“{branch}”已在另一个工作树（{path}）中检出。请先关闭该工作树或在其中切换分支。',
   'git.error.detachedHead': '你当前不在任何分支上，因此没有可发送或拉取的内容。请先切换到某个分支。',
+  'git.error.folderNotInVersion': '该版本中还没有此网站的文件夹，因此没有可显示或恢复的内容。',
   'git.error.identityMissing': 'Git 还不知道你是谁。请设置你的姓名和邮箱（git config --global user.name 和 user.email），然后再次保存。',
   'git.error.locked': '此项目中仍有另一个 Git 操作在运行。请稍等片刻再试；如果一直不结束，请关闭其他 Git 工具。',
   'git.error.mergeBranchChanged': '当前分支已更改。请重新打开合并以再次检查。',

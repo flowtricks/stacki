@@ -153,6 +153,9 @@ async function restoreProject(
 ): Promise<{ ok: boolean; parked: boolean }> {
   const commitId = await resolveCommit(git, projectPath, ref);
   await requireNoUnfinishedOperation(git, projectPath);
+  // A version from before this folder existed has nothing to put back: restoring it would delete every file of the
+  // site. Asked before anything is set aside.
+  await requireFolderInVersion(git, projectPath, commitId);
   const dirty = (await git(projectPath, ['status', '--porcelain'])).stdout.trim().length > 0;
   let parked = false;
   if (dirty) {
@@ -182,6 +185,18 @@ async function restoreProject(
     await git(projectPath, ['restore', `--source=${commitId}`, '--staged', '--worktree', '--', '.']);
   }
   return { ok: true, parked };
+}
+
+async function requireFolderInVersion(git: Git, projectPath: string, commitId: string): Promise<void> {
+  const prefix = await projectPrefix(git, projectPath);
+  if (prefix === '') {
+    return;
+  }
+  try {
+    await git(projectPath, ['cat-file', '-e', `${commitId}:${prefix.replace(/\/$/, '')}`]);
+  } catch {
+    throw new ReferencedError('git.error.folderNotInVersion');
+  }
 }
 
 /**

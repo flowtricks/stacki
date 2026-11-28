@@ -36,3 +36,17 @@
   font-size: 11px;
   opacity: 0.8;
 }
+
+/* The websites found inside a picked folder (features/welcome/nestedSites.ts): there can be many, so the
+   answers scroll while the title and Cancel stay, and a long path wraps instead of widening the window. */
+.nested-sites-dialog .choice-dialog-options {
+  max-height: min(360px, 48dvh);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.nested-sites-dialog .choice-dialog-option {
+  flex-shrink: 0;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -93,6 +93,16 @@ test('clone handler creates a new Astro checkout and refuses an existing directo
     assert.equal(git(result.projectPath, ['rev-parse', 'HEAD']), git(source, ['rev-parse', 'HEAD']));
     await assert.rejects(clone({}, { repository: 'owner/site' }), /EEXIST/);
     assert.equal(fs.existsSync(path.join(result.projectPath, 'package.json')), true);
+    // A monorepo whose site sits in a folder of its own: the clone offers it rather than refusing or opening the root.
+    fs.rmSync(path.join(source, 'package.json'));
+    fs.mkdirSync(path.join(source, 'apps', 'web'), { recursive: true });
+    fs.writeFileSync(path.join(source, 'apps', 'web', 'astro.config.mjs'), 'export default {};');
+    git(source, ['add', '--all']);
+    git(source, ['commit', '--message', 'Move the site']);
+    fs.rmSync(result.projectPath, { recursive: true, force: true });
+    const monorepo = await clone({}, { repository: 'owner/site' });
+    assert.equal(monorepo.canceled, false);
+    assert.deepEqual(monorepo.nested.sites, [{ projectPath: path.join(parent, 'site', 'apps', 'web'), relative: 'apps/web', name: undefined }]);
   } finally {
     tools.run = originalRun;
     fs.rmSync(directory, { recursive: true, force: true });

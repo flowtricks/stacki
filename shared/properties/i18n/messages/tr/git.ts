@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}", her şeyin döndüğü dal. Silinirse proje ana çalışma hattından yoksun kalır.',
   'git.error.deleteWorktree': '"{branch}" başka bir çalışma ağacında ({path}) açık. Önce onu kapatın veya başka bir dala geçirin.',
   'git.error.detachedHead': 'Bir dalda değilsiniz, bu yüzden gönderilecek veya çekilecek bir şey yok. Önce bir dala geçin.',
+  'git.error.folderNotInVersion': 'Bu web sitesinin klasörü o sürümde yoktu, bu yüzden gösterilecek veya geri yüklenecek bir şey yok.',
   'git.error.identityMissing':
     'Git henüz kim olduğunuzu bilmiyor. Adınızı ve e-postanızı ayarlayın (git config --global user.name ve user.email), ardından yeniden kaydedin.',
   'git.error.locked': 'Bu projede başka bir Git işlemi hâlâ çalışıyor. Biraz bekleyip yeniden deneyin; hiç bitmezse diğer Git araçlarını kapatın.',

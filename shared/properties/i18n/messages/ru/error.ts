@@ -143,4 +143,6 @@ export const messages = {
   'error.terminal.outsideProject': 'Терминал можно открыть только внутри текущего проекта.',
   'error.thumbnails.devServerSlow': 'сервер разработки не запустился вовремя',
   'error.thumbnails.noDependencies': 'В этом проекте ещё не установлены зависимости.',
+  'error.project.yarnPlugAndPlay':
+    'Пакеты проекта установлены через Yarn Plug’n’Play, а Stacki пока не умеет показывать такой предпросмотр. Задайте в .yarnrc.yml nodeLinker: node-modules, переустановите пакеты и откройте проект снова.',
 } as const satisfies CatalogOf<MessageKey>;

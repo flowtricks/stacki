@@ -6,8 +6,14 @@ import { useRef, useState } from 'react';
 import RepositoryPicker from '../../ui/RepositoryPicker';
 import { cloneRepository } from '../../ipc/repositoryBridge';
 import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
+import type { NestedSitesChoice } from '../../../shared/ipc/astroCopy';
 
-export default function CloneRepositoryModal(props: { readonly onClose: () => void; readonly onOpen: (projectPath: string) => void }) {
+export default function CloneRepositoryModal(props: {
+  readonly onClose: () => void;
+  readonly onOpen: (projectPath: string) => void;
+  /** The repository's website sits in a folder of its own: the screen asks which to open. */
+  readonly onNested: (choice: NestedSitesChoice) => void;
+}) {
   const translate = useTranslate();
   const [repository, setRepository] = useState('');
   const [state, setState] = useState<{ readonly kind: 'ready'; readonly error?: string } | { readonly kind: 'cloning' }>({ kind: 'ready' });
@@ -32,6 +38,8 @@ export default function CloneRepositoryModal(props: { readonly onClose: () => vo
         setState({ kind: 'ready' });
       } else if ('error' in result.value) {
         setState({ kind: 'ready', error: translateReference(result.value.error, result.value.errorRef, translate) });
+      } else if ('nested' in result.value) {
+        props.onNested(result.value.nested);
       } else {
         props.onOpen(result.value.projectPath);
       }

@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}" is the branch everything comes back to. Deleting it would leave the project without its main line of work.',
   'git.error.deleteWorktree': '"{branch}" is checked out in another worktree ({path}). Close or switch that one first.',
   'git.error.detachedHead': 'You are not on a branch, so there is nothing to send or pull. Switch to a branch first.',
+  'git.error.folderNotInVersion': 'This website’s folder didn’t exist in that version, so there is nothing to show or restore.',
   'git.error.identityMissing': 'Git doesn’t know who you are yet. Set your name and email (git config --global user.name and user.email), then save again.',
   'git.error.locked': 'Another Git operation is still running in this project. Wait a moment and try again; if it never finishes, close other Git tools.',
   'git.error.mergeBranchChanged': 'The current branch changed. Reopen the merge to review it again.',

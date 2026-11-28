@@ -140,4 +140,6 @@ export const messages = {
   'error.terminal.outsideProject': 'אפשר לפתוח טרמינל רק בתוך הפרויקט הנוכחי.',
   'error.thumbnails.devServerSlow': 'שרת הפיתוח לא עלה בזמן',
   'error.thumbnails.noDependencies': 'בפרויקט הזה עדיין לא הותקנו תלויות.',
+  'error.project.yarnPlugAndPlay':
+    'החבילות של הפרויקט הותקנו עם Yarn Plug’n’Play, ו-Stacki עדיין לא יכולה להציג לו תצוגה מקדימה. הגדירו את nodeLinker ל-node-modules בקובץ ‎.yarnrc.yml, התקינו שוב ופתחו מחדש.',
 } as const satisfies CatalogOf<MessageKey>;

@@ -155,6 +155,7 @@ export const messages = {
   'git.error.deleteTrunk': '„{branch}“ ist der Branch, zu dem alles zurückkehrt. Würdest du ihn löschen, hätte das Projekt keine Hauptlinie mehr.',
   'git.error.deleteWorktree': '„{branch}“ ist in einem anderen Worktree ({path}) ausgecheckt. Schließe oder wechsle diesen zuerst.', // review
   'git.error.detachedHead': 'Du bist auf keinem Branch, daher gibt es nichts zu senden oder zu pullen. Wechsle zuerst zu einem Branch.',
+  'git.error.folderNotInVersion': 'Den Ordner dieser Website gab es in dieser Version noch nicht. Es gibt nichts anzuzeigen oder wiederherzustellen.',
   'git.error.identityMissing':
     'Git weiß noch nicht, wer du bist. Lege deinen Namen und deine E-Mail-Adresse fest (git config --global user.name und user.email) und speichere dann erneut.',
   'git.error.locked':

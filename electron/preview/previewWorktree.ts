@@ -39,6 +39,8 @@ import { ensureExcluded } from '../lib/projectExclusions';
 import fs from 'fs';
 import path from 'path';
 import type { Git } from '../git/git';
+import { projectPrefix } from '../git/gitState';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 
 /** Where the preview checkout lives, and the directory git must not see. */
 const PREVIEW_DIRECTORY = path.join('.stacki', 'preview');
@@ -78,12 +80,25 @@ async function ensureWorktree(git: Git, { projectPath, ref }: { readonly project
     // node_modules stays whether or not that commit ignores it: the running server's config is in it
     // (preview/imageCacheConfig.ts).
     await git(directory, ['clean', '-qfd', '-e', 'node_modules']);
-    return directory;
+    return siteInCheckout(git, projectPath, directory);
   }
 
   fs.mkdirSync(path.dirname(directory), { recursive: true });
   await git(projectPath, ['worktree', 'add', '--detach', '--force', directory, ref]);
-  return directory;
+  return siteInCheckout(git, projectPath, directory);
+}
+
+// A worktree holds the whole repository. A site in a folder of its own is served from that folder of the checkout.
+async function siteInCheckout(git: Git, projectPath: string, checkout: string): Promise<string> {
+  const prefix = await projectPrefix(git, projectPath);
+  if (prefix === '') {
+    return checkout;
+  }
+  const site = path.resolve(checkout, prefix);
+  if (!fs.existsSync(site)) {
+    throw new ReferencedError('git.error.folderNotInVersion');
+  }
+  return site;
 }
 
 async function isRegistered(git: Git, projectPath: string, directory: string): Promise<boolean> {

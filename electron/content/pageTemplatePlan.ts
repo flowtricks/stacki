@@ -22,6 +22,7 @@ import { cmsSourcePath } from '../lib/contentPaths';
 import { toPosix } from '../lib/mainHelpers';
 import { CONTENT_CONFIG_PATH, addCollectionToConfig, createAstroCollection } from './astroCollectionConfig';
 import { configPathOf } from './contentConfig';
+import { astroManifestPath } from '../lib/installFolders';
 import { headingField, pageTemplateText, type CollectionFacts, type EmDashFacts } from './pageTemplateSource';
 import { detectEmDash } from './emdashProject';
 import { headingFieldOf, type EmDashCollection } from '../../shared/properties/emdash';
@@ -199,7 +200,9 @@ function newCollectionChanges(projectPath: string, name: string): readonly PageT
 // since Stacki's own new content configs already need it.
 function astroMajor(projectPath: string): number {
   try {
-    const manifest: unknown = JSON.parse(fs.readFileSync(path.join(projectPath, 'node_modules', 'astro', 'package.json'), 'utf8'));
+    // A workspace installs at its root, so the project's own folder is not the only place astro sits.
+    const file = astroManifestPath(projectPath) ?? path.join(projectPath, 'node_modules', 'astro', 'package.json');
+    const manifest: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     const version = toRecord(manifest)?.['version'];
     const major = typeof version === 'string' ? Number.parseInt(version, 10) : Number.NaN;
     return Number.isSafeInteger(major) ? major : Number.MAX_SAFE_INTEGER;
