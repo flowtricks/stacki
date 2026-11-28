@@ -263,6 +263,6 @@ test('ways round the check are refused', async (context) => {
 
 test('an idle page compiler does not hold the process open', async () => {
   await parseAstro('<h1>Title</h1>');
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await new Promise((resolve) => setImmediate(resolve));
   assert.ok(!process.getActiveResourcesInfo().includes('MessagePort'), 'The compiler thread lets the process exit once nothing waits on it');
 });
