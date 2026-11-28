@@ -6,6 +6,7 @@
 //   (macOS, Linux; into ~/.local/bin, no sudo), or `irm https://claude.ai/install.ps1 | iex` in
 //   PowerShell on Windows. Status: `claude auth status` (JSON). Sign in: `claude auth login
 //   --claudeai`. Sign out: `claude auth logout`.
+//   Update: `claude update`, only when the person asks: an old Claude Code lists old models.
 // - Codex. Install: `npm install --global --prefix ~/.local @openai/codex` (into ~/.local/bin, no
 //   sudo; on Windows npm's own global folder). Status: `codex login status`. Sign in: `codex login`
 //   (ChatGPT). Sign out: `codex logout`.
@@ -111,6 +112,8 @@ interface AgentSetupCommands {
   readonly status: readonly string[];
   readonly signIn: readonly string[];
   readonly signOut: readonly string[];
+  /** The CLI's own update command; undefined when the panel offers no update. */
+  readonly update: readonly string[] | undefined;
   /** Hosts a sign-in page may be on; any other address the CLI prints is not opened. */
   readonly signInHosts: readonly string[];
   /** Reads what a status command that ran to its end printed. */
@@ -142,6 +145,7 @@ export const AGENT_SETUP: Readonly<Record<AgentId, AgentSetupCommands>> = {
     status: [...claudeSettingsArguments(), 'auth', 'status'],
     signIn: [...claudeSettingsArguments(), 'auth', 'login', '--claudeai'],
     signOut: [...claudeSettingsArguments(), 'auth', 'logout'],
+    update: [...claudeSettingsArguments({ disableAllHooks: true }), 'update'],
     signInHosts: ['claude.ai', 'claude.com', 'anthropic.com', 'console.anthropic.com', 'platform.claude.com'],
     readStatus: readClaudeStatus,
   },
@@ -153,6 +157,7 @@ export const AGENT_SETUP: Readonly<Record<AgentId, AgentSetupCommands>> = {
     status: ['login', 'status'],
     signIn: ['login'],
     signOut: ['logout'],
+    update: undefined,
     signInHosts: ['auth.openai.com', 'chatgpt.com', 'openai.com'],
     readStatus: readCodexStatus,
   },
@@ -227,6 +232,8 @@ export class AgentSetup {
   private readonly billedPerUse = new Set<AgentId>();
   /** Agents charging extra usage past their plan, with when the included usage returns (seconds; undefined unknown). */
   private readonly extraUsage = new Map<AgentId, { readonly resetsAtSeconds: number | undefined }>();
+  /** The update running for an agent, at most one each. */
+  private readonly updates = new Map<AgentId, Promise<SetupState>>();
   /** The check a permit is waiting for, so sessions starting together share one status process. */
   private readonly permits = new Map<AgentId, Promise<SessionPermit>>();
 
@@ -246,6 +253,8 @@ export class AgentSetup {
         return this.cancel(agent);
       case 'signOut':
         return this.signOut(agent);
+      case 'update':
+        return this.update(agent);
       default: {
         const exhaustive: never = action;
         return exhaustive;
@@ -694,6 +703,35 @@ export class AgentSetup {
       return this.set({ agent, step: 'failed', during: 'sign-out', ...described('ai.setupError.signOut'), details: this.attemptDetails(attempt, output) });
     }
     this.forgetBilling(agent);
+    return this.detect(agent);
+  }
+
+  /**
+   * Runs the CLI's own update, then checks the sign-in again. Whether it worked is read from the installed version
+   * afterwards (the agent's availability), never from what the command printed: a CLI installed another way can end
+   * well and change nothing. Presses made while one update runs share it.
+   */
+  private update(agent: AgentId): Promise<SetupState> {
+    const waiting = this.updates.get(agent);
+    if (waiting !== undefined) {
+      return waiting;
+    }
+    const updated = this.runUpdate(agent).finally(() => this.updates.delete(agent));
+    this.updates.set(agent, updated);
+    return updated;
+  }
+
+  private async runUpdate(agent: AgentId): Promise<SetupState> {
+    const cli = this.cli(agent);
+    const args = AGENT_SETUP[agent].update;
+    if (cli === undefined || args === undefined || this.running.has(agent)) {
+      return this.state(agent);
+    }
+    const environment = await this.agentEnvironment(agent);
+    const run = await this.collect(agent, { command: cli, args }, { timeoutMs: SETUP_LIMITS.installMsMax, environment });
+    if (run.exitCode !== 0) {
+      this.log(agent, `the update ended with code ${run.exitCode}: ${redactSignInOutput(run.output).trim()}`);
+    }
     return this.detect(agent);
   }
 

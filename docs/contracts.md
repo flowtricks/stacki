@@ -2703,11 +2703,24 @@ renderer; the mode never is, so a new chat always starts in the mode that asks f
 Bypass permissions or Full access (`isDangerousMode`) asks once per chat through `confirmDialog`. A mode
 picked before the session exists is stored with the chat (`ai:chatUpdate` `settings`) and applied after the
 asking mode. `ai:agents` returns each agent's settings as it last reported them (main keeps them in
-`userData/ai/agent-options.json`). In a trusted project, an agent that has never reported them is
-probed once in the background: a throwaway `session/new`, its config options read, then
-`session/delete`, and the result pushed on `ai:agentStatus`. So the menus list exactly what the
-person's installed Claude Code or Codex offers, with its own names. Before any report there is a
-documented fallback (`FALLBACK_OPTIONS` in agentRegistry.ts). The
+`userData/ai/agent-options.json`). In a trusted project each agent is asked once a run, in the
+background, and again when its CLI changes (another file or version): a throwaway or pre-warmed
+`session/new`, its config options read, and the result pushed on `ai:agentStatus` when it differs.
+The saved list is shown meanwhile. So the menus list exactly what the person's installed Claude Code
+or Codex offers, with its own names; Stacki holds no list of model versions. Before any report there
+is a fallback (`FALLBACK_OPTIONS` in agentRegistry.ts) that for Claude names only the CLI's aliases
+(`opus`, `fable`, `sonnet`, `haiku`), without versions.
+
+**Which Claude Code, and an old one.** The model list is the CLI's, so an old copy lists old models
+(2.1.261 stops at Opus 5, Sonnet 5 and Haiku 4.5). Stacki's search path is not in the terminal's
+order, so when the first Claude Code on it has a known version and a later one is newer, the newest is
+used (`findCli`; versions are read from the install without running it, `cliVersion.ts`). A running
+adapter is replaced when idle if the CLI is now another file. When the version in use is older than
+`cliVersionMin` (the Claude Code the pinned adapter's SDK was made for; a test holds it to the
+lockfile), the `ready` availability carries `outdatedCli` and the model menu offers "Update Claude
+Code" (`ai:setup` `update`: `claude update`, only on that press). Success is read from the installed
+version afterwards; an unchanged one is a warning toast linking the install guide. A version that
+cannot be read (the native Windows `.exe`, a wrapper script) is never called old. The
 choices ride on `ai:chatCreate` (`settings`) and are applied with `session/set_config_option` once
 the chat's session exists, after the asking mode; a setting the agent no longer offers is skipped.
 The AI channels accept the open project's root itself (`MainHost.openProject`, compared through

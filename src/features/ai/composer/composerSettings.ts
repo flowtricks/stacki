@@ -19,6 +19,8 @@ export interface ComposerSettings {
   readonly reset: () => void;
   /** Something is remembered for this agent, so "Reset to defaults" has something to do. */
   readonly canReset: boolean;
+  /** Present when the agent's installed CLI is too old to list today's models: the menu offers to update it. */
+  readonly cliUpdate?: { readonly version: string; readonly busy: boolean; readonly run: () => void };
   /** Each agent's state for the badge in the agent list; absent where nothing is known. */
   readonly agentBadges?: Readonly<Partial<Record<AgentId, 'ready' | 'sign-in' | 'not-installed' | 'installing'>>>;
 }

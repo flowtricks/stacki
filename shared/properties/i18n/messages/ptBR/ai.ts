@@ -147,6 +147,12 @@ export const messages = {
   'ai.composer.attach.remove': 'Remover anexo',
   'ai.composer.attach.total': 'Estas imagens são grandes demais para enviar juntas. Remova uma primeiro.',
   'ai.composer.attach.unsupported': 'Anexe imagens ou arquivos deste projeto.', // same
+  'ai.composer.cli.howTo': 'Como atualizar',
+  'ai.composer.cli.stillOld': 'O Claude Code continua desatualizado. Atualize-o da mesma forma que o instalou.',
+  'ai.composer.cli.update': 'Atualizar o Claude Code',
+  'ai.composer.cli.updateHint': 'O Claude Code {version} está desatualizado, por isso os modelos mais novos não aparecem',
+  'ai.composer.cli.updated': 'O Claude Code está atualizado. Novos chats mostram os modelos mais novos.',
+  'ai.composer.cli.updating': 'Atualizando o Claude Code…',
   'ai.composer.commands': 'Comandos',
   'ai.composer.default': 'Padrão',
   'ai.composer.dictate': 'Ditar',

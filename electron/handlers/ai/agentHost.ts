@@ -92,7 +92,8 @@ import { described, noticeText } from './aiMessages';
 import { stopProcessTree } from '../../lib/nodeTools';
 import { AcpConnection, METHOD_NOT_FOUND, type AcpAnswer, type AcpRequestFailure } from './acpConnection';
 import { installAdapter, runNpm, type NpmRunner } from './agentInstaller';
-import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedEntry, type CliFileSystem } from './agentRegistry';
+import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedCliVersion, installedEntry, realCliFileSystem, type CliFileSystem } from './agentRegistry';
+import { isOlderVersion } from './cliVersion';
 import { realFileSystem, runnableCliPath } from './windowsCommand';
 import { ChangeLedger, parseLedgerTurns, serializeLedger, type LedgerDiff, type LedgerFiles, type TrackingMode } from './changeLedger';
 import { chatOption, CompactionCalls, eventsForUpdate, toolPaths } from './chatEvents';
@@ -216,15 +217,23 @@ class AgentProcess {
   /** When a turn or startup work last finished here (the host's clock): the order idle processes are evicted in. */
   lastUsedAt = 0;
 
+  readonly agent: AgentId;
+  readonly root: string;
+  /** The CLI file the adapter was told to run, as `findCli` answered it. */
+  readonly cli: string;
+
   constructor(
-    readonly agent: AgentId,
-    readonly root: string,
+    identity: { readonly agent: AgentId; readonly root: string; readonly cli: string },
     readonly child: ChildProcess,
     readonly connection: AcpConnection,
     readonly ready: Promise<Result<AcpInitialize, AiFailure>>,
     /** Session id → the chat it belongs to. */
     readonly sessions: Map<string, ChatId>,
-  ) {}
+  ) {
+    this.agent = identity.agent;
+    this.root = identity.root;
+    this.cli = identity.cli;
+  }
 
   noteStderr(chunk: string): void {
     this.stderr = (this.stderr + chunk).slice(-AI_LIMITS.stderrCharsMax);
@@ -509,6 +518,8 @@ export class AgentHost {
   private remembered: RememberedSettings | undefined;
   /** Agents being asked for their settings now, by process key: one probe at a time each. */
   private readonly probing = new Set<string>();
+  /** The CLI (`cliIdentity`) each agent's settings were read from in this run. */
+  private readonly listedWith = new Map<AgentId, string>();
   /** The one empty session an agent started early, waiting for the next new chat (sessionPool.ts). */
   private readonly slot = new WarmSlot<AgentProcess>();
   private readonly timings = new StartupTimings();
@@ -545,10 +556,14 @@ export class AgentHost {
     }
     const trusted = this.deps.store.readIndex(root).trusted;
     const options = AGENT_IDS.map((agent) => ({ agent, options: this.optionsOf(agent) }));
-    // An agent that has never reported its settings is asked once, in the background, so the
-    // new-chat row lists its real models and efforts. Only in a trusted project: nothing runs before.
+    // Each agent is asked for its settings once a run, in the background, and again when its CLI changed: the model
+    // list is the CLI's own, so a saved one goes stale with an update or a new model. The saved one is shown meanwhile.
+    // Only in a trusted project: nothing runs before.
     for (const availability of agents) {
-      if (trusted && availability.state === 'ready' && this.loadKnownOptions()[availability.agent] === undefined) {
+      if (trusted && availability.state === 'ready' && this.needsListing(availability.agent)) {
+        if (this.listedWith.has(availability.agent)) {
+          this.dropWarm(availability.agent); // A session started early by the CLI used before holds its old list.
+        }
         void this.probe(availability.agent, root);
       }
     }
@@ -614,7 +629,33 @@ export class AgentHost {
     if (crashes !== undefined && crashes.count > AI_LIMITS.restartsMax) {
       return { agent, state: 'failed', message: crashes.lastMessage };
     }
-    return { agent, state: 'ready', adapterVersion: spec.version, running: root !== undefined && this.processes.has(processKey(agent, root)) };
+    const outdated = this.outdatedCli(agent);
+    return {
+      agent,
+      state: 'ready',
+      adapterVersion: spec.version,
+      running: root !== undefined && this.processes.has(processKey(agent, root)),
+      ...(outdated === undefined ? {} : { outdatedCli: outdated }),
+    };
+  }
+
+  /** The installed CLI's version when it is older than the adapter's models need; undefined when it is not or cannot be read. */
+  private outdatedCli(agent: AgentId): string | undefined {
+    const min = ADAPTERS[agent].cliVersionMin;
+    const cli = min === undefined ? undefined : this.cliPath(agent);
+    const version = cli === undefined ? undefined : installedCliVersion(agent, cli, this.deps.cliFileSystem ?? realCliFileSystem);
+    return min !== undefined && version !== undefined && isOlderVersion(version, min) ? version : undefined;
+  }
+
+  /** The CLI in use, as one text that changes when another one is used or this one is updated. */
+  private cliIdentity(agent: AgentId): string {
+    const cli = this.cliPath(agent) ?? '';
+    return `${cli}\0${installedCliVersion(agent, cli, this.deps.cliFileSystem ?? realCliFileSystem) ?? ''}`;
+  }
+
+  /** Whether the agent has not been asked for its settings by this run of the app with the CLI now in use. */
+  private needsListing(agent: AgentId): boolean {
+    return this.loadKnownOptions()[agent] === undefined || this.listedWith.get(agent) !== this.cliIdentity(agent);
   }
 
   async install(agent: AgentId, root: string): Promise<Result<AgentAvailability, AiFailure>> {
@@ -1085,12 +1126,19 @@ export class AgentHost {
       // Waited out before the look below, so replies starting together after a crash still share one new process.
       await delay(AI_LIMITS.restartDelayMsMin * 2 ** (crashed.count - 1));
     }
-    const running = this.processes.get(key);
+    const found = this.cliPath(agent);
+    let running = this.processes.get(key);
+    // An update can put the CLI in a new file (the native installer does), while a running adapter still starts the
+    // old one. It is replaced as soon as it is idle; a chat on it resumes in the new one.
+    if (running !== undefined && found !== undefined && running.cli !== found && !this.isBusy(running)) {
+      this.stop(running);
+      running = undefined;
+    }
     if (running !== undefined) {
       const ready = await running.ready;
       return ready.ok ? ok(running) : ready;
     }
-    const cli = this.cliPath(agent);
+    const cli = found;
     if (cli === undefined) {
       return err({ code: 'missing-cli', ...described('ai.error.missingCli', { agent: AGENTS[agent].label }) });
     }
@@ -1196,7 +1244,7 @@ export class AgentHost {
         }
         return ok(parsed.value);
       });
-    process = new AgentProcess(agent, root, child, connection, ready, sessions);
+    process = new AgentProcess({ agent, root, cli }, child, connection, ready, sessions);
     child.stderr?.setEncoding('utf8');
     child.stderr?.on('data', (chunk: string) => {
       if (process !== undefined) {
@@ -2019,6 +2067,7 @@ export class AgentHost {
         const options = session.value.options.map(chatOption);
         if (options.length > 0) {
           const before = JSON.stringify(this.optionsOf(agent));
+          this.listedWith.set(agent, this.cliIdentity(agent));
           this.rememberOptions(agent, options, 'defaults');
           // Only news is published, so starting early never makes the panel redraw.
           if (JSON.stringify(this.optionsOf(agent)) !== before) {

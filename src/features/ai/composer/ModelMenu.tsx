@@ -33,6 +33,18 @@ export function modelMenuEntries(settings: ComposerSettings, translate: Translat
       });
     });
   }
+  const cliUpdate = settings.cliUpdate;
+  if (cliUpdate !== undefined) {
+    // Under the models, where the missing ones are looked for. The list is the CLI's own, so updating it is the way to them.
+    entries.push({
+      kind: 'item',
+      id: 'cli-update',
+      label: translate(cliUpdate.busy ? 'ai.composer.cli.updating' : 'ai.composer.cli.update'),
+      tooltip: translate('ai.composer.cli.updateHint', { version: cliUpdate.version }),
+      disabled: cliUpdate.busy,
+      onSelect: cliUpdate.run,
+    });
+  }
   const effort = effortEntries(settings, translate);
   if (effort !== undefined) {
     if (entries.length > 0) {

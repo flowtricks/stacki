@@ -411,7 +411,8 @@ export type AgentAvailability =
   | { readonly agent: AgentId; readonly state: 'missing-cli' }
   | { readonly agent: AgentId; readonly state: 'needs-install'; readonly adapterVersion: string; readonly downloadMegabytes: number }
   | { readonly agent: AgentId; readonly state: 'installing' }
-  | { readonly agent: AgentId; readonly state: 'ready'; readonly adapterVersion: string; readonly running: boolean }
+  /** `outdatedCli`: the installed CLI's version, only when it is too old to list today's models. */
+  | { readonly agent: AgentId; readonly state: 'ready'; readonly adapterVersion: string; readonly running: boolean; readonly outdatedCli?: string }
   | { readonly agent: AgentId; readonly state: 'sign-in' }
   | { readonly agent: AgentId; readonly state: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
@@ -601,7 +602,13 @@ export function parseAgentAvailability(input: unknown): AgentAvailability {
         downloadMegabytes: count(value['downloadMegabytes']),
       };
     case 'ready':
-      return { agent, state, adapterVersion: bounded(AI_LIMITS.idCharsMax, 'adapterVersion')(value['adapterVersion']), running: boolean(value['running']) };
+      return {
+        agent,
+        state,
+        adapterVersion: bounded(AI_LIMITS.idCharsMax, 'adapterVersion')(value['adapterVersion']),
+        running: boolean(value['running']),
+        ...(value['outdatedCli'] === undefined ? {} : { outdatedCli: bounded(AI_LIMITS.idCharsMax, 'outdatedCli')(value['outdatedCli']) }),
+      };
     case 'failed':
       return { agent, state, message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']), ...parsedRef(value['messageRef']) };
     case undefined:
@@ -895,7 +902,9 @@ export type SetupAction =
   | { readonly kind: 'signIn' }
   | { readonly kind: 'code'; readonly code: string }
   | { readonly kind: 'cancel' }
-  | { readonly kind: 'signOut' };
+  | { readonly kind: 'signOut' }
+  /** Updates the installed CLI with its own update command (Claude only). */
+  | { readonly kind: 'update' };
 
 /** The longest code a CLI's paste-back prompt takes. */
 export const SETUP_CODE_CHARS_MAX = 4_096;
@@ -920,6 +929,7 @@ export function parseSetupAction(input: unknown): SetupAction {
     case 'signIn':
     case 'cancel':
     case 'signOut':
+    case 'update':
       return { kind: value['kind'] };
     case 'code': {
       const code = bounded(SETUP_CODE_CHARS_MAX, 'code')(value['code']).trim();

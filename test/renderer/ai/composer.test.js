@@ -163,7 +163,7 @@ const CODEX_OPTIONS = [
   { id: 'model', name: 'Model', category: 'model', currentValue: 'gpt', choices: [choice('gpt', 'GPT 5')] },
 ];
 
-function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { claude: [], codex: [] }, microphone = GRANTED } = {}) {
+function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { claude: [], codex: [] }, microphone = GRANTED, claudeCli = () => ({}) } = {}) {
   const calls = [];
   const listeners = { events: undefined };
   const summary = { id: CHAT, agent, title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false };
@@ -176,7 +176,7 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { c
     aiAgents: record('aiAgents', () => ({
       trusted: true,
       agents: [
-        { agent: 'claude', state: 'ready', adapterVersion: '0.105.0', running: false },
+        { agent: 'claude', state: 'ready', adapterVersion: '0.105.0', running: false, ...claudeCli() },
         { agent: 'codex', state: 'ready', adapterVersion: '2.6.0', running: false },
       ],
       options: [
@@ -495,6 +495,30 @@ test('Ultracode is a switch row when the agent offers it, flips on a click and i
   await live(withoutUltracode);
   await click(byLabel('Model'));
   assert.equal(rows('[role="menuitemcheckbox"]').length, 0, 'no switch for an option the agent does not offer');
+});
+
+test('an old Claude Code offers its update under the models, and says how it went as a toast', async (context) => {
+  let version = '2.1.150';
+  const { calls } = await mount(context, { claudeCli: () => (version === undefined ? {} : { outdatedCli: version }) });
+  await click(byLabel('Model'));
+  const offer = rowNamed('Update Claude Code');
+  assert.match(await tipOf(offer), /2\.1\.150 is out of date, so the newest models are missing/);
+  // An update that changes nothing (installed another way) says so, with a way forward.
+  await click(offer);
+  assert.deepEqual(callsNamed(calls, 'aiSetup').at(-1).payload.action, { kind: 'update' });
+  assert.equal(toasts.at(-1).kind, 'warning');
+  assert.match(toasts.at(-1).message, /still out of date/);
+  assert.deepEqual(
+    toasts.at(-1).recovery.map((action) => action.label),
+    ['How to update'],
+  );
+  version = undefined;
+  await click(byLabel('Model'));
+  await click(rowNamed('Update Claude Code'));
+  assert.equal(toasts.at(-1).kind, 'success');
+  assert.match(toasts.at(-1).message, /up to date/);
+  await click(byLabel('Model'));
+  assert.ok(![...document.querySelectorAll('[role="menu"] .menu-label')].some((label) => label.textContent === 'Update Claude Code'));
 });
 
 test('More models holds the rest, and Agent switches provider (a started chat says it opens a new one)', async (context) => {
