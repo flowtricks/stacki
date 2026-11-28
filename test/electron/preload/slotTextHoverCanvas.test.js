@@ -12,6 +12,8 @@
 // range box measured in the page (a click picks them; the pointer alone draws no outline of their own), and each carries the owner `slot` (the page wrote the words, so their run is blue while the
 // component around them stays green). Both sides of the rule are checked: slot words are outlined as a run, including a
 // Heading that is only its words; words no slot or prop reaches (the badge) are not.
+// The window is as short as a CI screen leaves it, on every machine: input below the visible page reaches nothing, so every
+// point the probe uses is checked to be in view, and a probe that fails prints the viewport and what the frame last said.
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -34,6 +36,9 @@ const check = (what, condition, detail) => {
 };
 
 const PAGE = 'src/pages/index.astro';
+// A shared CI runner's display clamps a window to 642 px of page (also seen by runningPanelLayout.test.js), so a Mac with
+// a taller screen asks for that height too and runs what CI runs.
+const WINDOW_PX = { width: 1000, height: 642 };
 const PAGE_SOURCE = [
   '---',
   'import Button from "@/components/Button.astro";',
@@ -172,10 +177,11 @@ const PAGE_SOURCE = [
      app.disableHardwareAcceleration();
      ipcMain.on('boot:read', (event) => { event.returnValue = undefined; });
      app.on('window-all-closed', () => app.quit());
+     let probeState = async () => 'the page was not measured yet';
      const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({
-         show: false, width: 1000, height: 750,
+         show: false, width: ${WINDOW_PX.width}, height: ${WINDOW_PX.height}, useContentSize: true,
          webPreferences: { preload: ${JSON.stringify(preload)}, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true },
        });
        const out = {};
@@ -189,10 +195,26 @@ const PAGE_SOURCE = [
        // The words' own box (the range of their text) and their element's box, measured in the page.
        const boxes = (selector, index) => run('(() => { const el = ' + frame + '.document.querySelectorAll(' + JSON.stringify(selector) + ')[' + index + ']; const walker = ' + frame + '.document.createTreeWalker(el, 4); let node = walker.nextNode(); while (node && !node.data.trim()) { node = walker.nextNode(); }  const r = ' + frame + '.document.createRange(); r.selectNodeContents(node); const w = r.getBoundingClientRect(); const e = el.getBoundingClientRect(); return { words: { x: w.left, y: w.top, w: w.width, h: w.height }, element: { x: e.left, y: e.top, w: e.width, h: e.height } }; })()');
        const posts = () => run('JSON.stringify(window.posts.filter((m) => /^avb:text/.test(m.type)))').then(JSON.parse);
-       const point = (at) => win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(at.x), y: Math.round(at.y) });
-       // Inside the frame (900 by 700): a click outside it never reaches the page, and would drop no pick.
-       const away = { x: 890, y: 690 };
+       // What can be pointed at: the part of the frame the window shows. Input sent anywhere else is silently lost.
+       const view = await run('(() => { const f = document.getElementById("canvas").getBoundingClientRect(); return { width: Math.min(innerWidth, f.right), height: Math.min(innerHeight, f.bottom) }; })()');
+       const inView = (at) => {
+         if (!(at.x >= 0 && at.x < view.width && at.y >= 0 && at.y < view.height)) {
+           throw new Error('the probe pointed outside the visible page: ' + JSON.stringify({ at, view }));
+         }
+         return at;
+       };
+       const point = (at) => { inView(at); win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(at.x), y: Math.round(at.y) }); };
+       // The visible frame's bottom corner, clear of everything the page draws: a click there drops any pick.
+       const away = { x: view.width - 40, y: view.height - 10 };
+       const underAway = await run(frame + '.document.elementFromPoint(' + away.x + ', ' + away.y + ')?.localName');
+       if (underAway !== 'body' && underAway !== 'html') {
+         throw new Error('the point to click away on is not empty page: ' + JSON.stringify({ away, view, underAway }));
+       }
+       // Every click the frame's page hears, kept for the failure message.
+       await run('window.heard = []; ' + frame + '.addEventListener("click", (e) => { if (heard.length < 100) { heard.push([e.clientX, e.clientY]); } }, true)');
+       probeState = async () => ({ away, view, clicksHeard: await run('window.heard'), lastPosts: (await posts()).slice(-4) });
        const press = (at) => {
+         inView(at);
          win.webContents.sendInputEvent({ type: 'mouseDown', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(at.x), y: Math.round(at.y), button: 'left', clickCount: 1 });
        };
@@ -206,8 +228,8 @@ const PAGE_SOURCE = [
          for (let attempt = 0; attempt < attempts && picked === undefined; attempt += 1) {
            point(away);
            press(away);
-           // Input reaches the page after these calls return. Clearing the posts before it does lets the pointer's way out report
-           // the earlier pick again, to be read as this click's: so the frame is first heard to hold none.
+           // Input reaches the page after these calls return. The posts are cleared only once the frame is heard to hold no pick,
+           // so an earlier one still held (it waits for a selection this probe never sends) is never read as this click's.
            await waitFor({ what: 'the earlier pick dropped (' + what + ')', read: posts, until: (list) => list.filter((m) => m.type === 'avb:text-marks').at(-1)?.picked === undefined });
            await run('window.posts.length = 0');
            point(at);
@@ -274,6 +296,11 @@ const PAGE_SOURCE = [
        out.editingPicked = (await posts()).filter((m) => m.type === 'avb:text-marks' && m.picked !== undefined).at(-1)?.picked;
        console.log('RESULT ' + JSON.stringify(out));
        app.quit();
+     }).catch(async (error) => {
+       // Said and ended at once: left unhandled, the window stayed open until the suite's own two minute limit.
+       const state = await probeState().catch((cause) => 'unreadable: ' + String(cause));
+       console.error('PROBE FAILED ' + String(error?.stack ?? error) + '\\nstate: ' + JSON.stringify(state));
+       app.exit(1);
      });`,
   );
   const environment = { ...process.env };
@@ -294,7 +321,8 @@ const PAGE_SOURCE = [
 
   const line = result.stdout.split('\n').find((text) => text.startsWith('RESULT '));
   if (!line) {
-    check('the browser probe ran', false, `${result.stdout}\n${result.stderr}`.slice(0, 1500));
+    const failedAt = result.stderr.indexOf('PROBE FAILED ');
+    check('the browser probe ran', false, failedAt < 0 ? `${result.stdout}\n${result.stderr}`.slice(0, 1500) : result.stderr.slice(failedAt, failedAt + 4000));
   } else {
     const out = JSON.parse(line.slice('RESULT '.length));
     // Within a pixel: the frame's report and the page's own measure round differently.
