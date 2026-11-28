@@ -13,7 +13,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Check npm trusted publishing before the long test run
         # Why: a missing or mismatched npm trusted publisher surfaces only as a bare E404 after ten
         # minutes of tests. This exchanges the job's OIDC identity for a publish token, fails in
@@ -32,7 +32,7 @@ jobs:
             cat "${response}"
             exit 1
           fi
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -45,7 +45,7 @@ jobs:
         run: node --experimental-strip-types scripts/release/releasePlan.mts --sha="$GITHUB_SHA" --wait-minutes=30 --force-tests=false
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: npm install --global npm@11
+      - run: npm install --global npm@11.21.2
       - run: npm ci
       - run: npm --prefix studio ci
       - if: steps.plan.outputs.run_tests == 'true'

@@ -1,0 +1,29 @@
+# These files define the checks, the CI workflows and the releases (AGENTS.md, "Enforcement").
+# GitHub asks the owner to review a pull request that changes one. The review is requested,
+# not required. When two patterns match a file, the last one wins.
+
+# Rules and compiler, lint and format configs.
+/AGENTS.md @flowtricks
+/CLAUDE.md @flowtricks
+/docs/enforcement.md @flowtricks
+/eslint.config.mjs @flowtricks
+/studio/eslint.config.ts @flowtricks
+/.prettierrc.json @flowtricks
+/.prettierignore @flowtricks
+tsconfig*.json @flowtricks
+/shared/**/limits.ts @flowtricks
+/package.json @flowtricks
+
+# Gate, policy, hook and release scripts.
+/scripts/eslintPlugin/ @flowtricks
+/scripts/policy/ @flowtricks
+/scripts/agent/ @flowtricks
+/scripts/gate/ @flowtricks
+/scripts/release/ @flowtricks
+/.githooks/ @flowtricks
+/.claude/settings.json @flowtricks
+/.codex/ @flowtricks
+/.pi/ @flowtricks
+
+# Workflows and this file.
+/.github/ @flowtricks
