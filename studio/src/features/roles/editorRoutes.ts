@@ -68,6 +68,25 @@ export function assertEditorRequest(role: RoleView, pathname: string, body: stri
 }
 
 function onlyStylesDiffer(before: string, after: string): boolean {
-  const blank = (source: string) => source.replace(/(<style\b[^<>]*>)[\s\S]*?(<\/style\s*>)/gi, '$1$2');
-  return blank(before) === blank(after);
+  return withoutStyles(before) === withoutStyles(after);
+}
+
+// The page with each style block's text taken out. One pass: a single pattern for a whole block looks for the closing
+// tag afresh at every opening one, which takes minutes on a hostile page.
+function withoutStyles(source: string): string {
+  const opening = /<style\b[^<>]*>/gi;
+  const closing = /<\/style\s*>/gi;
+  let kept = '';
+  let from = 0;
+  for (let open = opening.exec(source); open !== null; open = opening.exec(source)) {
+    closing.lastIndex = opening.lastIndex;
+    const close = closing.exec(source);
+    if (close === null) {
+      break;
+    }
+    kept += source.slice(from, opening.lastIndex);
+    from = close.index;
+    opening.lastIndex = closing.lastIndex;
+  }
+  return kept + source.slice(from);
 }

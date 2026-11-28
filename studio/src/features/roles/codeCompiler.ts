@@ -45,6 +45,8 @@ parentPort.on('message', async ({ id, kind, source }) => {
 });
 `;
 
+const TOOK_TOO_LONG = 'The page compiler took too long';
+
 type Kind = 'tree' | 'tsx';
 
 interface Waiting {
@@ -81,7 +83,7 @@ class CompilerThread {
       this.converted += source.length;
     }
     return new Promise<unknown>((resolve, reject) => {
-      const timer = setTimeout(() => this.end('The page compiler took too long'), COMPILER_LIMITS.callMsMax);
+      const timer = setTimeout(() => this.end(TOOK_TOO_LONG), COMPILER_LIMITS.callMsMax);
       const settle = () => clearTimeout(timer);
       this.waiting.set(id, {
         resolve: (value) => {
@@ -155,8 +157,14 @@ async function compile(kind: Kind, source: string): Promise<unknown> {
   if (!running.usable) {
     spare ??= new CompilerThread();
   }
-  // A second failure is the page's own: the caller refuses the change or asks another way.
-  return result.catch(() => thread().call(kind, source));
+  // A second failure is the page's own: the caller refuses the change or asks another way. A page that ran out of
+  // time would only run out again, while every other write waits for this one.
+  return result.catch((error: unknown) => {
+    if (error instanceof Error && error.message === TOOK_TOO_LONG) {
+      throw error;
+    }
+    return thread().call(kind, source);
+  });
 }
 
 function isTree(value: unknown): value is ParseResult {

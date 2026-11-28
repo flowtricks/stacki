@@ -11,8 +11,9 @@
 import ts from 'typescript';
 import { textChange } from '../../shared/validation';
 import { astroToTSX, type Converted } from './codeCompiler';
-import { sinkOf } from './codeMarkup';
+import { ANIMATION_VALUES, runsWritten, sinkOf } from './codeMarkup';
 import { syntaxErrors } from './codeExpression';
+import { readRuntimeCode } from './codeRuntime';
 
 export type InertEdit =
   | { readonly kind: 'markup' }
@@ -92,7 +93,10 @@ function placeOf(file: ts.SourceFile, from: number, to: number): Place | undefin
     const owner = node.parent.parent.parent;
     // A component's `onClick` may be spread onto an element, so every handler name counts, on elements and components.
     const component = /^[A-Z]|\./.test(owner.tagName.getText(file));
-    const inert = sinkOf(name, !component) === 'none' && !/^(?:on|set:|is:|define:|client:|server:)/i.test(name);
+    // Typing may not turn data into a script (a script's type, an SVG animation's value, a written script address).
+    const tag = owner.tagName.getText(file).toLowerCase();
+    const data = tag !== 'script' && !ANIMATION_VALUES.has(name.toLowerCase()) && !runsWritten(name, node.text, { element: !component, tag });
+    const inert = data && sinkOf(name, !component) === 'none' && !/^(?:on|set:|is:|define:|client:|server:)/i.test(name);
     return inert ? { kind: 'markup', start, end } : undefined;
   }
   if (ts.isNoSubstitutionTemplateLiteral(node) && ts.isJsxExpression(node.parent) && tagName(node.parent.parent) === 'style') {
@@ -135,15 +139,68 @@ function frontmatterChange(before: string, after: string, change: Splice): Inert
   return fenced.test(old) || fenced.test(now) || rest !== before.slice(end) ? undefined : { kind: 'frontmatter', before: old, after: now };
 }
 
+/** What the compiler that runs the site finds in one version of a page. */
+interface Run {
+  readonly code: string;
+  readonly frontmatter: string;
+  readonly errors: number;
+}
+
+async function runOf(source: string): Promise<Run> {
+  const run = await readRuntimeCode(source);
+  return { code: JSON.stringify(run.units.map((unit) => unit.key)), frontmatter: run.frontmatter.trim(), errors: run.errors };
+}
+
+// The proof asks the editor’s compiler. The one that runs the site must also find the same code in both versions, and
+// the frontmatter the proof speaks of.
+function sameRunning(was: Run, now: Run, edit: InertEdit): boolean {
+  if (was.code !== now.code || now.errors > was.errors) {
+    return false;
+  }
+  if (edit.kind === 'frontmatter') {
+    return was.frontmatter === edit.before.trim() && now.frontmatter === edit.after.trim();
+  }
+  return was.frontmatter === now.frontmatter;
+}
+
 /** Reads edits for one workspace, keeping the last few conversions: a page's `after` is its next `before`. */
 export class InertEdits {
   private readonly recent = new Map<string, Reading>();
+  private readonly runs = new Map<string, Run>();
 
   async read(before: string, after: string): Promise<InertEdit | undefined> {
+    // Plainly new markup needs neither compiler.
     const change = splice(before, after);
     if (NEVER.test(change.removed) || NEVER.test(change.inserted)) {
       return undefined;
     }
+    // The two compilers read at once. A page either cannot read is the full check's to judge.
+    const [edit, runs] = await Promise.all([this.proven(before, after, change), this.both(before, after).catch(() => undefined)]);
+    return edit !== undefined && runs !== undefined && sameRunning(runs[0], runs[1], edit) ? edit : undefined;
+  }
+
+  private async both(before: string, after: string): Promise<readonly [Run, Run]> {
+    const was = await this.running(before);
+    return [was, await this.running(after)];
+  }
+
+  private async running(source: string): Promise<Run> {
+    const found = this.runs.get(source);
+    if (found !== undefined) {
+      return found;
+    }
+    const run = await runOf(source);
+    for (const oldest of this.runs.keys()) {
+      if (this.runs.size < CONVERSIONS_MAX) {
+        break;
+      }
+      this.runs.delete(oldest);
+    }
+    this.runs.set(source, run);
+    return run;
+  }
+
+  private async proven(before: string, after: string, change: Splice): Promise<InertEdit | undefined> {
     // A page the conversion cannot read is the full check's to judge.
     const was = await this.reading(before).catch(() => undefined);
     const now = was === undefined ? undefined : await this.reading(after).catch(() => undefined);

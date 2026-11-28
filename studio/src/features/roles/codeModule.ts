@@ -55,6 +55,13 @@ function collectNames(statement: ts.Statement, found: Names): void {
   }
 }
 
+/** The names a statement declares at run time. */
+export function declaredNames(statement: ts.Statement): ReadonlySet<string> {
+  const found: Names = { names: new Set(), queries: new Set() };
+  collectNames(statement, found);
+  return found.names;
+}
+
 function importedNames(statement: ts.ImportDeclaration, found: Names): void {
   const clause = statement.importClause;
   if (clause === undefined || clause.isTypeOnly) {
@@ -257,6 +264,11 @@ function changedValue(before: ts.Expression, after: ts.Expression, scope: CodeSc
     return next(before.expression, after.expression);
   }
   if (!ts.isCallExpression(before) || !ts.isCallExpression(after) || before.expression.getText() !== after.expression.getText()) {
+    return false;
+  }
+  // Type arguments are no data, so they stay as the developer wrote them.
+  const typed = (call: ts.CallExpression) => call.typeArguments?.map((item) => item.getText()).join() ?? '';
+  if (typed(before) !== typed(after)) {
     return false;
   }
   // Only the data lists a call was handed may change: a changed string argument could point the call elsewhere.
