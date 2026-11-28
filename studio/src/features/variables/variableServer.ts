@@ -7,6 +7,9 @@ import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
 import { batchedRead } from '../../shared/batchedRead';
 import { readMetadataSource } from '../settings/projectMetadata';
+import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { requestRole } from '../roles/serverAccess';
+import { assertRoleWrite } from '../roles/writeRules';
 import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/projectMetadata';
 
@@ -27,7 +30,7 @@ export function variableRoutes(root: string, rooms: Rooms) {
       if (!input) {
         return read(before);
       }
-      return editVariables(rooms, before, input);
+      return editVariables(rooms, before, input, await requestRole(root, request));
     });
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(result));
@@ -74,7 +77,7 @@ async function variableSources(root: string, rooms: Pick<Rooms, 'read'>) {
   const folders = await readMetadataSource(root, 'folders');
   return new Map(folders.source === undefined ? entries : [...entries, [METADATA_FILES.folders, folders.source] as const]);
 }
-async function editVariables(rooms: Rooms, before: Map<string, string>, input: Record<string, unknown>) {
+async function editVariables(rooms: Rooms, before: Map<string, string>, input: Record<string, unknown>, role: RoleView) {
   const next = new Map(before);
   const result = withVariableWorkspace(next, () => applyVariableOperation(string(input['operation'], 50), input['payload']));
   if (!result.ok) {
@@ -95,9 +98,22 @@ async function editVariables(rooms: Rooms, before: Map<string, string>, input: R
     const refused = described('variables.error.fileNotEditable', { file: locked[0] });
     return { ok: false, error: refused.message, errorRef: refused.messageRef };
   }
+  await assertVariableWrites(rooms, role, before, changed);
   const targets = await Promise.all(changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })));
   for (const { room, text } of targets) {
     await room.setSource(text);
   }
   return { ok: true };
+}
+
+// A variable edit rewrites its name wherever it is read, scripts included. A rename alone changes no code; anything
+// else a role without code permission writes here answers to the code check.
+async function assertVariableWrites(rooms: Rooms, role: RoleView, before: ReadonlyMap<string, string>, changed: readonly (readonly [string, string])[]) {
+  const unnamed = (text: string) => text.replace(/--[\w-]+/g, '--variable');
+  for (const [file, text] of changed) {
+    const original = before.get(file);
+    if (original === undefined || unnamed(original) !== unnamed(text)) {
+      await assertRoleWrite(role, { file, before: original, after: text }, rooms.guard);
+    }
+  }
 }

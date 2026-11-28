@@ -32,6 +32,7 @@ import { readSource, preparePath } from '../project/projectServer';
 import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed, assertEditorContentAllowed } from '../roles/documentAccess';
 import { EditorUndo } from '../roles/editorUndo';
+import { CodeGuard, writesCode } from '../roles/codeGuard';
 import { limitsEditing } from '../../../vendor/stacki/shared/properties/projectRoles';
 
 /** A person signed in by another authentication provider: presence by name and a provider-qualified key, no GitHub avatar. */
@@ -83,6 +84,8 @@ export class Room {
     readonly coordinator = new SerialQueue(),
     private readonly publishPresence?: () => void,
     private readonly live?: LivePresence,
+    // One per workspace, so code one document held can be pasted into another (codeGuard.ts).
+    private readonly guard = new CodeGuard(root),
   ) {
     this.colors = live?.colors ?? new PresenceColors();
     this.cursors = new CursorRelay(this.clients, (packet) => {
@@ -312,6 +315,10 @@ export class Room {
     assertComponentInsertAllowed(role, this.file, action, settings?.imports ?? []);
     const edits =
       action.kind === 'paste' ? pasteEdits(this.text.toString(), this.file, action) : structuralEdits(this.text.toString(), action, this.file, settings);
+    // A paste carries markup and frontmatter from the browser; every other action only arranges what the server holds.
+    if (action.kind === 'paste') {
+      await this.assertCode(role, applyEdits(this.text.toString(), [...edits]));
+    }
     const source = this.text.toString();
     const result = applyEdits(source, edits);
     // The action was allowed by its shape; its result is checked too, so an
@@ -455,17 +462,25 @@ export class Room {
       })
       .catch((error: unknown) => this.broadcast({ type: 'error', message: String(error) }));
   }
-  // A limited role's edit is also judged by what it changes. The room handles one message at a time, so the
-  // document it was probed against must still be the document it applies to.
+  // An edit that arrives as text is also judged by what it changes: no new code without a code permission, and a
+  // limited role's editing options. The room handles one message at a time, so the document it was probed against
+  // must still be the document it applies to.
   private async assertContent(socket: WebSocket, role: RoleView, after: string) {
     const before = this.text.toString();
-    if (!limitsEditing(role.editorOff) || after === before) {
+    if (after === before) {
       return;
     }
-    if (this.editorUndo.steps(this.people.get(socket) ?? '', role, { current: before, next: after })) {
-      return;
+    await this.assertCode(role, after);
+    if (limitsEditing(role.editorOff) && !this.editorUndo.steps(this.people.get(socket) ?? '', role, { current: before, next: after })) {
+      await assertEditorContentAllowed(role, this.file, { before, after }, (file) => readSource(this.root, file).catch(() => undefined));
     }
-    await assertEditorContentAllowed(role, this.file, { before, after }, (file) => readSource(this.root, file).catch(() => undefined));
+    if (this.text.toString() !== before) {
+      throw new Error('Another edit arrived. Please repeat the edit.');
+    }
+  }
+  private async assertCode(role: RoleView, after: string) {
+    const before = this.text.toString();
+    await this.guard.assertAllowed(role, { file: this.file, before, after });
     if (this.text.toString() !== before) {
       throw new Error('Another edit arrived. Please repeat the edit.');
     }
@@ -486,6 +501,11 @@ export class Room {
       }
       if (probe.getText('source').length > MAX_SOURCE || Y.encodeStateAsUpdate(probe).length > 8_000_000) {
         throw new Error('Document exceeds collaboration limits');
+      }
+      // An update that waits for a change the room does not hold would apply later, judged under whoever sends that
+      // change. A role without code permission may only send what can be judged now.
+      if (!writesCode(role) && waiting(probe) !== waiting(this.document)) {
+        throw new Error('Another edit arrived. Please repeat the edit.');
       }
       const after = probe.getText('source').toString();
       if (after !== this.text.toString()) {
@@ -614,6 +634,11 @@ export class Room {
     }
   }
 }
+// The changes a document holds back until others arrive, as one comparable value.
+function waiting(document: Y.Doc): string {
+  const { pendingStructs, pendingDs } = document.store;
+  return JSON.stringify([pendingStructs === null ? '' : Buffer.from(pendingStructs.update).toString('base64'), pendingDs?.length ?? 0]);
+}
 export function checksum(source: string) {
   return createHash('sha256').update(source).digest('hex');
 }
@@ -628,6 +653,8 @@ export function createRooms(root: string) {
   const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
   const releaseListeners = new Set<() => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
+  // Reads a room's own text, so code typed a moment ago counts as the project's before it reaches the disk.
+  const guard = new CodeGuard(root, async (file) => (await rooms.get(file))?.text.toString() ?? readSource(root, file));
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
       room.broadcast(message);
@@ -647,7 +674,7 @@ export function createRooms(root: string) {
       if (rooms.size >= 100) {
         throw new Error('Too many open documents');
       }
-      const room = new Room(root, file, coordinator, presence, live);
+      const room = new Room(root, file, coordinator, presence, live, guard);
       pending = room.initialize().then(() => {
         readyRooms.add(room);
         return room;
@@ -670,6 +697,7 @@ export function createRooms(root: string) {
     projectChanged: () => broadcast({ type: 'project-changed' }),
     resetWorkspace: () => resetWorkspaceRooms(rooms, readyRooms),
     coordinator,
+    guard,
     // Call under the coordinator before filesystem snapshots or multi-file writes.
     // Await actual saves, because flushing a failed batch alone does not retry it.
     persist: async () => {

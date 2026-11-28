@@ -447,7 +447,8 @@ class ConfigService {
   private spawnRunner(outfile: string): Promise<unknown> {
     const child = spawn(process.execPath, [outfile], {
       cwd: this.projectPath,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+      // The child runs the site's content config, which has no use for Studio's own token.
+      env: { ...process.env, STUDIO_CONTAINER_TOKEN: undefined, ELECTRON_RUN_AS_NODE: '1' },
       // The pipe tuple is what selects the overload with non-null streams.
       stdio: ['pipe', 'pipe', 'pipe'] as const,
     });

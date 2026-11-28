@@ -79,7 +79,11 @@ timings('drafts restored');
 reporter.report('dependencies');
 if (!(await linkImageDependencies(root))) {
   console.log('Installing changed site dependencies from cache');
+  // Installing runs the dependencies' scripts, which have no use for Studio's own token. Nothing else starts until
+  // it is back: the preview, which Studio itself runs in, needs it.
+  delete process.env['STUDIO_CONTAINER_TOKEN'];
   await command('npm', ['ci', '--prefer-offline', '--no-audit', '--no-fund', '--cache', '/opt/npm-cache']);
+  process.env['STUDIO_CONTAINER_TOKEN'] = token;
 }
 timings('dependencies ready');
 reporter.report('server');

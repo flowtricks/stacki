@@ -16,6 +16,10 @@ import { prepareGitWorkspaceCheckout } from './gitWorkspaceCheckout';
 import { setGitWorkspaceBusy, gitWorkspaceNeedsRecovery } from './gitWorkspaceLease';
 import { emptyAssetState } from '../assets/assetStateTypes';
 import { saveAssetState } from '../assets/assetState';
+import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { requestRole } from '../roles/serverAccess';
+import { assertMergeResolutions } from '../roles/writeRules';
+import { gitWorkspaceRun } from './gitWorkspaceObjects';
 import { record } from '../../shared/validation';
 import { ReferencedError, errorWire } from '../../shared/referencedError';
 import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
@@ -43,6 +47,7 @@ export function gitWorkspaceRoutes(
       const command = pathname.slice('/studio/api/git/'.length);
       const input: unknown = request.method === 'POST' ? JSON.parse(await readBody()) : {};
       const data = { ...record(input), projectPath: root };
+      const role = await requestRole(root, request);
       if (request.method !== 'POST') {
         throw new Error('Git commands require POST.');
       }
@@ -58,7 +63,7 @@ export function gitWorkspaceRoutes(
             // A Git command stopped at its time or disk limit leaves this lock, and every later command
             // then fails. The coordinator held here admits one workspace index user, so the lock is stale.
             await rm(path.join(state.git.directory, 'index.lock'), { force: true });
-            return await runGitWorkspaceCommand(workspace, state, rooms, command, data);
+            return await runGitWorkspaceCommand(workspace, state, rooms, command, data, role);
           } finally {
             if (!gitWorkspaceNeedsRecovery(root)) {
               setGitWorkspaceBusy(root, 'idle');
@@ -83,6 +88,7 @@ async function runGitWorkspaceCommand(
   rooms: ReturnType<typeof createRooms>,
   command: string,
   data: Record<string, unknown>,
+  role: RoleView,
 ): Promise<unknown> {
   switch (command) {
     case 'info':
@@ -117,7 +123,7 @@ async function runGitWorkspaceCommand(
       return deleteGitWorkspaceBranch(state, parseIpcPayload('git:deleteBranch', data));
     case 'merge':
     case 'resolveMerge':
-      return applyGitWorkspaceChange(state, rooms, await resolveGitWorkspaceCommand(workspace, state, command, data));
+      return applyGitWorkspaceChange(state, rooms, await resolveGitWorkspaceCommand(workspace, state, rooms, command, data, role));
     default:
       throw new Error('Unsupported Git command.');
   }
@@ -163,7 +169,14 @@ async function applyGitWorkspaceChange(
   }
 }
 
-async function resolveGitWorkspaceCommand(workspace: GitWorkspace, state: GitWorkspaceState, command: string, data: Record<string, unknown>) {
+async function resolveGitWorkspaceCommand(
+  workspace: GitWorkspace,
+  state: GitWorkspaceState,
+  rooms: ReturnType<typeof createRooms>,
+  command: string,
+  data: Record<string, unknown>,
+  role: RoleView,
+) {
   const branch = gitBranchName(data['branch']);
   const review = workspace.review;
   const remoteReview = branch.startsWith('refs/remotes/origin/');
@@ -175,6 +188,12 @@ async function resolveGitWorkspaceCommand(workspace: GitWorkspace, state: GitWor
     throw new ReferencedError('git.studio.branchGone');
   }
   const choices = command === 'resolveMerge' ? parseIpcPayload('git:resolveMerge', data).choices : undefined;
+  const run = gitWorkspaceRun(state.git);
+  const sides = {
+    ours: (file: string) => rooms.read(file).catch(() => undefined),
+    theirs: (file: string) => run(['show', `${target}:${file}`]).catch(() => undefined),
+  };
+  await assertMergeResolutions(role, choices, sides, rooms.guard);
   const merged = await mergeGitWorkspace(state, branch, target, choices);
   if (merged.manifest && remoteReview && review.kind === 'pending') {
     return { ...merged, manifest: { ...merged.manifest, remote: review.remote } };

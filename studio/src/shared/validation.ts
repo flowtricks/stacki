@@ -17,6 +17,15 @@ export function sourcePath(value: unknown): string {
   }
   return path;
 }
+/** Whether `value` is a file the editor opens as text. */
+export function supportedSource(value: string): boolean {
+  try {
+    sourcePath(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 export function textChange(before: string, after: string) {
   let start = 0;
   while (start < before.length && start < after.length && before[start] === after[start]) {

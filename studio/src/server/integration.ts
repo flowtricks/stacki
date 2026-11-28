@@ -41,7 +41,10 @@ import { fileStamps, parseFileStampRequest } from '../features/apps/pageFileStam
 import { saveAsset } from '../features/storage/assetStorage';
 import { interceptBrowserReloads } from '../features/preview/browserReloads';
 import { assertRouteAllowed, connectionRole, requestRole, RoleRefusal, routeRule } from '../features/roles/serverAccess';
+import type { RoleView } from '../../vendor/stacki/shared/properties/projectRoles';
 import { assertEditorRequest, routeReadsBody } from '../features/roles/editorRoutes';
+import { CodeRefusal } from '../features/roles/codeGuard';
+import { assertCreateAllowed } from '../features/roles/writeRules';
 
 interface Options {
   readonly root: string;
@@ -266,7 +269,7 @@ async function handleRequestInWorkspace(
     return;
   }
   if (url.pathname === '/studio/api/create' && request.method === 'POST') {
-    await createFile(readBody, response, options, rooms);
+    await createFile(await requestRole(options.root, request), readBody, response, options, rooms);
     return;
   }
   // The modification stamps a Stacki app's page index keys its cache by (pageFileStamps.ts).
@@ -459,6 +462,21 @@ function configureProjectWatching(server: ViteDevServer, root: string, rooms: Re
   });
 }
 
+// The Worker adds its container token and the viewer's session to every request it forwards. Sockets are upgraded
+// elsewhere and keep theirs.
+const STUDIO_CREDENTIALS: ReadonlySet<string> = new Set(['x-studio-token', 'x-studio-session']);
+function withholdStudioCredentials(request: IncomingMessage) {
+  for (const name of STUDIO_CREDENTIALS) {
+    delete request.headers[name];
+  }
+  // A site server may rebuild its request from the raw list: names and values alternate.
+  for (let index = request.rawHeaders.length - 2; index >= 0; index -= 2) {
+    if (STUDIO_CREDENTIALS.has(request.rawHeaders[index]?.toLowerCase() ?? '')) {
+      request.rawHeaders.splice(index, 2);
+    }
+  }
+}
+
 // Reads of a project file: its source, what its call to one of its imports
 // returns, sampled for the binding picker (valueSampler.ts), or the source of
 // a module it imports (importSource.ts). False: not a read.
@@ -488,16 +506,18 @@ async function sendSourceRead(response: ServerResponse, url: URL, options: Optio
   return false;
 }
 
-async function createFile(readBody: () => Promise<string>, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>) {
+async function createFile(role: RoleView, readBody: () => Promise<string>, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>) {
   // Read once: the role check may already have read the body.
   const input = record(JSON.parse(await readBody()));
   const file = sourcePath(input['file']);
   if (!/^src\/(pages|content|data)\//.test(file)) {
     throw new Error('Create pages or collection items here');
   }
+  const source = string(input['source']);
+  await assertCreateAllowed(role, file, source, rooms.guard);
   await rooms.coordinator.run(async () => {
     const destination = await preparePath(options.root, file);
-    await writeFile(destination, string(input['source']), { flag: 'wx' });
+    await writeFile(destination, source, { flag: 'wx' });
     await rooms.get(file);
   });
   json(response, 201, { file });
@@ -580,6 +600,10 @@ function configureStudioRequests(
   server.middlewares.use(function studioRequests(request, response, next) {
     const url = new URL(request.url ?? '/', 'http://studio');
     const pathname = url.pathname;
+    if (pathname !== '/studio' && !pathname.startsWith('/studio/')) {
+      // Everything else is the site's own code, which must not receive what only Studio's routes use.
+      withholdStudioCredentials(request);
+    }
     if (pathname === '/__avb/preview' || pathname === '/__avb/preview/') {
       // Internal preview links remain stable while Astro enforces the site's route policy.
       url.pathname = options.trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
@@ -598,8 +622,13 @@ function configureStudioRequests(
     void handleRequest(request, response, options, features, rooms, catalogs)
       .catch((error) => {
         // A refusal that carries a message reference travels with it, so the editor shows the sentence in the person's language.
-        const messageRef = error instanceof ReferencedError ? error.messageRef : error instanceof DescribedError ? error.problem.messageRef : undefined;
-        json(response, 400, {
+        const messageRef =
+          error instanceof ReferencedError || error instanceof CodeRefusal
+            ? error.messageRef
+            : error instanceof DescribedError
+              ? error.problem.messageRef
+              : undefined;
+        json(response, error instanceof RoleRefusal ? 403 : 400, {
           error: error instanceof Error ? error.message : 'Request failed',
           ...(messageRef === undefined ? {} : { messageRef }),
         });

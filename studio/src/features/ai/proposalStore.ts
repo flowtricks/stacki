@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { aiConfiguration, propose, proposedSource, type Proposal } from './agent';
 import type { createRooms } from '../collaboration/rooms';
 import { changeFiles } from '../project/changeFiles';
+import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { assertRoleWrite } from '../roles/writeRules';
 import { record, sourcePath, string } from '../../shared/validation';
 
 export class ProposalStore {
@@ -56,7 +58,7 @@ export class ProposalStore {
       changes: proposal.changes,
     };
   }
-  async apply(value: unknown) {
+  async apply(value: unknown, role: RoleView) {
     const id = string(record(value)['id'], 100);
     const entry = this.proposals.get(id);
     if (!entry || entry.expires < Date.now()) {
@@ -71,6 +73,11 @@ export class ProposalStore {
       );
       if (new Set(files.map((file) => file.file)).size !== files.length) {
         throw new Error('AI must return one change per file');
+      }
+      for (const [index, file] of files.entries()) {
+        const created = entry.proposal.changes[index]?.before === '';
+        const before = created ? undefined : await this.rooms.read(file.file);
+        await assertRoleWrite(role, { file: file.file, before, after: file.source }, this.rooms.guard);
       }
       await changeFiles(this.root, this.rooms, files);
     });

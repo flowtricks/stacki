@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ProposalStore } from './proposalStore';
 import { availableModels } from './configuration';
+import { requestRole } from '../roles/serverAccess';
 
 export async function aiRoute(proposals: ProposalStore, request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) {
   if (!pathname.startsWith('/studio/api/ai/')) {
@@ -23,7 +24,8 @@ export async function aiRoute(proposals: ProposalStore, request: IncomingMessage
     return true;
   }
   if (pathname === '/studio/api/ai/apply' && request.method === 'POST') {
-    response.end(JSON.stringify(await proposals.apply(JSON.parse(await readBody()))));
+    const role = await requestRole(proposals.root, request);
+    response.end(JSON.stringify(await proposals.apply(JSON.parse(await readBody()), role)));
     return true;
   }
   return false;

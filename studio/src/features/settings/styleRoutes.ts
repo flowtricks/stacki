@@ -5,6 +5,8 @@ import type { createRooms } from '../collaboration/rooms';
 import { projectFoldersFor } from '../../../vendor/stacki/electron/lib/projectFolders';
 import { folderHolding } from '../../../vendor/stacki/shared/properties/projectFolders';
 import { record, sourcePath, string } from '../../shared/validation';
+import { requestRole } from '../roles/serverAccess';
+import { assertStyleSave } from '../roles/writeRules';
 
 export async function styleFiles(root: string, astro: boolean) {
   const files = [];
@@ -41,10 +43,12 @@ export async function saveSource(request: IncomingMessage, rooms: ReturnType<typ
   const source = string(data['source']);
   const base = string(data['base']);
   const room = await rooms.get(file);
+  const role = await requestRole(room.root, request);
   return rooms.coordinator.run(async () => {
     if (room.text.toString() !== base) {
       throw new Error('Another editor changed this file. Reload the style panel before editing again.');
     }
+    await assertStyleSave(role, { file, before: base, after: source }, rooms.guard);
     await room.setSource(source);
     return { ok: true };
   });

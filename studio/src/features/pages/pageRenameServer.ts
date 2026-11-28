@@ -15,6 +15,8 @@ import { checkpointGitWorkspace } from '../history/gitWorkspaceCheckpoint';
 import { snapshotGitWorkspace, gitWorkspaceCommit, gitWorkspaceRun } from '../history/gitWorkspaceObjects';
 import { gitWorkspaceNeedsRecovery, setGitWorkspaceBusy } from '../history/gitWorkspaceLease';
 import { readWorkspaceId } from '../project/projectIdentity';
+import { requestRole } from '../roles/serverAccess';
+import { assertRenameAllowed } from '../roles/writeRules';
 
 export async function pageRenameRoute(
   root: string,
@@ -29,6 +31,7 @@ export async function pageRenameRoute(
   }
   const input: unknown = JSON.parse(await readBody());
   const change = parsePageRename(input);
+  assertRenameAllowed(await requestRole(root, request), change);
   await rooms.coordinator.run(async () => {
     await rooms.persist();
     const planned = planPageRename(root, change, projectAliases(root));
