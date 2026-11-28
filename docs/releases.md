@@ -47,6 +47,58 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.22
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.22.
+- **Features**
+  - roles: add per-role editing options, up to read only
+  - publish: add custom hosting and a staging destination
+  - welcome: find websites inside a picked folder
+  - preview: an optional key so only scanned devices get in
+  - ai: open every chat image large, after a restart too
+  - roles: group permissions by panel and canvas controls
+  - style: edit an instance's inline style where it takes effect
+  - preview: phone preview starts with only-via-this-code on
+  - publish: add any number of labelled publish destinations
+- **Fixes**
+  - studio: survive server restarts and batch pull downloads
+  - studio: ship one catalog per language and gate publish setup
+  - design: a frame's page never loses width to its own scrollbar
+  - preview: no frame narrows its page, whatever the page's CSS
+  - canvas: hide the page's scrollbar before the first paint
+  - security: harden Desktop app files, permissions, IPC and package
+  - studio: keep code to code roles and Studio secrets from the site
+  - studio: check release downloads against GitHub's asset digest
+  - security: keep the permissions previews already had
+  - studio: check restricted edits quickly and keep editor actions
+  - shared: assert the new path parsers' invariants
+  - studio: let the process exit while the page compiler is idle
+  - release: leave Intel terminal files out of the arm64 Mac app
+  - preview: keep the code-only guard up and its redirect on site
+  - publish: show each setting only once it can be filled in
+  - style: never start Design mode on a read-only inline style
+  - style: keep Inline styles the default, and lock what it can't edit
+  - preview: never leave the canvas blank when the preview dies
+  - ai: show a subscriber Claude's current models
+  - fixtures: keep an instance's style in the Lumos components
+  - preview: a restart on purpose never shows the preview as offline
+  - canvas: mark text in the selected copy only, solid on hover
+  - design: lock a style target only where the edit would be lost
+  - studio: keep shared pages to text and the room queue running
+  - studio: judge page code as the site's compiler reads it
+  - publish: refuse when a host reply cannot prove no clash
+  - publish: find a saved deploy link under any spelling of a folder
+  - style: keep code editors from saving stale text over an edit
+  - preview: end preview processes reliably, in tests and on Windows
+  - popup: keep a close asked before the first effects run
+- **Documentation**
+  - publish: describe destinations and their safety checks
+- **CI and build**
+  - publish: publish create-stacki from a job that installs nothing
+  - studio: share the new draft hook with Studio
+- **Maintenance**
+  - security: pin actions, add SECURITY.md and CODEOWNERS
+
 ## 1.4.21
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.21.
