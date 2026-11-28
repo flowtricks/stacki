@@ -5,10 +5,20 @@
 // and only for this run of the app: it is off at every launch and when the project closes, and it is never
 // written anywhere. The canvas keeps its loopback address either way; only the phone uses the network one.
 //
-// What crosses: the port the server answers on and the machine's IPv4 addresses on the network, best first.
-// Both are checked here, at the boundary, in both directions (main builds them, the renderer reads them).
+// What crosses: the port the server answers on, the machine's IPv4 addresses on the network, best first, and
+// who may open it. All are checked here, at the boundary, in both directions (main builds them, the renderer
+// reads them).
+//
+// Who may open it: only the devices that scanned the code, which is how the app turns the preview on every time,
+// or anyone on the network, chosen in the card's setting. For the first, main makes a random key when it is turned on and keeps it in memory only, never
+// in settings or `.stacki`; the dev server gets it in its environment (PREVIEW_KEY_ENV). The code carries
+// it as a query parameter; the dev server answers that request with a cookie and a redirect to the page
+// without it, and from then on the cookie is the device's way in (electron/previewServer/loopbackGuard.ts).
+// Every device that scans the code gets in; a new key, made each time the option is turned on, locks out
+// the ones that scanned an older code.
 import { record, pathText, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import type { Brand } from '../core/brand';
 import { err, ok, type Result } from '../core/result';
 
 export const DEV_NETWORK_LIMITS = {
@@ -30,8 +40,34 @@ export interface LanAddress {
   readonly interfaceName: string;
 }
 
-/** Off: the server answers on 127.0.0.1 only. On: it answers on every interface, at `port`. */
-export type DevNetworkState = { readonly kind: 'off' } | { readonly kind: 'on'; readonly port: number; readonly addresses: readonly LanAddress[] };
+/** Who may open the preview from the network: anyone on it, or only the devices that scanned the code. */
+export const DEV_NETWORK_ACCESSES = ['open', 'key'] as const;
+export type DevNetworkAccess = (typeof DEV_NETWORK_ACCESSES)[number];
+
+/** The key a device scans: 32 random bytes in base64url, 43 characters. Built only by toPreviewKey. */
+export type PreviewKey = Brand<string, 'PreviewKey'>;
+const PREVIEW_KEY_RE = /^[A-Za-z0-9_-]{43}$/;
+
+/** The query parameter the code carries the key in, the cookie a device keeps it in, and the dev server's variable. */
+export const PREVIEW_KEY_PARAM = 'stacki-key';
+export const PREVIEW_KEY_COOKIE = 'stacki-preview-key';
+export const PREVIEW_KEY_ENV = 'STACKI_PREVIEW_KEY';
+
+export function toPreviewKey(value: string): PreviewKey {
+  if (!PREVIEW_KEY_RE.test(value)) {
+    throw new Error('PreviewKey: expected 43 base64url characters');
+  }
+  return value as PreviewKey;
+}
+
+/** Who may open it, as the state carries it: with the key, which the code must hold, when only scanned devices may. */
+export type NetworkAccess = { readonly kind: 'open' } | { readonly kind: 'key'; readonly key: PreviewKey };
+
+export const NETWORK_ACCESS_OPEN: NetworkAccess = { kind: 'open' };
+
+/** Off: the server answers on 127.0.0.1 only. On: it answers on every interface, at `port`, to whom `access` lets in. */
+export type DevNetworkState =
+  { readonly kind: 'off' } | { readonly kind: 'on'; readonly port: number; readonly addresses: readonly LanAddress[]; readonly access: NetworkAccess };
 
 /** Why turning it on or off did not happen. Each code is a toast in the renderer. */
 export const DEV_NETWORK_FAILURES = ['no-address', 'no-server', 'external', 'busy', 'restart-failed'] as const;
@@ -39,10 +75,9 @@ export type DevNetworkFailure = (typeof DEV_NETWORK_FAILURES)[number];
 
 export type DevNetworkReply = Result<DevNetworkState, DevNetworkFailure>;
 
-export interface DevNetworkRequest {
-  readonly projectPath: string;
-  readonly mode: DevNetworkMode;
-}
+/** Back to this computer only, or open on the network to whom `access` names. */
+export type DevNetworkRequest =
+  { readonly projectPath: string; readonly mode: 'local' } | { readonly projectPath: string; readonly mode: 'network'; readonly access: DevNetworkAccess };
 
 export const DEV_NETWORK_OFF: DevNetworkState = { kind: 'off' };
 
@@ -57,10 +92,29 @@ export function parseDevNetworkRequest(input: unknown): DevNetworkRequest {
   const fields = record(input);
   const projectPath = pathText(fields['projectPath']);
   const mode = fields['mode'];
-  if (mode === 'local' || mode === 'network') {
+  if (mode === 'local') {
     return { projectPath, mode };
   }
-  throw new Error('DevNetworkRequest.mode: expected local or network');
+  if (mode !== 'network') {
+    throw new Error('DevNetworkRequest.mode: expected local or network');
+  }
+  const access = DEV_NETWORK_ACCESSES.find((known) => known === fields['access']);
+  if (access === undefined) {
+    throw new Error('DevNetworkRequest.access: expected open or key');
+  }
+  return { projectPath, mode, access };
+}
+
+export function parseNetworkAccess(input: unknown): NetworkAccess {
+  const fields = record(input);
+  const kind = fields['kind'];
+  if (kind === 'open') {
+    return NETWORK_ACCESS_OPEN;
+  }
+  if (kind !== 'key') {
+    throw new Error('NetworkAccess.kind: expected open or key');
+  }
+  return { kind, key: toPreviewKey(text(fields['key'])) };
 }
 
 export function parseLanAddress(input: unknown): LanAddress {
@@ -100,7 +154,7 @@ export function parseDevNetworkState(input: unknown): DevNetworkState {
     throw new Error('DevNetworkState.addresses: exceeds limit');
   }
   const parsed = addresses.map(parseLanAddress);
-  return { kind: 'on', port, addresses: parsed };
+  return { kind: 'on', port, addresses: parsed, access: parseNetworkAccess(fields['access']) };
 }
 
 export function parseDevNetworkReply(input: unknown): DevNetworkReply {
@@ -120,13 +174,17 @@ export function parseDevNetworkReply(input: unknown): DevNetworkReply {
 }
 
 /**
- * The address a phone opens: the network address, the server's port and the page the canvas shows.
- * `route` is the canvas's own path (`/`, `/blog/post`), never a full URL.
+ * The address a phone opens: the network address, the server's port and the page the canvas shows, with the
+ * key when only scanned devices may open it. `route` is the canvas's own path (`/`, `/blog/post`), never a
+ * full URL.
  */
-export function networkPageURL(address: LanAddress, port: number, route: string): string {
+export function networkPageURL(address: LanAddress, port: number, route: string, access: NetworkAccess): string {
   assert(isIPv4Address(address.address), 'networkPageURL: the address is IPv4');
   assert(route.startsWith('/'), 'networkPageURL: the route is a path');
   const url = new URL(route, `http://${address.address}:${port}`);
   assert(url.hostname === address.address, 'networkPageURL: the route keeps the host');
+  if (access.kind === 'key') {
+    url.searchParams.set(PREVIEW_KEY_PARAM, access.key);
+  }
   return url.href;
 }

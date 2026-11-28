@@ -13,6 +13,7 @@ import type { ScanResult } from '../../../shared/properties/projectScan';
 import { createCanvasRecovery, isCurrentPageFailure, type CanvasRecovery } from '../../features/preview/canvasRecovery';
 import { onFrameOverlay, publishCanvasRecovery } from '../../features/preview/canvasRecoveryBus';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { usePreviewSupervision } from './appPreviewSupervision';
 import { readPage, scanProject } from '../../ipc/bridge';
 import { assert } from '../../../shared/core/assert';
 import { onAssetRequest, clearAssetRequest } from '../../ui/assetPick';
@@ -194,12 +195,16 @@ export function useDevEvents(coreState: ReturnType<typeof useCoreState>, assetPi
   const { devLogRef, setBusy, setDevLog, setDevStatus, setDevUrl } = coreState;
   const { diagnose } = assetPickScope;
   const recovery = usePreviewRecovery(coreState);
+  const { serverExited } = usePreviewSupervision(coreState);
 
   useEffect(() => {
     const offProgress = onAppProgress((message) => setBusy(message));
     const offExit = onDevExit((log) => {
-      setDevStatus('off');
-      setDevUrl(undefined);
+      // A preview on show is started again (appPreviewSupervision.ts); otherwise the canvas says it is offline.
+      if (!serverExited()) {
+        setDevStatus('off');
+        setDevUrl(undefined);
+      }
       if (log) {
         devLogRef.current = log;
         setDevLog(log);
@@ -215,7 +220,7 @@ export function useDevEvents(coreState: ReturnType<typeof useCoreState>, assetPi
       offExit();
       offLog();
     };
-  }, [diagnose, devLogRef, setBusy, setDevLog, setDevStatus, setDevUrl]);
+  }, [diagnose, devLogRef, serverExited, setBusy, setDevLog, setDevStatus, setDevUrl]);
   return recovery;
 }
 

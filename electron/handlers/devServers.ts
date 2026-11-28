@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { execFile, type ChildProcess } from 'child_process';
+import { randomBytes } from 'crypto';
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
@@ -37,6 +38,7 @@ import {
   readAstroLock,
   satisfiesRange,
   serverAlive,
+  serverStillServes,
   trailingSlashFromSource,
 } from '../preview/devServerChecks';
 import { hasContentConfig } from '../content/contentConfig';
@@ -48,7 +50,18 @@ import { configOf } from '../../shared/properties/projectFolders';
 import type { Thumbnails } from './thumbnails';
 import { devServerArgs, devServerURL, networkAllowedHosts } from '../preview/devServerArgs';
 import { selectLanAddresses, type InterfaceTable } from '../preview/lanAddresses';
-import { DEV_NETWORK_OFF, type DevNetworkMode, type DevNetworkReply, type DevNetworkState } from '../../shared/ipc/devNetwork';
+import {
+  DEV_NETWORK_OFF,
+  NETWORK_ACCESS_OPEN,
+  PREVIEW_KEY_ENV,
+  toPreviewKey,
+  type DevNetworkMode,
+  type DevNetworkReply,
+  type DevNetworkRequest,
+  type DevNetworkState,
+  type NetworkAccess,
+  type PreviewKey,
+} from '../../shared/ipc/devNetwork';
 import { err, ok } from '../../shared/core/result';
 
 // Subscribe before sending the stop signal so a fast exit cannot be missed.
@@ -67,6 +80,16 @@ function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
     }, 10000);
     process.once('exit', exited);
   });
+}
+
+// `astro dev stop` ends whatever server the project's lock names. That may be one another Stacki or a terminal
+// started since ours: stopping ours must not stop theirs. Ports tell them apart.
+function lockNamesAnotherServer(server: DevServer): boolean {
+  const lock = readAstroLock(server.projectPath);
+  if (lock === undefined || !URL.canParse(lock.url)) {
+    return false; // Nothing says it is someone else's: the CLI is left to judge.
+  }
+  return new URL(lock.url).port !== new URL(server.url).port;
 }
 
 // The page patcher, handed to every page as a module. It lives in its own
@@ -108,18 +131,28 @@ export function startProjectPreview(
   projectPath: string,
 ): Promise<IpcResults['dev:start']> {
   thumbnails.noteProjectOpened();
-  return devServers.run(projectPath, async (assertActive) => {
-    const result = await devServers.start(projectPath, assertActive);
-    assertActive();
-    thumbnails.schedule(projectPath, 6000);
-    return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
-  });
+  // A restart main is making is waited for: a start slipped between its stop and its start would take another port.
+  return devServers.settled().then(() =>
+    devServers.run(projectPath, async (assertActive) => {
+      const result = await devServers.start(projectPath, assertActive);
+      assertActive();
+      thumbnails.schedule(projectPath, 6000);
+      return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
+    }),
+  );
 }
 
 /** Page files the preview config can be told about (its `/__avb/touch` takes the same). */
 const TOUCHABLE_FILE = /\.(astro|md|mdx)$/i;
 /** A touch that gets no answer by now is left to the file watcher. */
 const TOUCH_TIMEOUT_MS = 1500;
+
+/** The key only scanned devices hold: 32 random bytes, 43 base64url characters, made new each time the option is turned on. */
+function newPreviewKey(): PreviewKey {
+  const key = toPreviewKey(randomBytes(32).toString('base64url'));
+  assert(key.length === 43, 'newPreviewKey: 32 bytes in base64url');
+  return key;
+}
 
 export class DevServers {
   private server: DevServer | undefined = undefined;
@@ -137,15 +170,26 @@ export class DevServers {
   // only: never written anywhere, so it is off at every launch, and cleared when the project closes or
   // the app quits (stop()). A restart for any other reason (an .env change, a branch switch) keeps it.
   private networkProject: string | undefined = undefined;
+  // Who may open it from the network, while it is open there: anyone, or only the devices that scanned the
+  // code, with the key the code carries. Kept like networkProject, in memory only, and cleared with it; a new
+  // key is made each time the option is turned on (restartInMode), so an older code stops working.
+  private networkAccess: NetworkAccess = NETWORK_ACCESS_OPEN;
   // One change of mode at a time: each is a restart of the dev server, and a second toggle while one
   // restarts would race it.
   private networkChange: 'idle' | 'changing' = 'idle';
+  // The restart under way, and the port it is to come back on: the canvas, and a phone with the address, hold that one.
+  private restart: { readonly port: number; readonly settled: Promise<void> } | undefined = undefined;
 
   constructor(
     private readonly host: Pick<MainHost, 'send'>,
     // Extra variables the project's dev server gets (cms/cmsPreviewEnvironment.ts).
     private readonly previewEnvironment: (projectRoot: string) => Readonly<Record<string, string>> = () => ({}),
   ) {}
+
+  /** Settled once no restart of main's own is under way. */
+  settled(): Promise<void> {
+    return this.restart?.settled ?? Promise.resolve();
+  }
 
   /** The dev server the canvas shows, while one runs. */
   current(): DevServer | undefined {
@@ -178,8 +222,10 @@ export class DevServers {
       return;
     }
     if (server.daemon && server.bin) {
-      const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
-      await run(command, args, server.projectPath, SHORT_COMMAND);
+      if (!lockNamesAnotherServer(server)) {
+        const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
+        await run(command, args, server.projectPath, SHORT_COMMAND);
+      }
       if (this.server === server) {
         this.server = undefined;
       }
@@ -201,14 +247,19 @@ export class DevServers {
       // A stop that cancels is the project closing or the app quitting, never a restart (pause): the
       // preview goes back to this computer only (see networkProject).
       this.networkProject = undefined;
+      this.networkAccess = NETWORK_ACCESS_OPEN;
     }
     if (!this.server) {
       return;
     }
     const { proc, daemon, bin, projectPath } = this.server;
+    const replaced = lockNamesAnotherServer(this.server);
     this.server = undefined;
     // Daemonized servers (Astro >= 7 forks a background process) stop via the CLI.
     if (daemon && bin) {
+      if (replaced) {
+        return;
+      }
       try {
         const [cmd, argv] = nodeCliCommand(bin, ['dev', 'stop']);
         execFile(cmd, argv, { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(cmd) }, () => {});
@@ -228,8 +279,8 @@ export class DevServers {
    * asks again. Resolves true when the server is back at the same address
    * (its port comes from the project path, so it normally is) — the canvas's
    * Vite client reconnects to it by itself. False when there was nothing to
-   * do, or the server came back somewhere else; the app then hears of it as
-   * an exit and offers to start the preview again.
+   * do, or the server came back somewhere else; the app hears the new address
+   * (`dev:restart`) and shows the preview from there.
    */
   async restartForNewContentConfig(devUrl: string): Promise<boolean> {
     const server = this.server;
@@ -281,18 +332,34 @@ export class DevServers {
     return this.server?.url;
   }
 
+  // Stops and starts the server on purpose, on the same port while it is free. The app is told before and after
+  // (shared/ipc/devRestart.ts), so it neither calls the preview dead meanwhile nor misses a new address. Resolves
+  // true when the server is back where it was.
   private async restartAt(projectPath: string, devUrl: string): Promise<boolean> {
-    await this.pause();
-    const restarted = await this.run(projectPath, async (assertActive) => ({
-      ...(await this.start(projectPath, assertActive)),
-      trailingSlash: this.readTrailingSlash(projectPath),
-    }));
-    assert(restarted.url.length > 0, 'A restarted server has an address');
-    if (restarted.url !== devUrl) {
-      this.host.send('dev:exit', { code: 0, log: this.recentLog() });
-      return false;
+    const port = Number(new URL(devUrl).port);
+    assert(Number.isSafeInteger(port), 'restartAt: the old address has a port');
+    assert(port > 0, 'restartAt: the port is positive');
+    let finish = (): void => {};
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    this.restart = { port, settled };
+    this.host.send('dev:restart', { kind: 'begun' });
+    let url: string | undefined;
+    try {
+      await this.pause();
+      const restarted = await this.run(projectPath, async (assertActive) => ({
+        ...(await this.start(projectPath, assertActive)),
+        trailingSlash: this.readTrailingSlash(projectPath),
+      }));
+      assert(restarted.url.length > 0, 'A restarted server has an address');
+      url = restarted.url;
+    } finally {
+      this.restart = undefined;
+      finish();
+      this.host.send('dev:restart', { kind: 'done', url });
     }
-    return true;
+    return url === devUrl;
   }
 
   /** The trailing-slash mode the project's dev server serves. */
@@ -357,7 +424,7 @@ export class DevServers {
     const port = Number(new URL(server.url).port);
     assert(Number.isSafeInteger(port), 'networkState: the server has a port');
     assert(port > 0, 'networkState: the port is positive');
-    return { kind: 'on', port, addresses: selectLanAddresses(interfaces) };
+    return { kind: 'on', port, addresses: selectLanAddresses(interfaces), access: this.networkAccess };
   }
 
   /**
@@ -365,41 +432,55 @@ export class DevServers {
    * restarting its dev server with the other `--host` (devServerArgs.ts). The canvas keeps its loopback
    * address and reconnects by itself. A restart that fails leaves the mode off and the server started
    * again on loopback, once; the reply says it failed, for the renderer's toast. At most two restarts.
+   * While it is on, asking for the other access (anyone, or only scanned devices) restarts it the same way.
    */
-  async setNetwork(projectPath: string, mode: DevNetworkMode, interfaces: InterfaceTable = os.networkInterfaces()): Promise<DevNetworkReply> {
+  async setNetwork(request: DevNetworkRequest, interfaces: InterfaceTable = os.networkInterfaces()): Promise<DevNetworkReply> {
     // First: while a change restarts the server there is no server to judge, and the answer is "wait".
     if (this.networkChange === 'changing') {
       return err('busy');
     }
     const server = this.server;
-    if (server === undefined || !sameFilesystemPath(server.projectPath, projectPath)) {
+    if (server === undefined || !sameFilesystemPath(server.projectPath, request.projectPath)) {
       return err('no-server');
     }
     // A server the user runs themselves has no command line of ours to change.
     if (server.external === true) {
       return err('external');
     }
-    if (this.networkMode(projectPath) === mode) {
-      return ok(this.networkState(projectPath, interfaces));
+    if (this.runsAsAsked(request)) {
+      return ok(this.networkState(request.projectPath, interfaces));
     }
     // A machine on no network has no address for a phone to open: stay local and say so.
-    if (mode === 'network' && selectLanAddresses(interfaces).length === 0) {
+    if (request.mode === 'network' && selectLanAddresses(interfaces).length === 0) {
       return err('no-address');
     }
     this.networkChange = 'changing';
     try {
-      return await this.restartInMode(server.projectPath, server.url, mode, interfaces);
+      return await this.restartInMode(server.projectPath, server.url, request, interfaces);
     } finally {
       this.networkChange = 'idle';
     }
   }
 
-  private async restartInMode(projectPath: string, devUrl: string, mode: DevNetworkMode, interfaces: InterfaceTable): Promise<DevNetworkReply> {
+  /** Whether the server already runs as `request` asks: in its mode and, on the network, with its access. */
+  private runsAsAsked(request: DevNetworkRequest): boolean {
+    if (this.networkMode(request.projectPath) !== request.mode) {
+      return false;
+    }
+    if (request.mode === 'local') {
+      return true;
+    }
+    return this.networkAccess.kind === request.access;
+  }
+
+  private async restartInMode(projectPath: string, devUrl: string, request: DevNetworkRequest, interfaces: InterfaceTable): Promise<DevNetworkReply> {
     assert(this.networkChange === 'changing', 'restartInMode: one change at a time');
+    const mode: DevNetworkMode = request.mode;
     this.networkProject = mode === 'network' ? projectPath : undefined;
+    this.networkAccess = request.mode === 'network' && request.access === 'key' ? { kind: 'key', key: newPreviewKey() } : NETWORK_ACCESS_OPEN;
     this.pushLog(
       mode === 'network'
-        ? '\n[stacki] opening the preview on the local network; restarting it with --host 0.0.0.0.\n'
+        ? `\n[stacki] opening the preview on the local network${this.networkAccess.kind === 'key' ? ', to the devices that scan its code' : ''}; restarting it with --host 0.0.0.0.\n`
         : '\n[stacki] taking the preview back to this computer only; restarting it with --host 127.0.0.1.\n',
     );
     try {
@@ -411,6 +492,7 @@ export class DevServers {
     }
     // The second and last restart: back to this computer only, the mode that started before.
     this.networkProject = undefined;
+    this.networkAccess = NETWORK_ACCESS_OPEN;
     try {
       await this.restartAt(projectPath, devUrl);
     } catch {
@@ -418,6 +500,18 @@ export class DevServers {
     }
     assert(this.networkMode(projectPath) === 'local', 'restartInMode: a failed change ends local');
     return err('restart-failed');
+  }
+
+  /**
+   * The key the dev server checks (previewServer/loopbackGuard.ts), in its environment and nowhere else: only
+   * on the network, and only while only scanned devices may open the preview.
+   */
+  private previewKeyEnvironment(mode: DevNetworkMode): Readonly<Record<string, string>> {
+    const access = this.networkAccess;
+    if (mode === 'network' && access.kind === 'key') {
+      return { [PREVIEW_KEY_ENV]: access.key };
+    }
+    return {};
   }
 
   /** The generated config's path, or undefined when the dev server runs without it. `networkHosts`: the hosts Vite answers to on the local network, only in that mode. */
@@ -486,26 +580,40 @@ export class DevServers {
     }
   }
 
+  // The server already held for this project, when it still serves; otherwise it is let go, so a start replaces it.
+  // Why asked at all: a server that died or hung would be answered with for as long as the project stayed open.
+  private async stillRunning(current: DevServer): Promise<{ readonly url: string; readonly external?: true } | undefined> {
+    const serves = await serverStillServes(current.url);
+    // It may have exited, or been replaced, while it was asked.
+    if (this.server !== current) {
+      return undefined;
+    }
+    if (serves) {
+      return current.external === true ? { url: current.url, external: true } : { url: current.url };
+    }
+    this.pushLog('\n[stacki] the preview server stopped answering; starting it again.\n');
+    const exited = waitForPreviewExit(current.proc);
+    this.stop(false);
+    // A server that will not end is left behind: the new one takes the next free port.
+    await exited.catch(() => undefined);
+    return undefined;
+  }
+
   /** Starts the project's dev server, or answers with the one already running. */
   async start(projectPath: string, assertActive: () => void) {
     assertActive();
     if (this.server && sameFilesystemPath(this.server.projectPath, projectPath)) {
-      // For adopted external servers, make sure it's still alive.
-      if (this.server.external) {
-        const current = this.server;
-        if (await serverAlive(current.url)) {
-          assertActive();
-          return { url: current.url, external: true };
-        }
-        this.server = undefined;
-      } else {
-        return { url: this.server.url };
+      const running = await this.stillRunning(this.server);
+      assertActive();
+      if (running !== undefined) {
+        return running;
       }
     }
     assertActive();
     // The mode belongs to the project that turned it on: another project starts on this computer only.
     if (this.networkProject !== undefined && !sameFilesystemPath(this.networkProject, projectPath)) {
       this.networkProject = undefined;
+      this.networkAccess = NETWORK_ACCESS_OPEN;
     }
     this.stop(false);
     this.logBuffer = [];
@@ -568,7 +676,8 @@ export class DevServers {
   }
 
   private async spawn(projectPath: string, localBin: string, { force, bare }: { readonly force: boolean; readonly bare: boolean }, assertActive: () => void) {
-    const port = await findFreePort(previewPort(fs.realpathSync(projectPath)));
+    // A restart asks for the port it left; if that is taken now, the search goes on from it.
+    const port = await findFreePort(this.restart?.port ?? previewPort(fs.realpathSync(projectPath)));
     assertActive();
     // Every attempt (the first, the --force retry and the bare fallback) starts in the project's mode:
     // on the local network only when it was turned on for this project (setNetwork).
@@ -582,7 +691,7 @@ export class DevServers {
     const args = devServerArgs({ port, mode, configPath: markerConfig ? toPosix(path.relative(projectPath, markerConfig)) : undefined, force });
 
     const startedAtMs = Date.now();
-    const extra = this.previewEnvironment(fs.realpathSync(projectPath));
+    const extra = { ...this.previewEnvironment(fs.realpathSync(projectPath)), ...this.previewKeyEnvironment(mode) };
     const proc = spawnAstroServer(projectPath, localBin, args, extra);
 
     // Loopback in every mode: the canvas, thumbnails and main's own requests never change address.
@@ -746,7 +855,7 @@ export function registerDevServerHandlers({
 
   ipcMain.handle('dev:network', (_event, projectPath) => devServers.networkState(projectPath));
 
-  ipcMain.handle('dev:setNetwork', (_event, request) => devServers.setNetwork(request.projectPath, request.mode));
+  ipcMain.handle('dev:setNetwork', (_event, request) => devServers.setNetwork(request));
 
   ipcMain.handle('dev:diagnose', async (_event, projectPath) => {
     const nodePath = resolveNodeBin() ?? undefined;

@@ -3,6 +3,9 @@
 // 127.0.0.1; the app's own address stays loopback; the generated config names allowed hosts only in
 // network mode; closing the project (stop) turns it off; a failed restart ends off, restarted on
 // loopback, with a failure the renderer turns into a toast; and a change never takes more than two restarts.
+// Letting in only the devices that scan the code is an option of the network mode: it restarts the server
+// with a new random key in its environment (and nowhere else), each time it is turned on, and the key goes
+// with the mode when the preview goes back to this computer or the project closes.
 // Method: the pure parts (devServerArgs, devServerURL, networkAllowedHosts) are called directly, and the
 // generated config is written by writeMarkerConfig into a temporary project and read back as text. The
 // lifecycle runs on a DevServers whose process work (pause, start) is replaced by recorders that note the
@@ -13,7 +16,7 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { DevServers } = require('#dist/electron/handlers/devServers.js');
+const { DevServers, startProjectPreview } = require('#dist/electron/handlers/devServers.js');
 const { devServerArgs, devServerURL, networkAllowedHosts } = require('#dist/electron/preview/devServerArgs.js');
 
 const URL = 'http://127.0.0.1:48781';
@@ -93,19 +96,23 @@ function servers(server, { failStarts = 0 } = {}) {
 }
 
 const owned = (projectPath) => ({ proc: undefined, daemon: true, bin: 'astro', url: URL, projectPath });
+// The requests the renderer sends (shared/ipc/devNetwork.ts), on the network to anyone unless `access` says otherwise.
+const onNetwork = (projectPath, access = 'open') => ({ projectPath, mode: 'network', access });
+const onComputer = (projectPath) => ({ projectPath, mode: 'local' });
+const OPEN = { kind: 'open' };
 
 test('off by default; on restarts with 0.0.0.0, off restarts with 127.0.0.1; the canvas address never moves', async (context) => {
   const root = project(context);
   const { instance, starts, sent } = servers(owned(root));
   assert.deepEqual(instance.networkState(root, WIFI), { kind: 'off' });
   assert.equal(instance.networkMode(root), 'local');
-  const on = await instance.setNetwork(root, 'network', WIFI);
-  assert.deepEqual(on, { ok: true, value: { kind: 'on', port: 48781, addresses: [{ address: '192.168.1.23', interfaceName: 'en0' }] } });
+  const on = await instance.setNetwork(onNetwork(root), WIFI);
+  assert.deepEqual(on, { ok: true, value: { kind: 'on', port: 48781, addresses: [{ address: '192.168.1.23', interfaceName: 'en0' }], access: OPEN } });
   assert.deepEqual(starts, ['network']);
   assert.equal(instance.current().url, URL, 'the canvas keeps its loopback address');
-  assert.deepEqual(await instance.setNetwork(root, 'network', WIFI), on, 'asking again changes nothing');
+  assert.deepEqual(await instance.setNetwork(onNetwork(root), WIFI), on, 'asking again changes nothing');
   assert.deepEqual(starts, ['network'], 'and restarts nothing');
-  const off = await instance.setNetwork(root, 'local', WIFI);
+  const off = await instance.setNetwork(onComputer(root), WIFI);
   assert.deepEqual(off, { ok: true, value: { kind: 'off' } });
   assert.deepEqual(starts, ['network', 'local']);
   assert.equal(instance.current().url, URL);
@@ -119,7 +126,7 @@ test('off by default; on restarts with 0.0.0.0, off restarts with 127.0.0.1; the
 test('closing the project or quitting turns it off; a restart for another reason keeps it', async (context) => {
   const root = project(context);
   const { instance } = servers(owned(root));
-  await instance.setNetwork(root, 'network', WIFI);
+  await instance.setNetwork(onNetwork(root), WIFI);
   await instance.pause(); // A branch switch: the same project starts again in the same mode.
   assert.equal(instance.networkMode(root), 'network');
   instance.stop(); // project:close, before-quit, window-all-closed
@@ -131,7 +138,7 @@ test('another project starts on this computer only', async (context) => {
   const root = project(context);
   const other = project(context);
   const { instance } = servers(owned(root));
-  await instance.setNetwork(root, 'network', WIFI);
+  await instance.setNetwork(onNetwork(root), WIFI);
   assert.equal(instance.networkMode(other), 'local');
   // The real start, up to the point it would spawn: it clears the mode of the project it is not.
   const real = new DevServers({ send() {} });
@@ -149,7 +156,7 @@ test('another project starts on this computer only', async (context) => {
 test('no network address: refused, nothing restarts, the mode stays off', async (context) => {
   const root = project(context);
   const { instance, starts } = servers(owned(root));
-  assert.deepEqual(await instance.setNetwork(root, 'network', OFFLINE), { ok: false, error: 'no-address' });
+  assert.deepEqual(await instance.setNetwork(onNetwork(root), OFFLINE), { ok: false, error: 'no-address' });
   assert.deepEqual(starts, []);
   assert.equal(instance.networkMode(root), 'local');
 });
@@ -157,11 +164,11 @@ test('no network address: refused, nothing restarts, the mode stays off', async 
 test('no server, another project, or a server the user runs: refused without a restart', async (context) => {
   const root = project(context);
   const none = servers(undefined);
-  assert.deepEqual(await none.instance.setNetwork(root, 'network', WIFI), { ok: false, error: 'no-server' });
+  assert.deepEqual(await none.instance.setNetwork(onNetwork(root), WIFI), { ok: false, error: 'no-server' });
   const elsewhere = servers(owned(project(context)));
-  assert.deepEqual(await elsewhere.instance.setNetwork(root, 'network', WIFI), { ok: false, error: 'no-server' });
+  assert.deepEqual(await elsewhere.instance.setNetwork(onNetwork(root), WIFI), { ok: false, error: 'no-server' });
   const external = servers({ proc: undefined, url: URL, projectPath: root, external: true });
-  assert.deepEqual(await external.instance.setNetwork(root, 'network', WIFI), { ok: false, error: 'external' });
+  assert.deepEqual(await external.instance.setNetwork(onNetwork(root), WIFI), { ok: false, error: 'external' });
   assert.deepEqual([...none.starts, ...elsewhere.starts, ...external.starts], []);
   assert.deepEqual(external.instance.networkState(root, WIFI), { kind: 'off' });
 });
@@ -169,7 +176,7 @@ test('no server, another project, or a server the user runs: refused without a r
 test('a restart that fails ends off, started again on loopback once, and says so', async (context) => {
   const root = project(context);
   const { instance, starts, sent } = servers(owned(root), { failStarts: 1 });
-  assert.deepEqual(await instance.setNetwork(root, 'network', WIFI), { ok: false, error: 'restart-failed' });
+  assert.deepEqual(await instance.setNetwork(onNetwork(root), WIFI), { ok: false, error: 'restart-failed' });
   assert.deepEqual(starts, ['network', 'local'], 'two restarts at most: the asked mode, then back to loopback');
   assert.equal(instance.networkMode(root), 'local');
   assert.equal(instance.current().url, URL, 'the canvas is back');
@@ -182,7 +189,7 @@ test('a restart that fails ends off, started again on loopback once, and says so
 test('when the loopback restart fails too, the app hears the preview went away', async (context) => {
   const root = project(context);
   const { instance, starts, sent } = servers(owned(root), { failStarts: 2 });
-  assert.deepEqual(await instance.setNetwork(root, 'network', WIFI), { ok: false, error: 'restart-failed' });
+  assert.deepEqual(await instance.setNetwork(onNetwork(root), WIFI), { ok: false, error: 'restart-failed' });
   assert.deepEqual(starts, ['network', 'local'], 'still no third restart');
   assert.equal(instance.networkMode(root), 'local');
   assert.equal(sent.filter((message) => message.channel === 'dev:exit').length, 1);
@@ -191,8 +198,91 @@ test('when the loopback restart fails too, the app hears the preview went away',
 test('a second change while one restarts is refused', async (context) => {
   const root = project(context);
   const { instance, starts } = servers(owned(root));
-  const first = instance.setNetwork(root, 'network', WIFI);
-  assert.deepEqual(await instance.setNetwork(root, 'local', WIFI), { ok: false, error: 'busy' });
+  const first = instance.setNetwork(onNetwork(root), WIFI);
+  assert.deepEqual(await instance.setNetwork(onComputer(root), WIFI), { ok: false, error: 'busy' });
   assert.equal((await first).ok, true);
   assert.deepEqual(starts, ['network']);
+});
+
+test('only scanned devices: a restart with a new key, in the server’s environment and nowhere else', async (context) => {
+  const root = project(context);
+  const { instance, starts } = servers(owned(root));
+  assert.deepEqual(instance.previewKeyEnvironment('local'), {}, 'off: no key');
+  await instance.setNetwork(onNetwork(root), WIFI);
+  assert.deepEqual(instance.previewKeyEnvironment('network'), {}, 'open to anyone: no key');
+  const keyed = await instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  assert.equal(keyed.ok, true);
+  const access = keyed.value.access;
+  assert.equal(access.kind, 'key');
+  assert.match(access.key, /^[A-Za-z0-9_-]{43}$/, '32 random bytes in base64url');
+  assert.deepEqual(starts, ['network', 'network'], 'choosing it restarts the server once');
+  assert.deepEqual(instance.previewKeyEnvironment('network'), { STACKI_PREVIEW_KEY: access.key });
+  assert.deepEqual(instance.previewKeyEnvironment('local'), {}, 'never on this computer only');
+  assert.deepEqual(await instance.setNetwork(onNetwork(root, 'key'), WIFI), keyed, 'asking again keeps the key and restarts nothing');
+  assert.equal(starts.length, 2);
+
+  await instance.setNetwork(onNetwork(root), WIFI);
+  assert.deepEqual(instance.networkState(root, WIFI).access, OPEN, 'back to anyone: the key is gone');
+  const again = await instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  assert.notEqual(again.value.access.key, access.key, 'turned on again, a new key: an older code stops working');
+
+  await instance.setNetwork(onComputer(root), WIFI);
+  assert.deepEqual(instance.previewKeyEnvironment('network'), {}, 'back to this computer: the key goes with the mode');
+  const reopened = await instance.setNetwork(onNetwork(root), WIFI);
+  assert.deepEqual(reopened.value.access, OPEN, 'turned on again, it starts open: nothing is remembered');
+});
+
+test('closing the project drops the key with the mode; a failed restart ends open', async (context) => {
+  const root = project(context);
+  const { instance } = servers(owned(root));
+  await instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  instance.stop();
+  assert.deepEqual(instance.previewKeyEnvironment('network'), {});
+  const failing = servers(owned(root), { failStarts: 1 });
+  assert.deepEqual(await failing.instance.setNetwork(onNetwork(root, 'key'), WIFI), { ok: false, error: 'restart-failed' });
+  assert.deepEqual(failing.instance.previewKeyEnvironment('network'), {}, 'back on loopback, open, with no key left behind');
+});
+
+test('turning it on and off is announced as a restart, never as the preview ending, even when the address moves', async (context) => {
+  const root = project(context);
+  const { instance, sent } = servers(owned(root));
+  await instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  await instance.setNetwork(onComputer(root), WIFI);
+  const done = { kind: 'done', url: URL };
+  const told = (messages) => messages.filter((message) => message.channel !== 'dev:log');
+  assert.deepEqual(told(sent), [
+    { channel: 'dev:restart', payload: { kind: 'begun' } },
+    { channel: 'dev:restart', payload: done },
+    { channel: 'dev:restart', payload: { kind: 'begun' } },
+    { channel: 'dev:restart', payload: done },
+  ]);
+  // The reported bug: the server ran on the next port (its own was taken when the project opened), the restart came
+  // back elsewhere, and a running server was reported as ended ("Preview is offline").
+  const moved = servers({ ...owned(root), url: 'http://127.0.0.1:48782' });
+  assert.equal((await moved.instance.setNetwork(onNetwork(root, 'key'), WIFI)).ok, true);
+  assert.deepEqual(
+    told(moved.sent).map((message) => message.channel),
+    ['dev:restart', 'dev:restart'],
+  );
+  assert.deepEqual(told(moved.sent).at(-1).payload, done);
+});
+
+test('a start asked for while main restarts waits for that restart, and joins its server', async (context) => {
+  const root = project(context);
+  const { instance, starts } = servers(owned(root));
+  let release;
+  const stopping = new Promise((resolve) => (release = resolve));
+  instance.pause = async () => {
+    instance.server = undefined;
+    await stopping;
+  };
+  const change = instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  const asked = startProjectPreview(instance, { noteProjectOpened() {}, schedule() {} }, root);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(starts, [], 'nothing starts while the old server stops');
+  release();
+  assert.equal((await change).ok, true);
+  assert.equal((await asked).url, URL);
+  assert.deepEqual(starts.slice(0, 1), ['network'], 'the restart starts first, in the asked mode');
+  assert.ok(starts.every((mode) => mode === 'network'));
 });

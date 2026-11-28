@@ -547,6 +547,11 @@ function eventBridge() {
       ipcRenderer.on('dev:exit', listener);
       return () => ipcRenderer.removeListener('dev:exit', listener);
     },
+    onDevRestart: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('dev:restart', listener);
+      return () => ipcRenderer.removeListener('dev:restart', listener);
+    },
     onProgress: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('progress', listener);

@@ -11,6 +11,7 @@ import { renderToken } from './frameRegions';
 // bundle (scripts/build/bundleClients.ts). Their top levels only declare:
 // everything a frame does starts from the calls below, so the app's window
 // runs none of the frame half and a preview frame none of the bridge.
+import { answerAliveChecks } from './frameAlive';
 import { installCanvasText } from './frameText';
 import { installCanvasImage } from './frameImage';
 import { canvasSelects } from './frameInteraction';
@@ -30,6 +31,8 @@ if (location.protocol === 'stacki-app:') {
   // Design mode (experimental): a frame on its canvas is a still copy of a page, so it gets neither half.
 } else if (!process.isMainFrame) {
   const post = (message: unknown) => window.parent.postMessage(message, '*');
+  // First, so a frame can say it is there whatever happens to the rest (frameAlive.ts).
+  answerAliveChecks();
   // Registered first, so a double click on an image is heard before text editing (which takes the nearest words of a
   // stretched link) and before the one that opens a component.
   installCanvasImage(post, canvasSelects);

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { pageLoadEnd, pageLoadStart } from './pageLoadState';
+import { registerPreviewFrame } from './previewFrames';
 import { parsePreviewMessage } from './previewMessages';
 
 interface FrameSource {
@@ -24,7 +25,7 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
   const latest = useRef(target.key);
   latest.current = target.key;
   const [shown, setShown] = useState<FrameSource>();
-  const attach = useFrameReady(target, frameRef, setShown);
+  const { attach, element } = useFrameReady(target, frameRef, setShown);
   const loading = shown?.key !== target.key;
   const retained = loading ? shown : undefined;
   // The address bar draws the loading line from this; ending on unmount keeps it from sticking. Each page
@@ -37,6 +38,8 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
     pageLoadStart(frameId);
     return () => pageLoadEnd(frameId);
   }, [loading, frameId, target.key]);
+  // A frame with its page can be asked whether it is still there (previewSupervisor.ts).
+  useEffect(() => (loading ? undefined : registerPreviewFrame(frameId, element)), [loading, frameId, element]);
   const frames = retained ? [retained, target] : [target];
   return (
     <>
@@ -88,7 +91,7 @@ function useFrameReady(
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
   }, [target, show]);
-  return useCallback<React.RefCallback<HTMLIFrameElement>>(
+  const attach = useCallback<React.RefCallback<HTMLIFrameElement>>(
     (element): void => {
       frame.current = element ?? undefined;
       if (typeof forwardedRef === 'function') {
@@ -99,4 +102,6 @@ function useFrameReady(
     },
     [forwardedRef],
   );
+  const element = useCallback(() => frame.current, []);
+  return { attach, element };
 }

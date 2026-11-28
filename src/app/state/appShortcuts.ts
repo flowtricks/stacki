@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { data, type Data } from '../../../shared/core/boundary';
 import type { ImportDecl } from '../../../shared/page/pageNode';
+import { previewReloadAsked } from '../../features/preview/previewSupervisorBus';
 import { loadCatalog } from '../../features/props/loopCatalog';
 import { loadSanitySample } from '../../features/props/loopSettingsData';
 import { insertTargetFor as placeInsert } from '../../editor/insertTarget';
@@ -434,6 +435,7 @@ export function useMenuShortcuts(
       window.avb.onMenu('refreshPreview', () => {
         if (!windowHeld()) {
           setRefreshKey((count) => count + 1);
+          previewReloadAsked();
         }
       }),
     ];

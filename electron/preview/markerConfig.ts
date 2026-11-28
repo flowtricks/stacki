@@ -342,7 +342,7 @@ import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 // Marking happens in electron/previewServer/previewMarkers.ts, in memory: it reads project
 // files and returns strings, and nothing it returns is ever written back.
-const { loopbackGuardMiddleware, markCanvasSourceFile, markChunkFile, scanStyleBlocks, variantScopeMiddleware } = require(`,
+const { loopbackGuardMiddleware, loopbackGuardUpgrade, markCanvasSourceFile, markChunkFile, scanStyleBlocks, variantScopeMiddleware } = require(`,
   `);
 const componentPreviewModule = `,
   `;
@@ -756,11 +756,14 @@ const avbAllowedHosts = (own) => {
 // Stacki's own routes (/__avb/*, /studio, Vite's /__open-in-editor) answer this computer only, in every
 // mode: the guard runs before any of them and before Vite's own middleware (previewServer/loopbackGuard.ts).
 // First among the plugins and enforce:'pre', so its configureServer adds the first middleware of ours.
+// With a preview key, the same guard keeps a device that did not scan the code out of the site and of the
+// live-reload WebSocket, whose upgrade never reaches a middleware: its listener goes before Vite's.
 const avbLoopbackGuard = {
   name: 'avb-loopback-guard',
   enforce: 'pre',
   configureServer(server) {
     server.middlewares.use(loopbackGuardMiddleware);
+    server.httpServer?.prependListener('upgrade', loopbackGuardUpgrade);
   },
 };
 

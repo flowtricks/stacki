@@ -390,6 +390,8 @@ export type PreloadBridge = InvokeSurface & {
   readonly onDevLog: (callback: (data: unknown) => void) => () => void;
   readonly onPreviewFailed: (callback: (data: unknown) => void) => () => void;
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
+  /** Main restarting the dev server on purpose (shared/ipc/devRestart.ts, parseDevRestartNotice). */
+  readonly onDevRestart: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
   readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;
   /** Bytes of the dictation model received so far (shared/properties/voice/dictationModel.ts, parseDownloadProgress). */

@@ -104,6 +104,22 @@ export function parsesAsModule(file: string) {
   }
 }
 
+/** Asks made of a server whose port is open before it counts as hung; each waits `serverResponds`'s 1.5 s. */
+const SERVER_ASKS_MAX = 4;
+
+/** Whether a server started earlier still serves: a closed port says no at once, an open one gets a few asks. */
+export async function serverStillServes(url: string): Promise<boolean> {
+  if (!(await serverAlive(url))) {
+    return false;
+  }
+  for (let ask = 0; ask < SERVER_ASKS_MAX; ask += 1) {
+    if (await serverResponds(url)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Probes the URL's port on its hostname plus both loopback families —
 // on macOS "localhost" may resolve to ::1 while the server listens on IPv4.
 export async function serverAlive(urlString: string) {

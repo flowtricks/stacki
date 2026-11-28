@@ -27,7 +27,7 @@ import { withScopeCapture } from './scopeCapture';
 // The generated config counts a file's extracted <style> blocks with it (avbStyleBlockCount); it requires only this module.
 export { scanStyleBlocks } from './styleBlockScan';
 // The generated config registers this first, so Stacki's own routes answer this computer only (loopbackGuard.ts).
-export { loopbackGuardMiddleware } from './loopbackGuard';
+export { loopbackGuardMiddleware, loopbackGuardUpgrade } from './loopbackGuard';
 import { isLoopbackAddress } from './loopbackGuard';
 import { parseVariantHeader, VARIANT_HEADER, VARIANT_SCOPE_GLOBAL, withVariantOverride, type VariantOverride } from '../../shared/page/variantOverride';
 
