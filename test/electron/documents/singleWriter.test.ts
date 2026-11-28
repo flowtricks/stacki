@@ -268,6 +268,11 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 3, reason: "a pinned adapter's package.json, lockfile and install marker, staged in userData/agents" },
     renameSync: { count: 1, reason: 'puts the staged adapter folder in place whole' },
   },
+  'electron/handlers/ai/chatImageStore.ts': {
+    copyFileSync: { count: 1, reason: "a forked chat's own copies of its sent images, in userData/ai" },
+    renameSync: { count: 1, reason: 'a sent image put in place whole, in userData/ai' },
+    writeFileSync: { count: 1, reason: 'the temporary copy of a sent image, in userData/ai' },
+  },
   'electron/handlers/ai/chatStore.ts': {
     appendFileSync: { count: 1, reason: "a chat's transcript in userData/ai, append-only" },
     writeFileSync: { count: 1, reason: 'the temporary copy of the chat index or a reviews file in userData/ai' },
