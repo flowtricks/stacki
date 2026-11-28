@@ -1,7 +1,7 @@
 // The HTTP routes that write project files, each held to what its own part of the editor writes. The route gate
 // (serverAccess.ts) answers whether a role may use a route at all; these answer which files and content that use
 // may reach. The collaboration socket asks the same questions in the room (rooms.ts).
-import { can, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import type { RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { parseMergeResolution } from '../../../vendor/stacki/shared/ipc/mergeResolution';
 import { record, sourcePath, supportedSource } from '../../shared/validation';
 import { assertDocumentChangeAllowed, assertDocumentWritable, roleRefusal } from './documentAccess';
@@ -29,14 +29,10 @@ export async function assertRoleWrite(role: RoleView, change: CodeChange, guard:
 
 /** The Create route: pages and collection entries, which is all the editor's New dialogs make. */
 export async function assertCreateAllowed(role: RoleView, file: string, source: string, guard: CodeGuard): Promise<void> {
-  if (!writesCode(role)) {
-    const page = file.startsWith('src/pages/');
-    if (!(page ? PAGE_DOCUMENT : ENTRY_DOCUMENT).test(file)) {
-      throw new CodeRefusal(role, file);
-    }
-    if (!can(role, page ? 'page:create' : 'panel:cms')) {
-      throw roleRefusal(role);
-    }
+  // Which of the two dialogs a role may use stays the route gate's answer (page:create or the CMS panel), as before.
+  const kinds = file.startsWith('src/pages/') ? PAGE_DOCUMENT : ENTRY_DOCUMENT;
+  if (!writesCode(role) && !kinds.test(file)) {
+    throw new CodeRefusal(role, file);
   }
   await guard.assertAllowed(role, { file, before: undefined, after: source });
 }
@@ -55,6 +51,10 @@ export async function assertStyleSave(
     return;
   }
   if (STYLESHEET.test(file) && /^(?:src|public)\//.test(file)) {
+    return;
+  }
+  // The panel writes many times a second while a value is dragged: an edit inside one style block is told at once.
+  if (file.startsWith('src/') && file.endsWith('.astro') && (await guard.inert.read(before, after))?.kind === 'style') {
     return;
   }
   if (!file.endsWith('.astro') || (await markupBesideStyles(before)) !== (await markupBesideStyles(after))) {

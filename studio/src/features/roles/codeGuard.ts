@@ -16,6 +16,7 @@ import { batchedRead } from '../../shared/batchedRead';
 import { MAX_SOURCE } from '../../shared/validation';
 import { stat } from 'node:fs/promises';
 import ts from 'typescript';
+import { packageComponentFiles, packageComponentImport } from '../../../vendor/stacki/electron/lib/componentSources';
 import { RoleRefusal } from './documentAccess';
 import { innerScope, parseExpression, safeExpression, type CodeScope } from './codeExpression';
 import {
@@ -31,6 +32,7 @@ import {
 } from './codeModule';
 import { readPageCode, scriptAddress, scriptMarkup, type CodeUnit } from './codeMarkup';
 import { readMdxCode } from './codeMdx';
+import { InertEdits, type InertEdit } from './codeInert';
 import { componentTextProps, printedLiterals } from './editorFacts';
 
 export type FileKind = 'page' | 'mdx' | 'script' | 'inert' | 'unknown';
@@ -77,6 +79,9 @@ export const CODE_GUARD_LIMITS = {
   /** Files read to learn what code the project already holds. */
   inventoryFilesMax: 2_000,
   inventoryBytesMax: 32_000_000,
+  /** Pages kept from before the editor's own actions, read only if a later change needs what they held. */
+  keptPagesMax: 200,
+  keptCharsMax: 8_000_000,
   /** Changed statements compared with each older one. */
   comparisonsMax: 200_000,
 } as const satisfies Record<string, number>;
@@ -115,7 +120,10 @@ async function analyze(kind: FileKind, written: string): Promise<Analysis> {
   return { module: readModule(source), units: [], sources: [], errors: 0 };
 }
 
-const digest = (key: string): string => createHash('sha256').update(key).digest('base64');
+// One piece of code, however deeply it is indented: pasting and wrapping re-indent what they move, and the space at
+// the start of a line, or around the markup inside an expression, changes no JavaScript. Line breaks are kept.
+const settled = (key: string): string => key.replace(/\n[ \t]+/g, '\n').replace(/\s*__avbMarkup\s*/g, ' __avbMarkup ');
+const digest = (key: string): string => createHash('sha256').update(settled(key)).digest('base64');
 
 function keysOf(analysis: Analysis): readonly string[] {
   const imports = analysis.module.statements.flatMap((statement) => {
@@ -126,6 +134,13 @@ function keysOf(analysis: Analysis): readonly string[] {
 }
 
 type Known = (key: string) => boolean;
+
+interface Analyzed {
+  readonly analysis: Analysis;
+  readonly keys: ReadonlySet<string>;
+}
+
+const moduleOnly = (code: string): Analysis => ({ ...EMPTY, module: readModule(code) });
 
 // A string inside an expression that the browser would run: an address or markup that runs script.
 function harmlessStrings(expression: ts.Expression, sink: 'url' | 'html'): boolean {
@@ -193,11 +208,18 @@ function onlyAllowedCode(judged: Judged, known: Known): boolean {
 /** One workspace's check. It remembers code it has seen in files as they were. */
 export class CodeGuard {
   private readonly remembered = new Set<string>();
-  private readonly recent = new Map<string, { readonly analysis: Analysis; readonly keys: ReadonlySet<string> }>();
+  readonly inert = new InertEdits();
+  private readonly recent = new Map<string, Analyzed>();
+  private readonly kept = new Map<string, string>();
+  private keptChars = 0;
+  // What each page holds, by its text, so that a project is read once and only changed pages again.
+  private readonly pages = new Map<string, { readonly source: string; readonly keys: ReadonlySet<string> }>();
 
   constructor(
     private readonly root: string,
     private readonly read: (file: string) => Promise<string> = (file) => readSource(root, file),
+    // `full-only` is for the tests that hold the typing shortcut to the full check's verdict.
+    private readonly reading: 'shortcut' | 'full-only' = 'shortcut',
   ) {}
 
   /** Throws when `role` may not make `change`, for the code it holds. Which files a role writes is checked elsewhere. */
@@ -213,6 +235,9 @@ export class CodeGuard {
     if (kind === 'unknown' || (kind === 'script' && change.before === undefined)) {
       throw new CodeRefusal(role, change.file);
     }
+    if (this.reading === 'shortcut' && kind === 'page' && change.before !== undefined && (await this.typed(change.file, change.before, change.after))) {
+      return;
+    }
     const previous = change.before === undefined ? { analysis: EMPTY, keys: new Set<string>() } : await this.analyzed(kind, change.before);
     const next = await this.analyzed(kind, change.after);
     this.remember(previous.keys);
@@ -221,6 +246,11 @@ export class CodeGuard {
       const hashed = digest(key);
       return previous.keys.has(hashed) || this.remembered.has(hashed);
     };
+    if (onlyAllowedCode(judged, here)) {
+      return;
+    }
+    // Code a delete or a cut took away, now coming back.
+    await this.readKept();
     if (onlyAllowedCode(judged, here)) {
       return;
     }
@@ -234,6 +264,106 @@ export class CodeGuard {
       return;
     }
     throw new CodeRefusal(role, change.file);
+  }
+
+  // The shortcut for typing (codeInert.ts): true when the change certainly brings no code. False asks the full check.
+  private async typed(file: string, before: string, after: string): Promise<boolean> {
+    const edit: InertEdit | undefined = await this.inert.read(before, after);
+    if (edit === undefined) {
+      return false;
+    }
+    if (edit.kind !== 'frontmatter') {
+      // The code is the same, so what was learned about `before` is true of `after`: a later full check reads once.
+      const known = this.recent.get(`page:${digest(before)}`);
+      if (known !== undefined) {
+        this.keep(`page:${digest(after)}`, known);
+      }
+      return true;
+    }
+    // The template did not change, so only the frontmatter's statements are judged, by the same rules.
+    const was = moduleOnly(edit.before);
+    const now = moduleOnly(edit.after);
+    const carry = () => {
+      const known = this.recent.get(`page:${digest(before)}`);
+      if (known !== undefined) {
+        const analysis = { ...known.analysis, module: now.module };
+        this.keep(`page:${digest(after)}`, { analysis, keys: new Set(keysOf(analysis)) });
+      }
+    };
+    this.remember(keysOf(was));
+    const held = new Set(keysOf(was));
+    const here: Known = (key) => held.has(digest(key)) || this.remembered.has(digest(key));
+    const allowed =
+      onlyAllowedCode({ file, kind: 'page', before: was, after: now }, here) || (await this.onlyPrintedFrontmatter(file, before, after, edit, here));
+    if (allowed) {
+      carry();
+    }
+    return allowed;
+  }
+
+  // Text typed on the canvas into a string a developer's own call holds: judged without parsing the template again.
+  private async onlyPrintedFrontmatter(
+    file: string,
+    before: string,
+    after: string,
+    edit: { readonly before: string; readonly after: string },
+    known: Known,
+  ): Promise<boolean> {
+    const read = (target: string) => this.read(target).catch(() => undefined);
+    const textProp = await componentTextProps(file, [before, after], read);
+    const masked = async (source: string, frontmatter: string) => {
+      const from = source.indexOf(frontmatter);
+      let result = frontmatter;
+      const ranges = await printedLiterals(file, source, textProp);
+      for (const range of [...ranges].sort((left, right) => right.start - left.start)) {
+        if (range.start >= from && range.end <= from + frontmatter.length) {
+          result = `${result.slice(0, range.start - from)}"__avbText"${result.slice(range.end - from)}`;
+        }
+      }
+      return moduleOnly(result);
+    };
+    const left = await masked(before, edit.before);
+    const right = await masked(after, edit.after);
+    const held = new Set(keysOf(left));
+    return onlyAllowedCode({ file, kind: 'page', before: left, after: right }, (key) => held.has(digest(key)) || known(key));
+  }
+
+  /**
+   * Reads a page once as a role that will be checked opens it, so that its first change which does bring new markup
+   * reads the page once, not twice. Typing carries what is read here forward without reading the tree again.
+   */
+  async warm(role: RoleView, file: string, source: string): Promise<void> {
+    if (!writesCode(role) && fileKind(file) === 'page') {
+      await this.analyzed('page', source);
+    }
+  }
+
+  /**
+   * Keeps a page as it was before one of the editor's own actions, which this check never sees: what the action
+   * removes is not new when undo or a paste brings it back. Nothing is read now, so the action waits for nothing.
+   */
+  note(role: RoleView, file: string, source: string): void {
+    if (writesCode(role) || (fileKind(file) !== 'page' && fileKind(file) !== 'mdx') || this.kept.has(source)) {
+      return;
+    }
+    this.kept.set(source, file);
+    this.keptChars += source.length;
+    for (const oldest of this.kept.keys()) {
+      if (this.kept.size <= CODE_GUARD_LIMITS.keptPagesMax && this.keptChars <= CODE_GUARD_LIMITS.keptCharsMax) {
+        break;
+      }
+      this.kept.delete(oldest);
+      this.keptChars -= oldest.length;
+    }
+  }
+
+  private async readKept(): Promise<void> {
+    const waiting = [...this.kept];
+    this.kept.clear();
+    this.keptChars = 0;
+    for (const [source, file] of waiting) {
+      await this.retain(file, source).catch(() => undefined);
+    }
   }
 
   /** Keeps the code of a file about to be deleted or replaced, so putting it back is not new code. */
@@ -252,6 +382,11 @@ export class CodeGuard {
     }
     const analysis = await analyze(kind, source);
     const entry = { analysis, keys: new Set(keysOf(analysis)) };
+    this.keep(id, entry);
+    return entry;
+  }
+
+  private keep(id: string, entry: Analyzed): void {
     for (const oldest of this.recent.keys()) {
       if (this.recent.size < ANALYSES_MAX) {
         break;
@@ -259,7 +394,6 @@ export class CodeGuard {
       this.recent.delete(oldest);
     }
     this.recent.set(id, entry);
-    return entry;
   }
 
   // The canvas lets text be typed where the page prints a frontmatter string, even inside a developer's own call.
@@ -292,10 +426,29 @@ export class CodeGuard {
     }
   }
 
+  private async pageKeys(file: string): Promise<ReadonlySet<string>> {
+    const source = await this.read(file);
+    const known = this.pages.get(file);
+    if (known?.source === source) {
+      return known.keys;
+    }
+    // A page that cannot be read as code adds nothing, which can only refuse more.
+    const analysis = await analyze(fileKind(file), source).catch(() => EMPTY);
+    const keys = new Set(keysOf(analysis));
+    assert(this.pages.size <= CODE_GUARD_LIMITS.inventoryFilesMax, 'Remembered pages are bounded');
+    this.pages.set(file, { source, keys });
+    return keys;
+  }
+
   // The code the project's pages and MDX files hold now. Read only when a change holds code its own file did not.
   private async inventory(): Promise<ReadonlySet<string>> {
     const files = (await walk(this.root, 'src')).filter((file) => /\.(?:astro|mdx)$/.test(file) && supportedPath(file));
-    const found = new Set<string>();
+    const found = new Set<string>(
+      packageComponentFiles(this.root).flatMap((file) => {
+        const specifier = packageComponentImport(this.root, file);
+        return specifier === undefined ? [] : [digest(`import:${specifier}`)];
+      }),
+    );
     let bytes = 0;
     await batchedRead(files.slice(0, CODE_GUARD_LIMITS.inventoryFilesMax), async (file) => {
       const size = (await stat(await safePath(this.root, file))).size;
@@ -303,9 +456,7 @@ export class CodeGuard {
         return;
       }
       bytes += size;
-      // A page that cannot be read as code adds nothing, which can only refuse more.
-      const analysis = await analyze(fileKind(file), await this.read(file)).catch(() => EMPTY);
-      for (const key of keysOf(analysis)) {
+      for (const key of await this.pageKeys(file)) {
         found.add(key);
       }
     });

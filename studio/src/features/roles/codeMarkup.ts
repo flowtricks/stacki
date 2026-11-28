@@ -1,7 +1,7 @@
 // Where an Astro page holds code, read with Astro's own compiler so this sees what the preview server will run:
 // the frontmatter, every `{…}` expression with the callback names in scope around it, every attribute expression,
 // and the browser code an attribute or a `<script>` carries. An MDX file is read for the same things (codeGuard.ts).
-import { parse } from '@astrojs/compiler';
+import { parseAstro } from './codeCompiler';
 import type { AttributeNode, Node, TagLikeNode } from '@astrojs/compiler/types';
 import ts from 'typescript';
 import { parseExpression } from './codeExpression';
@@ -57,7 +57,7 @@ export function scriptMarkup(value: string): boolean {
 
 /** A page without its style blocks, comparable between two versions: equal means only styles differ. */
 export async function markupBesideStyles(source: string): Promise<string> {
-  const parsed = await parse(source, { position: false });
+  const parsed = await parseAstro(source);
   const parts: string[] = [];
   const pending: (Node | string)[] = [...parsed.ast.children].reverse();
   for (let index = 0; pending.length > 0; index++) {
@@ -98,7 +98,7 @@ interface Walk {
 
 /** The code of one `.astro` source. */
 export async function readPageCode(source: string): Promise<PageCode> {
-  const parsed = await parse(source, { position: false });
+  const parsed = await parseAstro(source);
   const walk: Walk = { units: [], sources: [], pending: [] };
   let frontmatter = '';
   walk.pending.push(...parsed.ast.children.map((node) => ({ node, names: new Set<string>() })));
@@ -148,7 +148,7 @@ function readScript(walk: Walk, node: TagLikeNode): void {
   }
 }
 
-function sinkOf(name: string, element: boolean): 'none' | 'handler' | 'url' | 'html' {
+export function sinkOf(name: string, element: boolean): 'none' | 'handler' | 'url' | 'html' {
   const lower = name.toLowerCase();
   if (element ? /^on[a-z]+$/.test(lower) : EVENT_NAMES.test(name)) {
     return 'handler';

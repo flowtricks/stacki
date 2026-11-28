@@ -60,6 +60,14 @@ interface SourceSnapshot {
   readonly scheduling: 'classify' | 'immediate';
 }
 
+interface Incoming {
+  readonly socket: WebSocket;
+  readonly message: Record<string, unknown>;
+}
+
+/** Waiting edits taken together at most; the queue itself stays bounded by its own limit. */
+const BATCH_MAX = 100;
+
 export class Room {
   readonly document = new Y.Doc();
   readonly text = this.document.getText('source');
@@ -72,6 +80,10 @@ export class Room {
   readonly cursors: CursorRelay;
   private readonly colors: PresenceColors;
   private queue = Promise.resolve();
+  // Messages waiting their turn, in order. Each has one turn in `queue`; a turn may take the edits right behind it.
+  private readonly inbox: Incoming[] = [];
+  // Turns still to be taken one at a time, after a batch that could not be taken together.
+  private alone = 0;
   private saved = '';
   private closed = false;
   private revision = 0;
@@ -153,6 +165,10 @@ export class Room {
     this.roles.set(socket, role);
     this.people.set(socket, key);
     maintainConnection(socket, identity ? (authorize ?? (async () => false)) : undefined);
+    // Only a head start: a page it cannot read is read again, and refused or not, by the first edit's own check.
+    void role()
+      .then((view) => this.guard.warm(view, this.file, this.text.toString()))
+      .catch(() => undefined);
     this.synchronize(socket);
     this.presence();
     socket.on('message', (bytes, binary) => this.receiveMessage(socket, bytes, binary));
@@ -175,18 +191,79 @@ export class Room {
         return;
       }
       this.queued++;
-      this.queue = this.queue
-        .then(async () => {
-          await this.coordinator.run(() => this.handle(socket, message));
-        })
-        .catch((error) => {
-          this.send(socket, { type: 'error', ...errorWire(error, 'studio.collab.editFailed') });
-        })
-        .finally(() => {
-          this.queued--;
-        });
+      this.inbox.push({ socket, message });
+      this.queue = this.queue.then(() => this.takeTurn());
     } catch {
       this.send(socket, { type: 'error', ...errorWire(undefined, 'studio.collab.invalidMessage') });
+    }
+  }
+  private async takeTurn() {
+    const next = this.inbox.shift();
+    if (next === undefined) {
+      return;
+    }
+    const batch = this.alone > 0 ? [next] : [next, ...this.following(next)];
+    this.alone = Math.max(0, this.alone - 1);
+    if (batch.length > 1 && (await this.coordinator.run(() => this.handleTogether(batch)))) {
+      this.inbox.splice(0, batch.length - 1);
+      this.queued -= batch.length;
+      return;
+    }
+    if (batch.length > 1) {
+      this.alone = batch.length - 1;
+    }
+    // One at a time, as each arrived: those behind keep their own turns.
+    try {
+      await this.coordinator.run(() => this.handle(next.socket, next.message));
+    } catch (error) {
+      this.send(next.socket, { type: 'error', ...errorWire(error, 'studio.collab.editFailed') });
+    } finally {
+      this.queued--;
+    }
+  }
+  // The edits waiting right behind `first` from the same connection, with nothing else between them.
+  private following(first: Incoming): readonly Incoming[] {
+    const found: Incoming[] = [];
+    for (const entry of this.inbox) {
+      const same = entry.socket === first.socket && entry.message['epoch'] === first.message['epoch'];
+      if (!same || entry.message['type'] !== 'update' || first.message['type'] !== 'update' || found.length >= BATCH_MAX - 1) {
+        break;
+      }
+      found.push(entry);
+    }
+    return found;
+  }
+  /**
+   * Edits that piled up while earlier ones were checked, judged as the one change they add up to: the check then reads
+   * the page once, so a backlog cannot grow however large the page is. Only the document they end at is ever applied,
+   * shared or saved, and it is checked like any single edit. False, with nothing changed, when they cannot be taken
+   * together: each is then handled alone, with its own verdict. Only for a role the code check judges, and not for one
+   * with editing options, whose undo steps through its edits one by one.
+   */
+  private async handleTogether(batch: readonly Incoming[]): Promise<boolean> {
+    const [first] = batch;
+    if (first === undefined || this.closed || first.message['epoch'] !== this.document.getMap('metadata').get('epoch')) {
+      return false;
+    }
+    try {
+      const role = await this.roleOf(first.socket);
+      if (writesCode(role) || limitsEditing(role.editorOff)) {
+        return false;
+      }
+      const saves = batch.map((entry) => parseSaveSequence(entry.message['save']));
+      const updates = batch.map((entry) => Buffer.from(string(entry.message['update'], 2_000_000), 'base64'));
+      const update = Buffer.from(Y.mergeUpdates(updates)).toString('base64');
+      const before = Y.encodeStateVector(this.document);
+      if (!(await this.applyUpdate({ ...first.message, update }, first.socket, role))) {
+        return false;
+      }
+      this.publish(first.socket, first.message, before);
+      for (const save of saves) {
+        this.acknowledgeSave(first.socket, save, 'classify');
+      }
+      return true;
+    } catch {
+      return false;
     }
   }
   private detach(socket: WebSocket, key: string) {
@@ -249,6 +326,13 @@ export class Room {
       throw new Error('Unknown collaboration message');
     }
     this.rememberChange(socket, role, previous);
+    this.publish(socket, message, before);
+    // Peers consume the accepted CRDT delta immediately. File projection and
+    // durable storage must not sit between a keystroke and another editor.
+    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
+  }
+  // What everyone gets once the document has changed.
+  private publish(socket: WebSocket, message: Record<string, unknown>, before: Uint8Array) {
     this.revision++;
     const update = Buffer.from(Y.encodeStateAsUpdate(this.document, before)).toString('base64');
     for (const client of this.clients.keys()) {
@@ -265,9 +349,6 @@ export class Room {
       });
     }
     this.presence();
-    // Peers consume the accepted CRDT delta immediately. File projection and
-    // durable storage must not sit between a keystroke and another editor.
-    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
   }
   private rememberChange(socket: WebSocket, role: RoleView, previous: string) {
     const person = this.people.get(socket);
@@ -320,6 +401,7 @@ export class Room {
       await this.assertCode(role, applyEdits(this.text.toString(), [...edits]));
     }
     const source = this.text.toString();
+    this.guard.note(role, this.file, source);
     const result = applyEdits(source, edits);
     // The action was allowed by its shape; its result is checked too, so an
     // operation that reaches past what the action named is still refused.
