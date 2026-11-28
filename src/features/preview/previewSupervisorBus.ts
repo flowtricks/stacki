@@ -12,9 +12,11 @@ export interface SupervisionView {
   readonly state: PreviewSupervision;
   /** Goes up each time the pages are loaded again, for a frame the canvas's refresh does not reach. */
   readonly reloads: number;
+  /** What the last start that failed said, for the cover to show on asking; undefined once one worked. */
+  readonly failure: string | undefined;
 }
 
-let view: SupervisionView = { state: { kind: 'ok' }, reloads: 0 };
+let view: SupervisionView = { state: { kind: 'ok' }, reloads: 0, failure: undefined };
 let owner: PreviewSupervisor | undefined;
 const listeners = new Set<() => void>();
 
@@ -29,6 +31,10 @@ export function publishSupervision(state: PreviewSupervision): void {
   publish({ ...view, state });
 }
 
+export function publishSupervisionFailure(failure: string | undefined): void {
+  publish({ ...view, failure });
+}
+
 export function publishSupervisedReload(): void {
   publish({ ...view, reloads: view.reloads + 1 });
 }
@@ -39,7 +45,7 @@ export function adoptPreviewSupervisor(supervisor: PreviewSupervisor): () => voi
   return () => {
     if (owner === supervisor) {
       owner = undefined;
-      publishSupervision({ kind: 'ok' });
+      publish({ ...view, state: { kind: 'ok' }, failure: undefined });
     }
   };
 }

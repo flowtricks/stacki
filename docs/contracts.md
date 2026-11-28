@@ -165,7 +165,8 @@ failure from a previous navigation cannot reload the new page.
 `dev:network` and `dev:setNetwork` (`shared/ipc/devNetwork.ts`) carry the phone preview: whether the
 project's dev server listens on the local network (`--host 0.0.0.0`) or on 127.0.0.1 only. The request
 names the project and a mode, `local` or `network`, and on the network an access, `open` (anyone on it) or
-`key` (only the devices that scan the code); the state is `off`, or `on` with the server's port, at most
+`key` (only the devices that scan the code). The app turns the preview on with `key` every time, in one restart;
+the card's setting asks for `open`, and that is not remembered either. The state is `off`, or `on` with the server's port, at most
 eight IPv4 addresses with their interface names and the access, which for `key` carries the key the code
 holds (43 base64url characters). Main makes a new key each time `key` is chosen, keeps it in memory only
 and gives it to the dev server in `STACKI_PREVIEW_KEY`; the guard answers the code's address with an
@@ -174,7 +175,15 @@ from the network with 403, Vite's live-reload WebSocket included. A refused chan
 (`no-address`, `no-server`, `external`, `busy`, `restart-failed`), each a toast in the renderer. The mode
 lives in main for the running app only: it is never written, it is off at launch, and `stop()` (project
 close, quit) clears it. The canvas, thumbnails and main's own requests keep the loopback address in both
-modes. Stacki's own dev-server routes (`/__avb/*`, `/studio`, Vite's `/__open-in-editor`) answer only a
+modes. A device without the key is answered with a short page that tells its holder to scan the code.
+
+`dev:restart` (`onDevRestart`, `shared/ipc/devRestart.ts`) says main is restarting the project's dev server on
+purpose: `{ kind: 'begun' }` before the old one stops, then `{ kind: 'done', url }` once the new one answers
+(`url` left out when it did not start). A restart asks for the port it left; `url` differs only when that was
+taken. It is never reported as `dev:exit`, which is only a server that ended without being asked to. While a
+restart is announced the preview supervisor (docs/canvas-recovery.md) holds back, and `dev:start` waits for it.
+
+Stacki's own dev-server routes (`/__avb/*`, `/studio`, Vite's `/__open-in-editor`) answer only a
 loopback socket with a loopback Host and Origin (`electron/previewServer/loopbackGuard.ts`), in both modes.
 
 Expected operating failures use `Result` or an explicit result union. A shape

@@ -24,7 +24,7 @@ export const PREVIEW_SUPERVISOR_LIMITS = {
   /** The same after the person asked, or a page failed to load: they are looking at a blank canvas. */
   urgentMissesMax: 2,
   /** Looks without an answer from a frame before it is loaded again. */
-  frameMissesMax: 3,
+  frameMissesMax: 2,
   /** Restarts made without being asked, per `restartWindowMs`. */
   restartsMax: 2,
   restartWindowMs: 600_000,

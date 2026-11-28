@@ -42,5 +42,8 @@ test('the menu event refreshes the preview with the same bump as the button', ()
   const shell = fs.readFileSync(repoPath('src/app/shell/AppShell.tsx'), 'utf8');
   const handler = shortcuts.slice(shortcuts.indexOf("window.avb.onMenu('refreshPreview'"));
   assert.match(handler.slice(0, 300), /setRefreshKey\(\(count\) => count \+ 1\)/);
-  assert.match(shell, /onReload=\{\(\) => app\.setRefreshKey\(\(count\) => count \+ 1\)\}/);
+  assert.match(shell, /onReload=\{\(\) => \{\s*app\.setRefreshKey\(\(count\) => count \+ 1\);/);
+  // Both also have a dead preview looked after (previewSupervisor.ts): a reload of one shows nothing by itself.
+  assert.match(handler.slice(0, 300), /previewReloadAsked\(\);/);
+  assert.match(shell.slice(shell.indexOf('<ReloadButton'), shell.indexOf('<ReloadButton') + 500), /previewReloadAsked\(\);/);
 });

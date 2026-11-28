@@ -1,3 +1,4 @@
+import { parseDevRestartNotice, type DevRestartNotice } from '../../shared/ipc/devRestart';
 import { sendPageEditWithRetry } from './saveRetry';
 import { parseAstroFileChanges, type AstroFileChange } from '../../shared/properties/astroFileChanges';
 import { parsePreviewFailure } from '../../shared/ipc/previewFailure';
@@ -446,6 +447,10 @@ export function onAppProgress(callback: (message: string | undefined) => void): 
 
 export function onPreviewFailed(callback: (url: string) => void): () => void {
   return window.avb.onPreviewFailed((input) => callback(parsePreviewFailure(input)));
+}
+
+export function onDevRestart(callback: (notice: DevRestartNotice) => void): () => void {
+  return window.avb.onDevRestart((input) => callback(parseDevRestartNotice(input)));
 }
 
 export function onDevExit(callback: (log: string) => void): () => void {

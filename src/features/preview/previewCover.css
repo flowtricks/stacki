@@ -22,3 +22,10 @@
   inline-size: min(640px, 100%);
   block-size: min(420px, 100%);
 }
+/* One above the other, so a long translation never squeezes the primary button. */
+.preview-cover-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}

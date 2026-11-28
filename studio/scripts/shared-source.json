@@ -308,6 +308,7 @@
     "src/features/structure/unlinkMenu.ts",
     "shared/ipc/designSnapshot.ts",
     "shared/ipc/devNetwork.ts",
+    "shared/ipc/devRestart.ts",
     "shared/ipc/fileExplorer.ts",
     "shared/ipc/folderOpen.ts",
     "shared/ipc/gitCommitDiff.ts",

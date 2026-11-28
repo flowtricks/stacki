@@ -16,7 +16,7 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { DevServers } = require('#dist/electron/handlers/devServers.js');
+const { DevServers, startProjectPreview } = require('#dist/electron/handlers/devServers.js');
 const { devServerArgs, devServerURL, networkAllowedHosts } = require('#dist/electron/preview/devServerArgs.js');
 
 const URL = 'http://127.0.0.1:48781';
@@ -241,4 +241,48 @@ test('closing the project drops the key with the mode; a failed restart ends ope
   const failing = servers(owned(root), { failStarts: 1 });
   assert.deepEqual(await failing.instance.setNetwork(onNetwork(root, 'key'), WIFI), { ok: false, error: 'restart-failed' });
   assert.deepEqual(failing.instance.previewKeyEnvironment('network'), {}, 'back on loopback, open, with no key left behind');
+});
+
+test('turning it on and off is announced as a restart, never as the preview ending, even when the address moves', async (context) => {
+  const root = project(context);
+  const { instance, sent } = servers(owned(root));
+  await instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  await instance.setNetwork(onComputer(root), WIFI);
+  const done = { kind: 'done', url: URL };
+  const told = (messages) => messages.filter((message) => message.channel !== 'dev:log');
+  assert.deepEqual(told(sent), [
+    { channel: 'dev:restart', payload: { kind: 'begun' } },
+    { channel: 'dev:restart', payload: done },
+    { channel: 'dev:restart', payload: { kind: 'begun' } },
+    { channel: 'dev:restart', payload: done },
+  ]);
+  // The reported bug: the server ran on the next port (its own was taken when the project opened), the restart came
+  // back elsewhere, and a running server was reported as ended ("Preview is offline").
+  const moved = servers({ ...owned(root), url: 'http://127.0.0.1:48782' });
+  assert.equal((await moved.instance.setNetwork(onNetwork(root, 'key'), WIFI)).ok, true);
+  assert.deepEqual(
+    told(moved.sent).map((message) => message.channel),
+    ['dev:restart', 'dev:restart'],
+  );
+  assert.deepEqual(told(moved.sent).at(-1).payload, done);
+});
+
+test('a start asked for while main restarts waits for that restart, and joins its server', async (context) => {
+  const root = project(context);
+  const { instance, starts } = servers(owned(root));
+  let release;
+  const stopping = new Promise((resolve) => (release = resolve));
+  instance.pause = async () => {
+    instance.server = undefined;
+    await stopping;
+  };
+  const change = instance.setNetwork(onNetwork(root, 'key'), WIFI);
+  const asked = startProjectPreview(instance, { noteProjectOpened() {}, schedule() {} }, root);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(starts, [], 'nothing starts while the old server stops');
+  release();
+  assert.equal((await change).ok, true);
+  assert.equal((await asked).url, URL);
+  assert.deepEqual(starts.slice(0, 1), ['network'], 'the restart starts first, in the asked mode');
+  assert.ok(starts.every((mode) => mode === 'network'));
 });

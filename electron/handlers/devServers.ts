@@ -83,13 +83,13 @@ function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
 }
 
 // `astro dev stop` ends whatever server the project's lock names. That may be one another Stacki or a terminal
-// started since ours: stopping ours must not stop theirs. Ports tell them apart. No lock leaves nothing to stop.
-function lockNamesServer(server: DevServer): boolean {
+// started since ours: stopping ours must not stop theirs. Ports tell them apart.
+function lockNamesAnotherServer(server: DevServer): boolean {
   const lock = readAstroLock(server.projectPath);
   if (lock === undefined || !URL.canParse(lock.url)) {
-    return false;
+    return false; // Nothing says it is someone else's: the CLI is left to judge.
   }
-  return new URL(lock.url).port === new URL(server.url).port;
+  return new URL(lock.url).port !== new URL(server.url).port;
 }
 
 // The page patcher, handed to every page as a module. It lives in its own
@@ -131,12 +131,15 @@ export function startProjectPreview(
   projectPath: string,
 ): Promise<IpcResults['dev:start']> {
   thumbnails.noteProjectOpened();
-  return devServers.run(projectPath, async (assertActive) => {
-    const result = await devServers.start(projectPath, assertActive);
-    assertActive();
-    thumbnails.schedule(projectPath, 6000);
-    return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
-  });
+  // A restart main is making is waited for: a start slipped between its stop and its start would take another port.
+  return devServers.settled().then(() =>
+    devServers.run(projectPath, async (assertActive) => {
+      const result = await devServers.start(projectPath, assertActive);
+      assertActive();
+      thumbnails.schedule(projectPath, 6000);
+      return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
+    }),
+  );
 }
 
 /** Page files the preview config can be told about (its `/__avb/touch` takes the same). */
@@ -174,12 +177,19 @@ export class DevServers {
   // One change of mode at a time: each is a restart of the dev server, and a second toggle while one
   // restarts would race it.
   private networkChange: 'idle' | 'changing' = 'idle';
+  // The restart under way, and the port it is to come back on: the canvas, and a phone with the address, hold that one.
+  private restart: { readonly port: number; readonly settled: Promise<void> } | undefined = undefined;
 
   constructor(
     private readonly host: Pick<MainHost, 'send'>,
     // Extra variables the project's dev server gets (cms/cmsPreviewEnvironment.ts).
     private readonly previewEnvironment: (projectRoot: string) => Readonly<Record<string, string>> = () => ({}),
   ) {}
+
+  /** Settled once no restart of main's own is under way. */
+  settled(): Promise<void> {
+    return this.restart?.settled ?? Promise.resolve();
+  }
 
   /** The dev server the canvas shows, while one runs. */
   current(): DevServer | undefined {
@@ -212,7 +222,7 @@ export class DevServers {
       return;
     }
     if (server.daemon && server.bin) {
-      if (lockNamesServer(server)) {
+      if (!lockNamesAnotherServer(server)) {
         const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
         await run(command, args, server.projectPath, SHORT_COMMAND);
       }
@@ -243,11 +253,11 @@ export class DevServers {
       return;
     }
     const { proc, daemon, bin, projectPath } = this.server;
-    const ownsLock = lockNamesServer(this.server);
+    const replaced = lockNamesAnotherServer(this.server);
     this.server = undefined;
     // Daemonized servers (Astro >= 7 forks a background process) stop via the CLI.
     if (daemon && bin) {
-      if (!ownsLock) {
+      if (replaced) {
         return;
       }
       try {
@@ -269,8 +279,8 @@ export class DevServers {
    * asks again. Resolves true when the server is back at the same address
    * (its port comes from the project path, so it normally is) — the canvas's
    * Vite client reconnects to it by itself. False when there was nothing to
-   * do, or the server came back somewhere else; the app then hears of it as
-   * an exit and offers to start the preview again.
+   * do, or the server came back somewhere else; the app hears the new address
+   * (`dev:restart`) and shows the preview from there.
    */
   async restartForNewContentConfig(devUrl: string): Promise<boolean> {
     const server = this.server;
@@ -322,18 +332,34 @@ export class DevServers {
     return this.server?.url;
   }
 
+  // Stops and starts the server on purpose, on the same port while it is free. The app is told before and after
+  // (shared/ipc/devRestart.ts), so it neither calls the preview dead meanwhile nor misses a new address. Resolves
+  // true when the server is back where it was.
   private async restartAt(projectPath: string, devUrl: string): Promise<boolean> {
-    await this.pause();
-    const restarted = await this.run(projectPath, async (assertActive) => ({
-      ...(await this.start(projectPath, assertActive)),
-      trailingSlash: this.readTrailingSlash(projectPath),
-    }));
-    assert(restarted.url.length > 0, 'A restarted server has an address');
-    if (restarted.url !== devUrl) {
-      this.host.send('dev:exit', { code: 0, log: this.recentLog() });
-      return false;
+    const port = Number(new URL(devUrl).port);
+    assert(Number.isSafeInteger(port), 'restartAt: the old address has a port');
+    assert(port > 0, 'restartAt: the port is positive');
+    let finish = (): void => {};
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    this.restart = { port, settled };
+    this.host.send('dev:restart', { kind: 'begun' });
+    let url: string | undefined;
+    try {
+      await this.pause();
+      const restarted = await this.run(projectPath, async (assertActive) => ({
+        ...(await this.start(projectPath, assertActive)),
+        trailingSlash: this.readTrailingSlash(projectPath),
+      }));
+      assert(restarted.url.length > 0, 'A restarted server has an address');
+      url = restarted.url;
+    } finally {
+      this.restart = undefined;
+      finish();
+      this.host.send('dev:restart', { kind: 'done', url });
     }
-    return true;
+    return url === devUrl;
   }
 
   /** The trailing-slash mode the project's dev server serves. */
@@ -650,7 +676,8 @@ export class DevServers {
   }
 
   private async spawn(projectPath: string, localBin: string, { force, bare }: { readonly force: boolean; readonly bare: boolean }, assertActive: () => void) {
-    const port = await findFreePort(previewPort(fs.realpathSync(projectPath)));
+    // A restart asks for the port it left; if that is taken now, the search goes on from it.
+    const port = await findFreePort(this.restart?.port ?? previewPort(fs.realpathSync(projectPath)));
     assertActive();
     // Every attempt (the first, the --force retry and the bare fallback) starts in the project's mode:
     // on the local network only when it was turned on for this project (setNetwork).

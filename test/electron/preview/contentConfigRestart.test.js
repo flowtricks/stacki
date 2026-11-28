@@ -99,13 +99,20 @@ test('nothing restarts when there is nothing a restart would fix', async (contex
   assert.deepEqual(stopped.calls, []);
 });
 
-test('a restart that comes back at another address tells the app the old one is gone', async (context) => {
+test('a restart that comes back at another address tells the app the new one, never that the preview ended', async (context) => {
   const root = project(context, { withConfig: false });
-  const { instance, calls, sent } = servers(owned(root), { configAtStart: false, restartUrl: 'http://127.0.0.1:48782' });
+  const moved = 'http://127.0.0.1:48782';
+  const { instance, calls, sent } = servers(owned(root), { configAtStart: false, restartUrl: moved });
   addConfig(root);
   assert.equal(await instance.restartForNewContentConfig(URL), false);
   assert.deepEqual(calls, ['pause', 'start']);
-  const exits = sent.filter((message) => message.channel === 'dev:exit');
-  assert.equal(exits.length, 1, 'the app hears the preview at the old address ended');
-  assert.equal(typeof exits[0].payload.log, 'string');
+  assert.deepEqual(
+    sent.filter((message) => message.channel === 'dev:exit'),
+    [],
+    'a running server is never reported as ended',
+  );
+  assert.deepEqual(
+    sent.filter((message) => message.channel === 'dev:restart').map((message) => message.payload),
+    [{ kind: 'begun' }, { kind: 'done', url: moved }],
+  );
 });

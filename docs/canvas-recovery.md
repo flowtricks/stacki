@@ -63,6 +63,35 @@ patch, and a patch leaves the overlay).
   closes itself (its next good update) needs no reload. An overlay that comes back on the reloaded page
   counts toward the same cap (3 per minute). "Reload canvas" on the notice and the toolbar stay.
 
+## A canvas that goes blank
+
+Everything above needs the dev server to send something. These send nothing:
+
+| What happened | What the canvas showed | Why nothing noticed |
+|---|---|---|
+| The dev server died, and was a detached (daemon) server | Empty, see-through frame on the next load: the dark pane | Astro >= 7 forks a detached server when the environment shows an AI agent (Stacki started from an agent's shell). Nothing heard it exit, `dev:start` kept answering with its address, and an unreachable check has no words for a notice |
+| The dev server hung | The old page, or a load that never ends | No exit, no failed navigation |
+| The frame's process died | A flat grey box | Electron raises no event for a subframe's process |
+
+- **Cause, removed:** every Astro server starts with `ASTRO_DEV_BACKGROUND=1`, so it stays Stacki's own
+  process. `dev:start` asks a held server whether it still serves and replaces one that does not.
+  `astro dev stop` (the detached fallback) runs only while the project's lock names our port.
+- **Watched:** `src/features/preview/previewSupervisor.ts` asks the server (`/@vite/client`) and the loaded
+  frames (`avb:alive`, `electron/preload/frameAlive.ts`) every 5 s while the window is visible, and at once
+  on return to the window, on a failed navigation, on `dev:exit`, and when the person reloads.
+- **Recovered:** 3 silent looks restart the server (2 after a failed load or a reload), 2 silent looks
+  reload a frame. At most 2 restarts per 10 minutes and 2 frame reloads per 5 minutes.
+- **Past the bound:** the canvas shows "The preview stopped", **Restart preview** and, when a start failed,
+  Show diagnostics. While restarting it shows placeholder shapes. It is never left blank.
+- The editor's page, selection and unsaved work are not touched: only the server and the frames are.
+- A restart main makes on purpose (phone preview on or off, `.env`, a new integration) is announced
+  (`dev:restart`, docs/contracts.md): the supervisor holds back and no offline screen appears. It asks for
+  the port it left. Before, a server that had started on the next port (its own was taken) came back on its
+  own port and was reported as ended: "Preview is offline" (v1.4.17 to v1.4.21).
+
+Guard tests: `test/renderer/preview/previewSupervisor.test.js`, `previewFramesAlive.test.js`,
+`test/electron/preview/previewServerDeath.test.js`, `networkPreview.test.js`, `contentConfigRestart.test.js`.
+
 ## Measured (generated fixture, real Astro dev server, `npm run integration:recovery`)
 
 | Fix | Healthy canvas after the fix |

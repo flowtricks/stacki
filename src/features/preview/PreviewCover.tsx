@@ -2,6 +2,7 @@
 // started again, and when that did not work, what happened and the button that tries again. The canvas is never left
 // blank without either.
 import { EmptyState } from '../../ui/EmptyState';
+import { reportErrorToast } from '../../ui/errorNotices';
 import { RefreshIcon } from '../../ui/Icons';
 import { SkeletonRows, Skeleton } from '../../ui/Skeleton';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -10,7 +11,7 @@ import './previewCover.css';
 
 export function PreviewCover() {
   const translate = useTranslate();
-  const { state } = useSupervision();
+  const { state, failure } = useSupervision();
   switch (state.kind) {
     case 'ok': {
       return undefined;
@@ -33,9 +34,16 @@ export function PreviewCover() {
             icon={<RefreshIcon size={18} />}
             title={translate('preview.stopped.title')}
             action={
-              <button type="button" className="primary" onClick={restartPreview}>
-                {translate('preview.stopped.restart')}
-              </button>
+              <div className="preview-cover-actions">
+                <button type="button" className="primary" onClick={restartPreview}>
+                  {translate('preview.stopped.restart')}
+                </button>
+                {failure !== undefined && (
+                  <button type="button" className="ghost" onClick={() => reportErrorToast(failure)}>
+                    {translate('preview.offline.diagnostics')}
+                  </button>
+                )}
+              </div>
             }
           />
         </div>
