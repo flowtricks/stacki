@@ -7,11 +7,11 @@ import { readPublishConfig } from './publishConfig';
 import { ensureToolPath } from '../lib/nodeTools';
 import { deploysFromStacki, parsePublishCommitMessage, type CustomDeploy, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
 import type { DeployLinkStore } from './deployLinkStore';
-import type { PublishRequestTarget } from '../../shared/properties/publishDestinations';
-import { STAGING_SERVICES, type StagingServices } from './publishStaging';
-import { publishStagingJob } from './publisherStaging';
+import { findDestination, requestedDestination, type DestinationId, type PublishRequestTarget } from '../../shared/properties/publishDestinations';
+import { DESTINATION_SERVICES, readPublishDestinations, type DestinationServices } from './publishDestination';
+import { publishDestinationJob, published } from './publisherDestination';
 import { DEPLOY_TRANSPORT, sendDeployRequest, type DeployTransport } from './deployRequest';
-import { parseDesktopPublishProgress, type DesktopPublishState } from '../../shared/properties/publishState';
+import { parseDesktopPublishProgress, type DesktopPublishState, type PublishedDestination } from '../../shared/properties/publishState';
 import { checkHostingReady, deployHosting, runPublishScripts } from './publishCommands';
 import { createPublishSnapshot, createPublishSource, type PublishSource, type PublishSnapshot } from './publishSnapshot';
 import { publishingGitEnvironment, publishingGitRemote, recordPublishedGitHub } from './publishGitHub';
@@ -42,7 +42,7 @@ export class DesktopPublisher {
   private current: DesktopPublishState = { kind: 'idle' };
 
   private readonly deployLinks: DeployLinkSender;
-  private readonly stagingServices: StagingServices;
+  private readonly destinationServices: DestinationServices;
   /** The running job's custom host, if it has one, so every outcome says what was only handed over. */
   private custom: CustomDeploy | undefined;
 
@@ -50,10 +50,10 @@ export class DesktopPublisher {
   // for the network a deploy link is sent over.
   constructor(
     private readonly temporary: PublishTemporarySeams = PUBLISH_TEMPORARY_SEAMS,
-    options: { readonly deployLinks?: DeployLinkStore; readonly transport?: DeployTransport; readonly staging?: StagingServices } = {},
+    options: { readonly deployLinks?: DeployLinkStore; readonly transport?: DeployTransport; readonly destinations?: DestinationServices } = {},
   ) {
     this.deployLinks = { store: options.deployLinks, transport: options.transport ?? DEPLOY_TRANSPORT };
-    this.stagingServices = options.staging ?? STAGING_SERVICES;
+    this.destinationServices = options.destinations ?? DESTINATION_SERVICES;
   }
 
   state(root: string): DesktopPublishState {
@@ -71,17 +71,20 @@ export class DesktopPublisher {
     this.project = root;
     this.custom = undefined;
     const preparing = described('error.publish.preparing');
-    this.current = { kind: 'running', step: preparing.message, stepRef: preparing.messageRef };
-    if (target === 'staging') {
+    const destination = requestedDestination(target);
+    const named = destination === undefined ? {} : namedDestination(root, destination);
+    this.current = { kind: 'running', step: preparing.message, stepRef: preparing.messageRef, ...named };
+    if (destination !== undefined) {
       // A flow of its own: nothing production's publish does (a commit, a push of this branch) can happen here.
-      void this.publishStaging(root);
+      void this.publishDestination(root, destination);
     } else {
+      assert(target === 'all' || target === 'github' || target === 'hosting', 'A request without a destination is production’s');
       void this.publish(root, target, message);
     }
     return this.current;
   }
 
-  private async publishStaging(root: string): Promise<void> {
+  private async publishDestination(root: string, id: DestinationId): Promise<void> {
     ensureToolPath();
     await sweepPublishTemporaries(this.temporary);
     const canonical = await realpath(root).then(ok, publishFilesystemFailure);
@@ -89,13 +92,14 @@ export class DesktopPublisher {
       this.fail(canonical.error, { github: false, hosting: false });
       return;
     }
-    await publishStagingJob({
+    await publishDestinationJob({
       root: canonical.value,
+      id,
       show: (state) => {
         this.current = state;
       },
       temporary: this.temporary,
-      services: this.stagingServices,
+      services: this.destinationServices,
       deployLinks: this.deployLinks.store,
       transport: this.deployLinks.transport,
     });
@@ -279,6 +283,16 @@ export class DesktopPublisher {
       hosting: completed.hosting,
       ...this.handoff(completed),
     };
+  }
+}
+
+/** The label the popup uses from its first moment. Settings that cannot be read are the job's own failure to report. */
+function namedDestination(root: string, id: DestinationId): { readonly destination?: PublishedDestination } {
+  try {
+    const destination = findDestination(readPublishDestinations(root), id);
+    return destination === undefined ? {} : { destination: published(destination) };
+  } catch {
+    return {};
   }
 }
 

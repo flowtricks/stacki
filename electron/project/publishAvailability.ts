@@ -9,9 +9,9 @@ import {
 import { ensureToolPath, git } from '../lib/nodeTools';
 import { readPublishConfig } from './publishConfig';
 import { publishingGitRemote } from './publishGitHub';
-import { deploymentConfiguration, readDeploymentReceipt, stagingConfiguration } from './publishReceipt';
-import { stagingDestination } from '../../shared/properties/publishDestinations';
-import { readPublishDestinations } from './publishStaging';
+import { deploymentConfiguration, destinationConfiguration, readDeploymentReceipt } from './publishReceipt';
+import type { Destination } from '../../shared/properties/publishDestinations';
+import { readPublishDestinations } from './publishDestination';
 import { readPublishTree } from './publishSnapshot';
 
 export async function readPublishAvailability(root: string): Promise<PublishAvailability> {
@@ -23,43 +23,55 @@ export async function readPublishAvailability(root: string): Promise<PublishAvai
     // Invalid or unreadable settings must remain actionable through the setup dialog.
     return UNKNOWN_PUBLISH_AVAILABILITY;
   }
-  const [github, hosting, production, staging] = await Promise.all([
+  const [github, hosting, production, destinations] = await Promise.all([
     githubAvailability(root, config).catch(() => ({ github: 'unknown' as const })),
     hostingAvailability(root, config).catch(() => 'unknown' as const),
     readDeploymentReceipt(root).catch(() => undefined),
-    stagingAvailability(root, config).catch(() => ({ state: 'unknown' as const })),
+    // An unreadable destinations file offers no destination rows; the settings say why.
+    destinationsAvailability(root, config).catch(() => undefined),
   ]);
   const publishedAtMs = production?.publishedAtMs;
   return {
     ...github,
     hosting,
     ...(publishedAtMs === undefined || hosting === 'unconfigured' ? {} : { hostingPublishedAtMs: publishedAtMs }),
-    ...(staging === undefined ? {} : { staging }),
+    ...(destinations === undefined || destinations.length === 0 ? {} : { destinations }),
   };
 }
 
-async function stagingAvailability(root: string, config: PublishConfig): Promise<DestinationStatus | undefined> {
-  const staging = stagingDestination(readPublishDestinations(root));
-  if (staging === undefined) {
-    return undefined;
-  }
-  const receipt = await readDeploymentReceipt(root, 'staging');
-  if (receipt === undefined) {
-    return { state: 'pending' };
+/** One status each, from that destination's own record. The files to publish are read at most once for all of them. */
+async function destinationsAvailability(root: string, config: PublishConfig): Promise<readonly DestinationStatus[]> {
+  const { destinations } = readPublishDestinations(root);
+  let tree: ReturnType<typeof readPublishTree> | undefined;
+  const readTree = () => (tree ??= readPublishTree(root));
+  return Promise.all(
+    destinations.map((destination) =>
+      destinationAvailability(root, config, destination, readTree).catch(() => ({ id: destination.id, state: 'unknown' as const })),
+    ),
+  );
+}
+
+async function destinationAvailability(
+  root: string,
+  config: PublishConfig,
+  destination: Destination,
+  readTree: () => ReturnType<typeof readPublishTree>,
+): Promise<DestinationStatus> {
+  const { id } = destination;
+  const receipt = await readDeploymentReceipt(root, id);
+  // A receipt for other settings says nothing about this destination: another target's address is not this one's.
+  if (receipt === undefined || receipt.configuration !== destinationConfiguration(config, destination)) {
+    return { id, state: 'pending' };
   }
   const last = {
     ...(receipt.publishedAtMs === undefined ? {} : { publishedAtMs: receipt.publishedAtMs }),
     ...(receipt.url === undefined ? {} : { url: receipt.url }),
   };
-  if (receipt.configuration !== stagingConfiguration(config, staging)) {
-    // Another destination's address is not this one's.
-    return { state: 'pending' };
-  }
-  const source = await readPublishTree(root);
+  const source = await readTree();
   if (!source.ok) {
-    return { state: 'unknown', ...last };
+    return { id, state: 'unknown', ...last };
   }
-  return { state: receipt.tree === source.value ? 'current' : 'pending', ...last };
+  return { id, state: receipt.tree === source.value ? 'current' : 'pending', ...last };
 }
 
 async function githubAvailability(root: string, config: PublishConfig): Promise<Pick<PublishAvailability, 'github' | 'githubPush'>> {

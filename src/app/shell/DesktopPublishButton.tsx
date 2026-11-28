@@ -5,7 +5,7 @@ import { parsePublishSource } from '../../../shared/properties/publishConfig';
 import { PublishStatus } from '../../features/publishing/PublishStatus';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { parsePublishCommitMessage } from '../../../shared/properties/publishConfig';
-import type { PublishRequestTarget } from '../../../shared/properties/publishDestinations';
+import { requestedDestination, type PublishRequestTarget } from '../../../shared/properties/publishDestinations';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
 import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { PublishControl } from '../../features/publishing/PublishControl';
@@ -177,7 +177,7 @@ async function setUpSavedPublishWorker(projectPath: string, translate: Translato
 
 async function publishSetup(projectPath: string, target: PublishRequestTarget, message: string | undefined): Promise<PublishSetup | undefined> {
   // Neither commits to the person's branch, so neither asks for a commit message.
-  if (target === 'hosting' || target === 'staging') {
+  if (target === 'hosting' || requestedDestination(target) !== undefined) {
     return undefined;
   }
   const repository = await readGitInfo(projectPath);

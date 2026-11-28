@@ -321,36 +321,6 @@ test('every list starts with its Add row, which opens that step and keeps the ch
   assert.equal(writes[0].hosting.project, 'website');
 });
 
-test('the staging Worker is chosen from the account, and naming a new one leaves production alone', async (context) => {
-  const source = cloudflareSettings();
-  const { discovery, writes, show } = fixture(context, source);
-  const staged = JSON.stringify({
-    version: 1,
-    destinations: [
-      { id: 'staging', target: { kind: 'cloudflare-worker', project: 'website-staging' }, buildScript: 'build', beforePublish: [], afterPublish: [] },
-    ],
-  });
-  window.avb.projectMetadata = async (input) => ({ ok: true, value: { source: input.kind === 'publishDestinations' ? staged : source } });
-  window.avb.setUpPublishWorker = async () => assert.fail('a staging Worker must not set the site up as production');
-  await show();
-  for (const call of discovery.filter((entry) => entry.request.provider === 'cloudflare')) {
-    await act(async () => call.resolve(cloudflareInventory));
-  }
-  await act(async () => field('Staging Worker').click());
-  assert.equal(optionLabels()[0], 'Add Worker');
-  assert.ok(!optionLabels().includes('website'), 'production’s Worker is not offered');
-  assert.ok(!optionLabels().includes('team-site'), 'another account’s Worker is not offered');
-  await act(async () => document.querySelector('.dd-option').click());
-  const { Simulate } = require('react-dom/test-utils');
-  await act(async () => {
-    Simulate.change(document.querySelector('.publish-new-worker input'), { target: { value: 'my-preview' } });
-  });
-  await act(async () => document.querySelector('.publish-new-worker .primary').click());
-  assert.equal(document.querySelector('.publish-new-worker') ?? undefined, undefined);
-  assert.match(field('Staging Worker').textContent, /my-preview/);
-  assert.deepEqual(writes, [], 'nothing is saved before Save');
-});
-
 function cloudflareSettings() {
   return JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, hosting: linked.projects[0].hosting });
 }

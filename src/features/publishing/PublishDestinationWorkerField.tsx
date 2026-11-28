@@ -1,5 +1,6 @@
-// The separate staging Worker, chosen like production's: from the account's own Workers, or named with Add Worker.
-// Production's Worker is never offered. A named Worker that does not exist yet is created by the first staging publish.
+// A destination's separate Worker in production's account, chosen like production's: from the account's own Workers,
+// or named with Add Worker. Production's Worker is never offered. A named Worker that does not exist yet is created by
+// the destination's first publish.
 import { useEffect, useState } from 'react';
 import { WORKER_NAME_PATTERN } from '../../../shared/properties/publishWorkerSetup';
 import type { PublishDiscovery, PublishProject } from '../../../shared/properties/publishDiscovery';
@@ -20,7 +21,7 @@ interface Props {
   readonly change: (worker: string) => void;
 }
 
-export function StagingWorkerField(props: Props) {
+export function DestinationWorkerField(props: Props) {
   const translate = useTranslate();
   const { discovery, busy, refresh } = useAccountDiscovery(props.projectPath);
   const [adding, setAdding] = useState(false);
@@ -30,19 +31,19 @@ export function StagingWorkerField(props: Props) {
   // Only a complete list can say that a Worker is not at Cloudflare yet.
   const isNew = !listed && !busy && discovery?.kind === 'ready' && discovery.notice === undefined && WORKER_NAME_PATTERN.test(props.value);
   const options = [
-    ...(listed ? [] : [{ value: props.value, label: props.value, ...(isNew ? { description: translate('publish.staging.worker.new') } : {}) }]),
+    ...(listed ? [] : [{ value: props.value, label: props.value, ...(isNew ? { description: translate('publish.destination.worker.new') } : {}) }]),
     ...offered.map((name) => ({ value: name, label: name })),
   ];
   // While the account asks to be signed in, its own field above shows that button and nothing here could be listed.
   if (discovery?.kind === 'failed' && connectionRecovery('cloudflare', discovery).kind === 'sign-in') {
     return undefined;
   }
-  const label = translate('publish.staging.workerName');
+  const label = translate('publish.destination.workerName');
   return (
     <div className="publish-field" aria-busy={busy}>
       <div className="publish-field-heading">
         <div className="publish-label-refresh">
-          <FieldLabel label={label} hint={translate('publish.staging.worker.replaces')} />
+          <FieldLabel label={label} hint={translate('publish.destination.worker.replaces')} />
           <button
             type="button"
             className="publish-refresh publish-refresh-icon"
@@ -61,7 +62,7 @@ export function StagingWorkerField(props: Props) {
         ariaLabel={label}
         value={props.value}
         options={busy ? options : withAddOption(translate('publish.hosting.addWorker'), options)}
-        placeholder={busy ? translate('publish.hosting.loadingProjects') : translate('publish.staging.worker.choose')}
+        placeholder={busy ? translate('publish.hosting.loadingProjects') : translate('publish.destination.worker.choose')}
         invalid={props.invalid}
         onChange={(worker) => (worker === ADD_OPTION ? setAdding(true) : props.change(worker))}
         menuClassName="publish-dropdown"

@@ -2,6 +2,7 @@
 // Why: `parsePublishConfig` throws on an empty identifier because malformed data at a boundary is a programmer
 // or storage error. An empty field in the settings form is not: it is an expected failure the person can fix,
 // so it is answered as a value (AGENTS.md §3) naming the field, and the form says exactly which one to fill.
+import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
 import type { PublishConfig } from './publishConfig';
 import type { Destination } from './publishDestinations';
@@ -55,27 +56,38 @@ export function findMissingPublishField(config: Pick<PublishConfig, 'hosting' | 
   return ok(undefined);
 }
 
-export type MissingStagingField = 'stagingEnvironment' | 'stagingWorker' | 'stagingBranch' | 'stagingAlias' | 'stagingScript';
+export type MissingDestinationField = 'environment' | 'worker' | 'branch' | 'alias' | 'script' | 'cloudflareAccount' | 'hostingProject' | 'vercelOrganization';
 
-/** The staging field a person still has to fill, named before the parser would refuse the whole destination. */
-export function findMissingStagingField(staging: Pick<Destination, 'target'>): Result<undefined, { readonly field: MissingStagingField }> {
-  const { target } = staging;
-  const empty = (value: string, field: MissingStagingField) => (value.trim() === '' ? err({ field }) : ok(undefined));
+/** The destination field a person still has to fill, named before the parser would refuse the whole file. */
+export function findMissingDestinationField(destination: Pick<Destination, 'target'>): Result<undefined, { readonly field: MissingDestinationField }> {
+  const { target } = destination;
+  const empty = (value: string, field: MissingDestinationField) => (value.trim() === '' ? err({ field }) : ok(undefined));
   switch (target.kind) {
     case 'cloudflare-environment':
-      return empty(target.environment, 'stagingEnvironment');
+      return empty(target.environment, 'environment');
     case 'cloudflare-worker':
-      return empty(target.project, 'stagingWorker');
+      return empty(target.project, 'worker');
     case 'cloudflare-pages':
     case 'github-branch':
     case 'link':
-      return empty(target.branch, 'stagingBranch');
+      return empty(target.branch, 'branch');
     case 'netlify':
-      return empty(target.alias, 'stagingAlias');
+      return empty(target.alias, 'alias');
     case 'script':
-      return empty(target.script, 'stagingScript');
+      return empty(target.script, 'script');
     case 'vercel':
       return ok(undefined);
+    case 'host': {
+      // The same fields, in the same order, as production's; a destination's build script has a field of its own.
+      const hosting = findMissingPublishField({ hosting: target.hosting, buildScript: 'build' });
+      if (hosting.ok) {
+        return ok(undefined);
+      }
+      const { field } = hosting.error;
+      assert(field !== 'deployScript', 'A provider hosting has no deploy script');
+      assert(field !== 'buildScript', 'The build script given is not empty');
+      return err({ field });
+    }
     default: {
       const exhaustive: never = target;
       return exhaustive;

@@ -552,3 +552,56 @@ test('late discovery cannot overwrite a changed destination', async (context) =>
   assert.deepEqual(view.writes, []);
   assert.equal(document.querySelector('[aria-label="Open published site"]') === null, true);
 });
+
+const destinationEntry = (id, label, target, extra = {}) => ({ id, label, target, buildScript: 'build', beforePublish: [], afterPublish: [], ...extra });
+
+function withDestinations(view, config, destinations) {
+  const source = JSON.stringify({ version: 1, destinations });
+  window.avb.projectMetadata = async (input) => ({
+    ok: true,
+    value: { source: input.kind === 'publishDestinations' ? source : JSON.stringify(config) },
+  });
+}
+
+test('each destination has its own row in order, with its label, status, last publish and site', async (context) => {
+  const config = { ...DEFAULT_PUBLISH_CONFIG, hosting: { provider: 'netlify', siteId: 'live-site' } };
+  const view = fixture(context, config);
+  withDestinations(view, config, [
+    destinationEntry('d-b', 'Client review', { kind: 'netlify', alias: 'client' }, { siteUrl: 'https://client.example.com' }),
+    destinationEntry('d-a', 'QA', { kind: 'github-branch', branch: 'qa' }),
+  ]);
+  const availability = {
+    github: 'current',
+    hosting: 'pending',
+    hostingPublishedAtMs: Date.now() - 60_000,
+    destinations: [
+      { id: 'd-a', state: 'current', publishedAtMs: Date.now() - 3_600_000 },
+      { id: 'd-b', state: 'pending' },
+    ],
+  };
+  await view.show(availability);
+  await act(async () => arrow().click());
+  const rows = options().map((entry) => entry.textContent);
+  assert.match(rows[1], /^Deploy to production.*published/);
+  assert.match(rows[2], /^Publish to Client reviewChanges to publish$/);
+  assert.match(rows[3], /^Publish to QAUp to date · published/);
+  assert.equal(options()[3].disabled, true, 'only the current destination is disabled');
+  assert.equal(options()[2].disabled, false);
+  assert.equal(document.querySelector('[aria-label="Open Client review site"]').href, 'https://client.example.com/');
+  assert.equal(options()[2].parentElement.title, 'Deploys from this computer. GitHub and production are not touched.');
+  assert.match(options()[3].parentElement.title, /to the qa branch only/);
+  const saved = view.writes.length;
+  await act(async () => options()[2].click());
+  assert.deepEqual(view.published, ['destination:d-b']);
+  assert.equal(view.writes.length, saved, 'publishing a destination saves nothing');
+});
+
+test('with no destinations the menu is what it always was', async (context) => {
+  const config = { ...DEFAULT_PUBLISH_CONFIG, hosting: { provider: 'netlify', siteId: 'live-site' } };
+  const view = fixture(context, config);
+  await view.show({ github: 'current', hosting: 'pending', hostingPublishedAtMs: Date.now() });
+  await act(async () => arrow().click());
+  assert.equal(options().length, 3);
+  assert.match(options()[1].textContent, /^Deploy to hostingChanges to deploy$/);
+  assert.ok(document.querySelector('.stacki-publish-destination') === null);
+});

@@ -193,12 +193,29 @@ test('without the computer’s encryption nothing is kept', async (context) => {
   assert.deepEqual(await store.state(site.root), { kind: 'unavailable' });
 });
 
+test('two destinations can never hold or send the same link, and one removed destination’s link is gone', async (context) => {
+  const site = await publishSite(context, { publish: custom({ deploy: 'link' }) });
+  const store = fakeLinkStore(site.userData);
+  const ids = ['staging', 'd-review01'];
+  assert.equal((await store.save(site.root, 'https://host.example/staging', 'staging', ids)).ok, true);
+  const taken = await store.save(site.root, 'https://host.example/staging', 'd-review01', ids);
+  assert.equal(taken.ok ? '' : taken.error.messageRef?.key, 'publish.destination.error.sharedLink');
+  assert.deepEqual(await store.state(site.root, 'd-review01'), { kind: 'none' });
+  // Saved before the other destination was known of, the copy is still never sent.
+  assert.equal((await store.save(site.root, 'https://host.example/staging', 'd-review01')).ok, true);
+  const sent = await store.linkToSend(site.root, 'd-review01', ids);
+  assert.equal(sent.ok ? '' : sent.error.messageRef?.key, 'publish.destination.error.sharedLink');
+  assert.equal(store.remove(site.root, 'staging').ok, true);
+  assert.deepEqual(await store.state(site.root, 'staging'), { kind: 'none' });
+  assert.deepEqual(await store.linkToSend(site.root, 'd-review01', ['d-review01']), { ok: true, value: 'https://host.example/staging' });
+});
+
 test('each destination has its own link, and staging can never hold or send production’s', async (context) => {
   const site = await publishSite(context, { publish: custom({ deploy: 'link' }) });
   const store = fakeLinkStore(site.userData);
   assert.equal((await store.save(site.root, LINK, 'production')).ok, true);
   const same = await store.save(site.root, LINK, 'staging');
-  assert.equal(same.ok ? '' : same.error.messageRef?.key, 'publish.staging.error.productionLink');
+  assert.equal(same.ok ? '' : same.error.messageRef?.key, 'publish.destination.error.productionLink');
   assert.deepEqual(await store.state(site.root, 'staging'), { kind: 'none' });
   assert.equal((await store.linkToSend(site.root, 'staging')).ok, false);
   const file = path.join(site.userData, 'deploy-links.json');

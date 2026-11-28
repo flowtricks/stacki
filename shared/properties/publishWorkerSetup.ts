@@ -66,7 +66,7 @@ export function parseWorkerSetupResult(input: unknown): WorkerSetupResult {
 /** Whether a failed publish is the one that Worker setup fixes. */
 export function publishNeedsWorkerSetup(state: DesktopPublishState): boolean {
   if (state.kind === 'failed') {
-    // Setup writes production's Worker settings, so it is never offered for what stopped a staging publish.
+    // Setup writes production's Worker settings, so it is never offered for what stopped a destination's publish.
     return state.destination === undefined && state.messageRef?.key === WORKER_SETUP_NEEDED_KEY;
   }
   return false;

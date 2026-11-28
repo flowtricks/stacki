@@ -9,7 +9,8 @@ import { described, type Described } from './i18n/messageRef';
 import { parseOptionalMessageRef } from '../core/i18n/messageReference';
 import { isPublishScriptName } from './publishConfig';
 import { parsePublishedSiteURL } from './publishSite';
-import { DESTINATION_LIMITS, parseStagingTarget, type WorkerEnvironment } from './publishDestinations';
+import { DESTINATION_LIMITS, parseDestinationId, parseDestinationTarget, type DestinationId } from './publishDestinations';
+import type { WorkerEnvironment } from './publishDestinationDefaults';
 
 export const DEPLOY_LINK_LIMITS = {
   linkCharsMax: 2_048,
@@ -27,9 +28,20 @@ export type DeployLinkState =
   | { readonly kind: 'unavailable' }
   | { readonly kind: 'unsupported' };
 
-/** Each destination keeps its own link: production's can never be sent by a staging publish, nor the reverse. */
-export const DEPLOY_LINK_DESTINATIONS = ['production', 'staging'] as const;
-export type DeployLinkDestination = (typeof DEPLOY_LINK_DESTINATIONS)[number];
+/**
+ * Whose link it is: `production`, or a destination's id (an id is never `production`). Each keeps its own link, and one
+ * can never be sent for another.
+ */
+export type DeployLinkDestination = 'production' | DestinationId;
+export const PRODUCTION_LINK = 'production';
+
+export interface DeployLinkStates {
+  readonly production: DeployLinkState;
+  /** One entry for each saved destination. */
+  readonly destinations: Readonly<Record<DestinationId, DeployLinkState>>;
+  /** What a destination that has not been saved yet shows: it has no link, or this computer cannot keep one. */
+  readonly unsaved: DeployLinkState;
+}
 
 export type CustomPublishRequest =
   | { readonly action: 'read' }
@@ -41,7 +53,7 @@ export type CustomPublishResult =
       readonly kind: 'ready';
       readonly scripts: readonly string[];
       readonly environments: readonly WorkerEnvironment[];
-      readonly links: Readonly<Record<DeployLinkDestination, DeployLinkState>>;
+      readonly links: DeployLinkStates;
     }
   | ({ readonly kind: 'failed' } & Described);
 
@@ -111,11 +123,20 @@ export function parseCustomPublishRequest(input: unknown): CustomPublishRequest 
 }
 
 function parseLinkDestination(input: unknown): DeployLinkDestination {
-  const destination = DEPLOY_LINK_DESTINATIONS.find((entry) => entry === input);
-  if (destination === undefined) {
-    throw new Error('Unknown deploy link destination.');
+  return input === PRODUCTION_LINK ? PRODUCTION_LINK : parseDestinationId(input);
+}
+
+function parseDeployLinkStates(input: unknown): DeployLinkStates {
+  const value = record(input);
+  const entries = Object.entries(record(value['destinations']));
+  if (entries.length > DESTINATION_LIMITS.destinationsMax) {
+    throw new Error('Too many deploy link states.');
   }
-  return destination;
+  return {
+    production: parseDeployLinkState(value['production']),
+    destinations: Object.fromEntries(entries.map(([id, state]) => [parseDestinationId(id), parseDeployLinkState(state)])),
+    unsaved: parseDeployLinkState(value['unsaved']),
+  };
 }
 
 export function parseDeployLinkState(input: unknown): DeployLinkState {
@@ -155,18 +176,12 @@ export function parseCustomPublishResult(input: unknown): CustomPublishResult {
   if (environments.length > DESTINATION_LIMITS.environmentsMax) {
     throw new Error('Too many Wrangler environments.');
   }
-  const links = record(value['links']);
-  return {
-    kind: 'ready',
-    scripts,
-    environments,
-    links: { production: parseDeployLinkState(links['production']), staging: parseDeployLinkState(links['staging']) },
-  };
+  return { kind: 'ready', scripts, environments, links: parseDeployLinkStates(value['links']) };
 }
 
 function parseWorkerEnvironment(input: unknown): WorkerEnvironment {
   const value = record(input);
-  const target = parseStagingTarget({ kind: 'cloudflare-environment', environment: value['name'] });
+  const target = parseDestinationTarget({ kind: 'cloudflare-environment', environment: value['name'] });
   assert(target.kind === 'cloudflare-environment', 'An environment parses as one');
   return {
     name: target.environment,

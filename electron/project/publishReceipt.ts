@@ -4,7 +4,7 @@ import path from 'node:path';
 import { count, record, text } from '../../shared/core/boundary';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 import { git } from '../lib/nodeTools';
-import type { Destination, DestinationId } from '../../shared/properties/publishDestinations';
+import { parseDestinationId, type Destination, type DestinationId } from '../../shared/properties/publishDestinations';
 import { parseDeploymentURL } from '../../shared/properties/publishState';
 
 type ReceiptDestination = 'production' | DestinationId;
@@ -57,11 +57,15 @@ export function parseDeploymentReceipt(input: unknown): DeploymentReceipt {
   };
 }
 
-/** Staging keeps a receipt of its own, so publishing one destination can never mark the other as up to date. */
-export function stagingConfiguration(config: PublishConfig, staging: Destination): string {
-  const { target, buildScript, beforePublish, afterPublish } = staging;
+/**
+ * Each destination keeps a receipt of its own, so publishing one can never mark another as up to date. Its label and
+ * address change nothing deployed. A destination with a project of its own does not depend on production's host.
+ */
+export function destinationConfiguration(config: PublishConfig, destination: Destination): string {
+  const { target, buildScript, beforePublish, afterPublish } = destination;
+  const borrowed = target.kind === 'host' ? {} : { hosting: config.hosting };
   return createHash('sha256')
-    .update(JSON.stringify({ hosting: config.hosting, target, buildScript, beforePublish, afterPublish }))
+    .update(JSON.stringify({ ...borrowed, target, buildScript, beforePublish, afterPublish }))
     .digest('hex');
 }
 
@@ -105,5 +109,7 @@ async function deploymentReceiptPath(root: string, destination: ReceiptDestinati
   if (!path.isAbsolute(directory)) {
     throw new Error('Git directory must be absolute.');
   }
-  return path.join(directory, destination === 'production' ? 'stacki-deployment.json' : 'stacki-deployment-staging.json');
+  // The id names a file, so it is held to the destination id rule here too.
+  const name = destination === 'production' ? 'stacki-deployment.json' : `stacki-deployment-${parseDestinationId(destination)}.json`;
+  return path.join(directory, name);
 }

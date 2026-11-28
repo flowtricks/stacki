@@ -2,10 +2,11 @@
 // project, because `.stacki/` is committed to Git. The link is held only sealed by the operating system's own
 // encryption (Electron safeStorage), as CMS and media keys are, and nothing is saved when that is unavailable.
 //
-// A link is bound to the project folder, the GitHub repository and the destination (production or staging) it was
-// added for. All three are sealed inside the encrypted value, so neither editing this file nor cloning another
-// repository into the same folder can send a link on behalf of anything it was not saved for. A binding that does
-// not match is answered, never sent, and staging is never allowed to hold or send production's link.
+// A link is bound to the project folder, the GitHub repository and the destination (production, or one added
+// destination's id) it was added for. All three are sealed inside the encrypted value, so neither editing this file nor
+// cloning another repository into the same folder can send a link on behalf of anything it was not saved for. A binding
+// that does not match is answered, never sent, and a destination is never allowed to hold or send the link of
+// production or of another destination.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -13,7 +14,8 @@ import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
 import { err, ok, type Result } from '../../shared/core/result';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
-import { maskDeployLink, parseDeployLink, type DeployLinkDestination, type DeployLinkState } from '../../shared/properties/publishDeployLink';
+import { maskDeployLink, parseDeployLink, PRODUCTION_LINK, type DeployLinkDestination, type DeployLinkState } from '../../shared/properties/publishDeployLink';
+import { DESTINATION_LIMITS, type DestinationId } from '../../shared/properties/publishDestinations';
 import { git } from '../lib/nodeTools';
 
 /** The operating system's encryption, as Electron's safeStorage offers it. */
@@ -24,8 +26,9 @@ export interface DeployLinkCrypt {
 }
 
 export const DEPLOY_LINK_STORE_LIMITS = {
-  projectsMax: 256,
-  fileBytesMax: 2 * 1024 * 1024,
+  /** One entry for each project and destination that has a link. */
+  linksMax: 1_024,
+  fileBytesMax: 8 * 1024 * 1024,
   sealedCharsMax: 8_192,
 } as const satisfies Record<string, number>;
 
@@ -47,21 +50,33 @@ export class DeployLinkStore {
     private readonly folder: () => string,
   ) {}
 
-  async state(projectRoot: string, destination: DeployLinkDestination = 'production'): Promise<DeployLinkState> {
+  async state(projectRoot: string, destination: DeployLinkDestination = PRODUCTION_LINK): Promise<DeployLinkState> {
     const opened = await this.openLink(projectRoot, destination);
     return opened.kind === 'saved' ? { kind: 'saved', mask: maskDeployLink(opened.link) } : { kind: opened.kind };
   }
 
-  /** The link itself, for the one request a publish sends. Main process only; it never crosses IPC. */
-  async linkToSend(projectRoot: string, destination: DeployLinkDestination = 'production'): Promise<Result<string, Described>> {
+  /** Whether this computer can keep a link at all, which is what a destination without a saved one shows. */
+  unsavedState(): DeployLinkState {
+    return this.crypt.available() ? { kind: 'none' } : { kind: 'unavailable' };
+  }
+
+  /**
+   * The link itself, for the one request a publish sends. Main process only; it never crosses IPC. `others` are the
+   * project's other destinations, whose links a destination must never send.
+   */
+  async linkToSend(
+    projectRoot: string,
+    destination: DeployLinkDestination = PRODUCTION_LINK,
+    others: readonly DestinationId[] = [],
+  ): Promise<Result<string, Described>> {
     const opened = await this.openLink(projectRoot, destination);
     switch (opened.kind) {
-      case 'saved':
-        // Checked again at sending: production's link may have been saved after staging's.
-        if (destination === 'staging' && (await this.holds(projectRoot, 'production', opened.link))) {
-          return err(described('publish.staging.error.productionLink'));
-        }
-        return ok(opened.link);
+      case 'saved': {
+        // Checked again at sending: another link may have been saved after this one. Publishing production is not held
+        // back by a destination's link; it is the destination that may not send production's.
+        const taken = destination === PRODUCTION_LINK ? undefined : await this.sharedWith(projectRoot, destination, others, opened.link);
+        return taken === undefined ? ok(opened.link) : err(taken);
+      }
       case 'none':
         return err(described('publish.custom.link.missing'));
       case 'other-repository':
@@ -75,7 +90,12 @@ export class DeployLinkStore {
     }
   }
 
-  async save(projectRoot: string, input: string, destination: DeployLinkDestination = 'production'): Promise<Result<undefined, Described>> {
+  async save(
+    projectRoot: string,
+    input: string,
+    destination: DeployLinkDestination = PRODUCTION_LINK,
+    others: readonly DestinationId[] = [],
+  ): Promise<Result<undefined, Described>> {
     const link = parseDeployLink(input);
     if (!link.ok) {
       return link;
@@ -84,9 +104,9 @@ export class DeployLinkStore {
     if (!this.crypt.available()) {
       return err(described('publish.custom.link.unavailable'));
     }
-    const other = destination === 'production' ? 'staging' : 'production';
-    if (await this.holds(projectRoot, other, link.value)) {
-      return err(described('publish.staging.error.productionLink'));
+    const taken = await this.sharedWith(projectRoot, destination, others, link.value);
+    if (taken !== undefined) {
+      return err(taken);
     }
     const binding = await deployLinkBinding(projectRoot);
     const key = linkKey(binding.project, destination);
@@ -106,7 +126,7 @@ export class DeployLinkStore {
     return ok(undefined);
   }
 
-  remove(projectRoot: string, destination: DeployLinkDestination = 'production'): Result<undefined, Described> {
+  remove(projectRoot: string, destination: DeployLinkDestination = PRODUCTION_LINK): Result<undefined, Described> {
     const key = linkKey(realProject(projectRoot), destination);
     const { [key]: removed, ...others } = this.read();
     if (removed === undefined) {
@@ -121,9 +141,25 @@ export class DeployLinkStore {
     return ok(undefined);
   }
 
-  private async holds(projectRoot: string, destination: DeployLinkDestination, link: string): Promise<boolean> {
-    const opened = await this.openLink(projectRoot, destination);
-    return opened.kind === 'saved' && opened.link === link;
+  /** Why `destination` may not use `link`: production or one of `others` already does. */
+  private async sharedWith(
+    projectRoot: string,
+    destination: DeployLinkDestination,
+    others: readonly DestinationId[],
+    link: string,
+  ): Promise<Described | undefined> {
+    assert(others.length <= DESTINATION_LIMITS.destinationsMax, 'The other destinations stay bounded');
+    for (const other of [PRODUCTION_LINK, ...others]) {
+      if (other === destination) {
+        continue;
+      }
+      const opened = await this.openLink(projectRoot, other);
+      if (opened.kind === 'saved' && opened.link === link) {
+        const production = other === PRODUCTION_LINK || destination === PRODUCTION_LINK;
+        return described(production ? 'publish.destination.error.productionLink' : 'publish.destination.error.sharedLink');
+      }
+    }
+    return undefined;
   }
 
   private async openLink(projectRoot: string, destination: DeployLinkDestination): Promise<Opened> {
@@ -170,7 +206,7 @@ export class DeployLinkStore {
       if (value['version'] !== 1) {
         return {};
       }
-      const entries = Object.entries(record(value['links'])).slice(-DEPLOY_LINK_STORE_LIMITS.projectsMax);
+      const entries = Object.entries(record(value['links'])).slice(-DEPLOY_LINK_STORE_LIMITS.linksMax);
       return Object.fromEntries(
         entries.flatMap(([key, sealed]) => (typeof sealed === 'string' && sealed.length <= DEPLOY_LINK_STORE_LIMITS.sealedCharsMax ? [[key, sealed]] : [])),
       );
@@ -180,7 +216,7 @@ export class DeployLinkStore {
   }
 
   private write(links: Sealed): void {
-    const kept = Object.fromEntries(Object.entries(links).slice(-DEPLOY_LINK_STORE_LIMITS.projectsMax));
+    const kept = Object.fromEntries(Object.entries(links).slice(-DEPLOY_LINK_STORE_LIMITS.linksMax));
     const body = JSON.stringify({ version: 1, links: kept });
     assert(body.length <= DEPLOY_LINK_STORE_LIMITS.fileBytesMax, 'The deploy link store stays within its size');
     const file = this.file();

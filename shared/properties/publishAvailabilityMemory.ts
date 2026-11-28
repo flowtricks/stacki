@@ -66,25 +66,27 @@ function mergeConfirmed(previous: PublishAvailability | undefined, result: Publi
   const github = result.github === 'unknown' ? (previous?.github ?? 'unknown') : result.github;
   const hosting = keepUnknown(previous?.hosting, result.hosting);
   const githubPush = result.github === 'unknown' ? previous?.githubPush : result.githubPush;
-  const staging = mergeStaging(previous?.staging, result.staging);
+  const destinations = mergeDestinations(previous?.destinations, result.destinations);
   const { hostingPublishedAtMs } = result;
   return {
     github,
     hosting,
     ...(githubPush === undefined ? {} : { githubPush }),
     ...(hostingPublishedAtMs === undefined ? {} : { hostingPublishedAtMs }),
-    ...(staging === undefined ? {} : { staging }),
+    ...(destinations === undefined ? {} : { destinations }),
   };
 }
 
-// Absent means the project has no staging, which replaces what was shown; unjudged keeps what was confirmed.
-function mergeStaging(previous: PublishAvailability['staging'], next: PublishAvailability['staging']): PublishAvailability['staging'] {
-  if (next?.state !== 'unknown') {
-    return next;
-  }
-  const shown = previous ?? next;
-  assert(next.state === 'unknown', 'Only an unjudged check keeps what was shown');
-  return shown;
+// The newest check says which destinations exist, so a removed one leaves. One it could not judge keeps what was confirmed.
+function mergeDestinations(previous: PublishAvailability['destinations'], next: PublishAvailability['destinations']): PublishAvailability['destinations'] {
+  return next?.map((status) => {
+    if (status.state !== 'unknown') {
+      return status;
+    }
+    const shown = previous?.find((entry) => entry.id === status.id) ?? status;
+    assert(shown.id === status.id, 'Only the same destination keeps what was shown');
+    return shown;
+  });
 }
 
 function keepUnknown(previous: PublishDestinationState | undefined, next: PublishDestinationState): PublishDestinationState {
@@ -102,12 +104,9 @@ function flipsToPending(previous: PublishAvailability, next: PublishAvailability
       return true;
     }
   }
-  if (previous.staging?.state === 'current') {
-    if (next.staging?.state === 'pending') {
-      return true;
-    }
-  }
-  return false;
+  return (previous.destinations ?? []).some(
+    (shown) => shown.state === 'current' && next.destinations?.find((entry) => entry.id === shown.id)?.state === 'pending',
+  );
 }
 
 /** How long a burst of file events must stay quiet before one check is asked for. */

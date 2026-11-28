@@ -21,6 +21,8 @@ interface Props {
   readonly projects: readonly PublishProject[];
   readonly busy: boolean;
   readonly refresh: () => void;
+  /** Whether naming a new Worker sets the site up for it, as production's does, or only names it. */
+  readonly workerSetup: 'now' | 'on-first-deploy';
 }
 
 export function HostingChoice(props: Props) {
@@ -63,7 +65,7 @@ export function HostingChoice(props: Props) {
       )}
       {dialog === 'worker' && (
         <AddWorker
-          setup="now"
+          setup={props.workerSetup}
           projectPath={props.projectPath}
           account={account}
           accountName={props.accounts.find((entry) => entry.id === account)?.name ?? account}

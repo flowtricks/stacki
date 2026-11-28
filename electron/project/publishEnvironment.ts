@@ -11,6 +11,8 @@ export function publishEnvironment(): NodeJS.ProcessEnv {
     'GH_TOKEN',
     'GITHUB_TOKEN',
     'AI_API_KEY',
+    // Only a destination's own publish names a destination; one inherited from this computer would mislead its scripts.
+    'STACKI_PUBLISH_DESTINATION',
   ]) {
     delete environment[name];
   }

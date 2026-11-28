@@ -127,6 +127,126 @@ export const messages = {
   'publish.custom.updatesFromGitHub': 'Aktualisiert sich bei Änderungen auf GitHub',
   'publish.custom.updatesFromGitHubTip': 'Dein Host deployt nach einem Push selbst. Stacki kann nicht sehen, wann er fertig ist.',
   'publish.custom.yourHost': 'Dein Host',
+  'publish.destination.add': 'Ziel hinzufügen',
+  'publish.destination.addLimit': 'Ein Projekt kann bis zu {max} Ziele haben.',
+  'publish.destination.afterPublish': 'Nach dem Veröffentlichen hierher',
+  'publish.destination.alias': 'Alias', // same
+  'publish.destination.beforePublish': 'Vor dem Veröffentlichen hierher',
+  'publish.destination.branch': 'Branch', // same
+  'publish.destination.buildScriptHint':
+    'Dieser Build erhält STACKI_PUBLISH_ENV=staging und STACKI_PUBLISH_DESTINATION={id}. Was sich hier ändert, etwa Entwürfe anzeigen oder noindex hinzufügen, bestimmt deine Website.',
+  'publish.destination.defaultLabel': 'Staging', // same
+  'publish.destination.desktopOnly': 'Zusätzliche Ziele werden über die Stacki-Desktop-App veröffentlicht.',
+  'publish.destination.environment': 'Wrangler-Umgebung',
+  'publish.destination.error.builtForProduction':
+    '{label}: Der Build zielte nicht auf env.{environment}, daher hat Stacki ihn nicht deployt. Der Cloudflare-Adapter wählt die Umgebung anhand von CLOUDFLARE_ENV.',
+  'publish.destination.error.changed':
+    'Die Einstellungen von {label} wurden während des Veröffentlichens geändert, daher wurde nichts weiter gesendet. Veröffentliche erneut.',
+  'publish.destination.error.currentBranch': 'Du bist auf dem Branch {branch}. Wähle für {label} einen separaten Branch.',
+  'publish.destination.error.defaultUnknown':
+    'Stacki konnte nicht erkennen, welcher Branch auf GitHub der Standard ist. Pushe einmal zu GitHub und veröffentliche dann auf {label}.',
+  'publish.destination.error.diverged':
+    'Der Branch {branch} auf GitHub enthält Commits, die Stacki nicht veröffentlicht hat. Führe sie zusammen, lösche sie oder wähle einen anderen Branch.',
+  'publish.destination.error.hostUnconfirmed': 'Stacki konnte {label} nicht beim Host prüfen und hat daher nicht veröffentlicht.',
+  'publish.destination.error.linkedProject':
+    '{label}: Dieser Ordner ist mit diesem Projekt verknüpft, daher behandelt „Veröffentlichen“ es als Produktion. Wähle ein anderes oder speichere zuerst das Hosting der Produktion.',
+  'publish.destination.error.noEnvironment': '{label}: Die Wrangler-Konfiguration hat keinen Abschnitt env.{environment}.',
+  'publish.destination.error.notSetUp': 'Dieses Ziel ist nicht eingerichtet. Füge es in den Veröffentlichungseinstellungen hinzu.',
+  'publish.destination.error.pagesUnconfirmed':
+    'Stacki konnte den Produktions-Branch von Pages nicht bestätigen und hat daher nicht auf {label} veröffentlicht.',
+  'publish.destination.error.productionAddress': '{label} hat die Website-Adresse der Produktion. Gib diesem Ziel eine eigene Adresse.',
+  'publish.destination.error.productionLink':
+    'Die Produktion und ein anderes Ziel können nicht denselben Deploy-Link verwenden. Nutze einen Link, der nur dieses Ziel deployt.',
+  'publish.destination.error.productionProject': '{label} verwendet das Projekt der Produktion. Wähle ein anderes Projekt oder „Wie Produktion“.',
+  'publish.destination.error.productionRoute':
+    '{label} würde {host} übernehmen, das von der Produktion bedient wird. Gib dem Ziel in der Wrangler-Konfiguration eigene Routen oder eine leere Routenliste.',
+  'publish.destination.error.productionScript': '{label} führt ein Skript aus, das die Produktion deployt. Entferne dieses Skript daraus.',
+  'publish.destination.error.providerChanged':
+    'Der Produktions-Host wurde geändert, seit {label} eingerichtet wurde. Richte das Ziel in den Veröffentlichungseinstellungen erneut ein.',
+  'publish.destination.error.review': 'Dieses Projekt veröffentlicht per Pull-Request-Review, daher veröffentlicht Stacki nicht direkt auf andere Ziele.',
+  'publish.destination.error.routesUnreadable':
+    'Stacki konnte die Wrangler-Routen nicht lesen und kann daher nicht ausschließen, dass {label} eine andere Website ändern würde.',
+  'publish.destination.error.sameAsProduction': '{label} zeigt auf denselben Ort wie die Produktion. Wähle ein anderes Ziel.',
+  'publish.destination.error.sameRepository':
+    '{label} verwendet ein Projekt, das aus diesem Repository baut. Es könnte also deine Live-Website sein. Wähle ein anderes Projekt.',
+  'publish.destination.error.separateShared':
+    '{label}: Diese Website deklariert Workflows oder Container, die ein zweiter Worker übernehmen könnte. Verwende stattdessen eine Wrangler-Umgebung.',
+  'publish.destination.error.servesAddress':
+    '{label} würde {host} überschreiben, das die Produktion oder ein anderes Ziel verwendet. Wähle ein anderes Projekt.',
+  'publish.destination.error.shared': '{label} und {other} würden an denselben Ort veröffentlichen. Gib einem davon ein anderes Ziel.',
+  'publish.destination.error.sharedLink': 'Zwei Ziele können nicht denselben Deploy-Link verwenden. Gib jedem einen eigenen.',
+  'publish.destination.error.sharedResource':
+    '{label} deklariert einen Workflow, Queue-Consumer oder Container, den die Produktion verwendet. Vergib dafür einen eigenen Namen.',
+  'publish.destination.error.sharedRoute': '{label} würde {host} übernehmen, das {other} verwendet. Gib dem Ziel eine eigene Route.',
+  'publish.destination.error.vercelFirstDeploy':
+    '{label}: Vercel macht das erste Deployment eines Projekts zur Produktion. Veröffentliche zuerst einmal in Produktion.',
+  'publish.destination.error.vercelUnconfirmed':
+    'Stacki konnte nicht bestätigen, dass Vercel bereits ein Produktions-Deployment hat, und hat daher nicht auf {label} veröffentlicht.',
+  'publish.destination.hint.cloudflareEnvironment':
+    'Baut auf diesem Computer und deployt dann diese Wrangler-Umgebung. GitHub und die Produktion bleiben unberührt.',
+  'publish.destination.hint.cloudflareWorker':
+    'Deployt einen zweiten Worker ohne die Routen oder Zeitpläne der Produktion. Er behält dieselben Bindings und nutzt daher dieselben Daten. GitHub bleibt unberührt.',
+  'publish.destination.hint.githubBranch':
+    'Pusht deine aktuellen Dateien nur in diesen Branch, nie erzwungen. Dein Host muss den Branch selbst bauen. Dein eigener Branch und die Produktion bleiben unberührt.',
+  'publish.destination.hint.link':
+    'Pusht deine aktuellen Dateien nur in diesen Branch und sendet dann den Deploy-Link dieses Ziels. Nutze einen Link, der diesen Branch deployt. Stacki kann nicht prüfen, was ein Link auslöst.',
+  'publish.destination.hint.netlify': 'Erstellt unter diesem Alias einen Netlify-Entwurfs-Deploy. Deine Live-Website und GitHub bleiben unberührt.',
+  'publish.destination.hint.ownProject':
+    'Veröffentlicht als Live-Website dieses Projekts. Verwende daher ein Projekt, das nur für dieses Ziel erstellt wurde. GitHub bleibt unberührt.',
+  'publish.destination.hint.ownWorker':
+    'Deployt diesen Worker ohne deine Wrangler-Routen oder Zeitpläne. Er behält dieselben Bindings, prüfe also, auf welche Daten sie zugreifen. GitHub bleibt unberührt.',
+  'publish.destination.hint.pages': 'Deployt einen Vorschau-Branch deines Pages-Projekts. GitHub und die Produktion bleiben unberührt.',
+  'publish.destination.hint.script':
+    'Baut eine saubere Kopie deiner Website und führt dann dieses Skript aus. Stacki kann nicht prüfen, was ein Skript tut, stelle also sicher, dass es nur dieses Ziel deployt.',
+  'publish.destination.hint.vercel':
+    'Erstellt eine Vercel-Vorschau, die Vercel baut. Das Projekt braucht zuerst ein Produktions-Deployment. GitHub bleibt unberührt.',
+  'publish.destination.hooksHint': 'Skripte der Produktion und anderer Ziele laufen hier nie. Verwende npm-Skriptnamen, durch Kommas getrennt.',
+  'publish.destination.host': 'Hosting', // same
+  'publish.destination.host.same': 'Wie Produktion',
+  'publish.destination.label': 'Bezeichnung',
+  'publish.destination.labelProblem.blank': 'Gib jedem Ziel eine Bezeichnung.',
+  'publish.destination.labelProblem.invalid': 'Eine Bezeichnung hat bis zu 60 Zeichen und keine Schrägstriche.',
+  'publish.destination.labelProblem.reserved': 'Produktion und GitHub sind bereits vergeben. Wähle eine andere Bezeichnung.',
+  'publish.destination.labelProblem.taken': 'Zwei Ziele heißen {label}. Gib jedem eine eigene Bezeichnung.',
+  'publish.destination.menu.current': 'Aktuell',
+  'publish.destination.menu.deploysFromComputer': 'Deployt von diesem Computer. GitHub und die Produktion bleiben unberührt.',
+  'publish.destination.menu.openSite': 'Website {label} öffnen',
+  'publish.destination.menu.pending': 'Änderungen zu veröffentlichen',
+  'publish.destination.menu.production': 'In Produktion deployen',
+  'publish.destination.menu.productionTip': 'Ändert nur die Produktion. Andere Ziele bleiben unverändert.',
+  'publish.destination.menu.publish': 'Auf {label} veröffentlichen',
+  'publish.destination.menu.published': '{status} · veröffentlicht {time}',
+  'publish.destination.menu.pushesBranch': 'Pusht deine aktuellen Dateien nur in den Branch {branch}. Die Produktion bleibt unberührt.',
+  'publish.destination.menu.unknown': 'Status nicht verfügbar',
+  'publish.destination.missing.alias': '{label}: Alias eingeben',
+  'publish.destination.missing.branch': '{label}: Branch eingeben',
+  'publish.destination.missing.cloudflareAccount': '{label}: Cloudflare-Konto wählen',
+  'publish.destination.missing.environment': '{label}: Wrangler-Umgebung wählen',
+  'publish.destination.missing.hostingProject': '{label}: Hosting-Projekt wählen',
+  'publish.destination.missing.script': '{label}: Deploy-Skript wählen',
+  'publish.destination.missing.vercelOrganization': '{label}: Vercel-Projekt mit Team wählen',
+  'publish.destination.missing.worker': '{label}: Worker wählen',
+  'publish.destination.mode': 'Art des Deployments',
+  'publish.destination.mode.githubBranch': 'GitHub-Branch',
+  'publish.destination.more': 'Weitere Optionen',
+  'publish.destination.pagesBranch': 'Vorschau-Branch',
+  'publish.destination.remove': 'Ziel entfernen',
+  'publish.destination.removeBody': 'Seine Einstellungen und sein Deploy-Link werden beim Speichern gelöscht. Bereits Veröffentlichtes bleibt online.',
+  'publish.destination.removeNamed': '{label} entfernen',
+  'publish.destination.removeTitle': '{label} entfernen?',
+  'publish.destination.separateWorker': 'Separater Worker',
+  'publish.destination.step.building': '{label} wird gebaut…',
+  'publish.destination.step.deploying': 'Deployment auf {label}…',
+  'publish.destination.step.pushing': 'Push in den Branch {branch}…',
+  'publish.destination.title': 'Ziele',
+  'publish.destination.unreadable':
+    'Stacki konnte .stacki/publish-destinations.json nicht lesen. Korrigiere die Datei und öffne diese Einstellungen dann erneut.',
+  'publish.destination.vercelPreview': 'Vercel-Vorschau',
+  'publish.destination.worker.choose': 'Worker wählen…',
+  'publish.destination.worker.new': 'Neu. Wird beim ersten Veröffentlichen hierher erstellt',
+  'publish.destination.worker.replaces':
+    'Das Veröffentlichen hierher ersetzt, was dieser Worker ausliefert. Wähle einen, der nur für dieses Ziel genutzt wird.',
+  'publish.destination.workerName': 'Worker', // same
   'publish.git.error.badFilename': 'Ein Git-Dateiname ist kein gültiges UTF-8.',
   'publish.git.error.badTreeEntry': 'Nicht unterstützter oder fehlerhafter Git-Baumeintrag.',
   'publish.git.error.chunkLimit': 'Die Git-Liste hat ihr Blocklimit überschritten.',
@@ -282,93 +402,9 @@ export const messages = {
   'publish.site.label': 'URL der veröffentlichten Website',
   'publish.site.saveFailed':
     'Der Link zur veröffentlichten Website konnte nicht gespeichert werden. Öffne die Veröffentlichungsoptionen erneut, um es noch einmal zu versuchen.',
-  'publish.staging.add': 'Staging hinzufügen',
-  'publish.staging.afterPublish': 'Nach dem Veröffentlichen auf Staging',
-  'publish.staging.alias': 'Alias', // same
-  'publish.staging.beforePublish': 'Vor dem Veröffentlichen auf Staging',
-  'publish.staging.branch': 'Staging-Branch',
-  'publish.staging.buildScriptHint':
-    'Staging-Builds erhalten STACKI_PUBLISH_ENV=staging. Was Staging ändert, etwa Entwürfe anzeigen oder noindex hinzufügen, bestimmt deine Website.',
-  'publish.staging.desktopOnly': 'Auf Staging wird über die Stacki-Desktop-App veröffentlicht.',
-  'publish.staging.environment': 'Wrangler-Umgebung',
-  'publish.staging.error.builtForProduction':
-    'Der Build zielte nicht auf env.{environment}, daher hat Stacki ihn nicht deployt. Der Cloudflare-Adapter wählt die Umgebung anhand von CLOUDFLARE_ENV.',
-  'publish.staging.error.currentBranch': 'Du bist auf dem Branch {branch}. Wähle einen separaten Staging-Branch.',
-  'publish.staging.error.defaultUnknown':
-    'Stacki konnte nicht erkennen, welcher Branch auf GitHub der Standard ist. Pushe einmal zu GitHub und veröffentliche dann auf Staging.',
-  'publish.staging.error.diverged':
-    'Der Branch {branch} auf GitHub enthält Commits, die Stacki nicht veröffentlicht hat. Führe sie zusammen, lösche sie oder wähle einen anderen Branch.',
-  'publish.staging.error.noEnvironment': 'Die Wrangler-Konfiguration hat keinen Abschnitt env.{environment}.',
-  'publish.staging.error.notSetUp': 'Staging ist nicht eingerichtet. Füge es in den Veröffentlichungseinstellungen hinzu.',
-  'publish.staging.error.pagesUnconfirmed': 'Stacki konnte den Produktions-Branch von Pages nicht bestätigen und hat daher nicht auf Staging veröffentlicht.',
-  'publish.staging.error.productionLink': 'Staging und Produktion können nicht denselben Deploy-Link verwenden. Nutze einen Link, der nur Staging deployt.',
-  'publish.staging.error.productionRoute':
-    'Staging würde {host} übernehmen, das von der Produktion bedient wird. Gib Staging in der Wrangler-Konfiguration eigene Routen oder eine leere Routenliste.',
-  'publish.staging.error.providerChanged':
-    'Der Produktions-Host wurde geändert, seit Staging eingerichtet wurde. Richte Staging in den Veröffentlichungseinstellungen erneut ein.',
-  'publish.staging.error.review': 'Dieses Projekt veröffentlicht per Pull-Request-Review, daher veröffentlicht Stacki nicht direkt auf Staging.',
-  'publish.staging.error.routesUnreadable':
-    'Stacki konnte die Wrangler-Routen nicht lesen und kann daher nicht ausschließen, dass die Produktion geändert wird.',
-  'publish.staging.error.sameAsProduction': 'Staging zeigt auf denselben Ort wie die Produktion. Wähle ein anderes Staging-Ziel.',
-  'publish.staging.error.separateShared':
-    'Diese Website deklariert Workflows oder Container, die ein zweiter Worker der Produktion wegnehmen könnte. Verwende stattdessen eine Wrangler-Umgebung.',
-  'publish.staging.error.sharedResource':
-    'Staging deklariert einen Workflow, Queue-Consumer oder Container, den die Produktion verwendet. Gib Staging dafür einen eigenen Namen.',
-  'publish.staging.error.vercelFirstDeploy':
-    'Vercel macht das erste Deployment eines Projekts zur Produktion. Veröffentliche einmal in Produktion, bevor du Staging verwendest.',
-  'publish.staging.error.vercelUnconfirmed':
-    'Stacki konnte nicht bestätigen, dass Vercel bereits ein Produktions-Deployment hat, und hat daher nicht auf Staging veröffentlicht.',
-  'publish.staging.hint.cloudflareEnvironment':
-    'Baut auf diesem Computer und deployt dann diese Wrangler-Umgebung. GitHub und die Produktion bleiben unberührt.',
-  'publish.staging.hint.cloudflareWorker':
-    'Deployt einen zweiten Worker ohne die Routen oder Zeitpläne der Produktion. Er behält dieselben Bindings und nutzt daher dieselben Daten. GitHub bleibt unberührt.',
-  'publish.staging.hint.githubBranch':
-    'Pusht deine aktuellen Dateien nur in diesen Branch, nie erzwungen. Dein Host muss den Branch selbst bauen. Dein eigener Branch und die Produktion bleiben unberührt.',
-  'publish.staging.hint.link':
-    'Pusht deine aktuellen Dateien nur in diesen Branch und sendet dann den Staging-Deploy-Link. Nutze einen Link, der diesen Branch deployt.',
-  'publish.staging.hint.netlify': 'Erstellt unter diesem Alias einen Netlify-Entwurfs-Deploy. Deine Live-Website und GitHub bleiben unberührt.',
-  'publish.staging.hint.pages': 'Deployt einen Vorschau-Branch deines Pages-Projekts. GitHub und die Produktion bleiben unberührt.',
-  'publish.staging.hint.script':
-    'Baut eine saubere Kopie deiner Website und führt dann dieses Skript aus. Stacki kann nicht prüfen, was ein Skript tut, stelle also sicher, dass es nur Staging deployt.',
-  'publish.staging.hint.vercel':
-    'Erstellt eine Vercel-Vorschau, die Vercel baut. Das Projekt braucht zuerst ein Produktions-Deployment. GitHub bleibt unberührt.',
-  'publish.staging.hooksHint': 'Die Skripte der Produktion laufen nie für Staging. Verwende npm-Skriptnamen, durch Kommas getrennt.',
-  'publish.staging.host': 'Staging-Host',
-  'publish.staging.host.same': 'Wie Produktion',
-  'publish.staging.menu.current': 'Aktuell',
-  'publish.staging.menu.deploysFromComputer': 'Deployt von diesem Computer. GitHub und die Produktion bleiben unberührt.',
-  'publish.staging.menu.openSite': 'Staging-Website öffnen',
-  'publish.staging.menu.pending': 'Änderungen zu veröffentlichen',
-  'publish.staging.menu.production': 'In Produktion deployen',
-  'publish.staging.menu.productionTip': 'Ändert nur die Produktion. Staging bleibt unverändert.',
-  'publish.staging.menu.publish': 'Auf Staging veröffentlichen',
-  'publish.staging.menu.publishNamed': 'Auf {name} veröffentlichen',
-  'publish.staging.menu.published': '{status} · veröffentlicht {time}',
-  'publish.staging.menu.pushesBranch': 'Pusht deine aktuellen Dateien nur in den Branch {branch}. Die Produktion bleibt unberührt.',
-  'publish.staging.menu.unknown': 'Status nicht verfügbar',
-  'publish.staging.missing.alias': 'Gib einen Staging-Alias ein',
-  'publish.staging.missing.branch': 'Gib einen Staging-Branch ein',
-  'publish.staging.missing.environment': 'Wähle eine Wrangler-Umgebung aus',
-  'publish.staging.missing.script': 'Wähle ein Staging-Skript aus',
-  'publish.staging.missing.worker': 'Wähle einen Staging-Worker',
-  'publish.staging.mode': 'Art des Staging-Deployments',
-  'publish.staging.mode.githubBranch': 'GitHub-Staging-Branch',
-  'publish.staging.more': 'Weitere Optionen',
-  'publish.staging.name': 'Name', // same
-  'publish.staging.pagesBranch': 'Vorschau-Branch',
-  'publish.staging.remove': 'Staging entfernen',
-  'publish.staging.separateWorker': 'Separater Worker',
-  'publish.staging.step.building': 'Staging wird gebaut…',
-  'publish.staging.step.deploying': 'Deployment auf Staging…',
-  'publish.staging.step.pushing': 'Push in den Branch {branch}…',
-  'publish.staging.title': 'Staging', // same
-  'publish.staging.unreadable': 'Stacki konnte .stacki/publish-destinations.json nicht lesen. Korrigiere die Datei und öffne diese Einstellungen dann erneut.',
-  'publish.staging.vercelPreview': 'Vercel-Vorschau',
-  'publish.staging.worker.choose': 'Worker wählen…',
-  'publish.staging.worker.new': 'Neu. Wird beim ersten Veröffentlichen auf Staging erstellt',
-  'publish.staging.worker.replaces': 'Das Veröffentlichen auf Staging ersetzt, was dieser Worker ausliefert. Wähle einen, der nur für Staging genutzt wird.',
-  'publish.staging.workerName': 'Staging-Worker',
   'publish.status.close': 'Schließen',
+  'publish.status.destinationDone': 'Deployment auf {label} abgeschlossen',
+  'publish.status.destinationPushed': 'Nur in den eigenen Branch gepusht',
   'publish.status.githubDone': 'Änderungen zu GitHub gepusht',
   'publish.status.hostingDone': 'Hosting-Deployment abgeschlossen',
   'publish.status.keepOpen': 'Lass Stacki geöffnet, bis die Veröffentlichung abgeschlossen ist.',
@@ -377,8 +413,6 @@ export const messages = {
   'publish.status.preparingProject': 'Dein Projekt wird vorbereitet',
   'publish.status.progress': 'Veröffentlichungsfortschritt',
   'publish.status.requestAccepted': 'Dein Host hat die Anfrage angenommen',
-  'publish.status.stagingDone': 'Staging-Deployment abgeschlossen',
-  'publish.status.stagingPushed': 'Nur in den Staging-Branch gepusht',
   'publish.status.step.afterScripts': 'Skripte nach der Veröffentlichung werden ausgeführt …',
   'publish.status.step.building': 'Website wird gebaut …',
   'publish.status.step.checkingIncoming': 'Suche auf GitHub nach eingehenden Änderungen …',
@@ -392,6 +426,9 @@ export const messages = {
   'publish.status.step.runningHooks': 'Hooks werden ausgeführt und die Website wird gebaut …',
   'publish.status.step.savingToGitHub': 'Wird auf GitHub gespeichert …',
   'publish.status.stepOf': 'Schritt {current} von {total}',
+  'publish.status.title.destinationDone': 'Auf {label} veröffentlicht',
+  'publish.status.title.destinationPushed': 'Branch für {label} gepusht',
+  'publish.status.title.destinationRunning': 'Veröffentlichung auf {label}',
   'publish.status.title.done': 'Erfolgreich veröffentlicht',
   'publish.status.title.failed': 'Veröffentlichung braucht Aufmerksamkeit',
   'publish.status.title.pushed': 'Zu GitHub gepusht',
@@ -399,8 +436,6 @@ export const messages = {
   'publish.status.title.review': 'Bereit zur Prüfung',
   'publish.status.title.running': 'Veröffentlichung läuft',
   'publish.status.title.scriptDone': 'Deploy-Skript abgeschlossen',
-  'publish.status.title.stagingDone': 'Auf Staging veröffentlicht',
-  'publish.status.title.stagingPushed': 'In den Staging-Branch gepusht',
   'publish.status.unchanged': 'Deine Live-Website und der aktuelle Branch bleiben unverändert.',
   'publish.studio.accountUnreachable': 'Die Kontoanmeldung ist nicht erreichbar. Versuche es erneut.',
   'publish.studio.error.alreadySyncing': 'Das Veröffentlichen synchronisiert bereits GitHub. Warte, bis es abgeschlossen ist.',

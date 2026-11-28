@@ -1,9 +1,10 @@
 import { ChevronDownIcon } from '../../ui/Icons';
+import { assert } from '../../../shared/core/assert';
 import { useEffect, useRef, useState } from 'react';
 import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import { deploysFromStacki, parsePublishConfig, parsePublishSource, publishDefaultTarget } from '../../../shared/properties/publishConfig';
-import type { PublishRequestTarget } from '../../../shared/properties/publishDestinations';
-import { useStagingConfiguration } from './useStagingConfiguration';
+import { requestedDestination, type PublishRequestTarget } from '../../../shared/properties/publishDestinations';
+import { useDestinationConfiguration } from './useDestinationConfiguration';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import Popup from '../../ui/Popup';
 import { PublishSettings } from './PublishSettings';
@@ -35,7 +36,7 @@ export function PublishControl({
   const translate = useTranslate();
   const { open, setOpen, settings, checking, run, openSettings, closeSettings } = usePublishMenu(projectPath, publish, settingsClosed, refreshAvailability);
   const configuration = usePublishConfiguration(projectPath, { open, settings, checking });
-  const staging = useStagingConfiguration(projectPath, { open, settings, checking });
+  const destinations = useDestinationConfiguration(projectPath, { open, settings, checking });
   const defaultTarget = 'config' in configuration ? publishDefaultTarget(configuration.config) : 'all';
   const availability = configuredPublishAvailability(checkedAvailability, configuration);
   const provider = 'config' in configuration ? configuration.config.hosting.provider : 'none';
@@ -67,7 +68,8 @@ export function PublishControl({
         open={open}
         anchor={container.current ?? undefined}
         onClose={() => setOpen(false)}
-        className="stacki-publish-menu"
+        // Only a menu with added destinations can grow past the window; without them it is drawn as it always was.
+        className={destinations.length === 0 ? 'stacki-publish-menu' : 'stacki-publish-menu stacki-publish-menu-long'}
         label={translate('publish.menu.options')}
       >
         <PublishMenuOptions
@@ -79,7 +81,7 @@ export function PublishControl({
           busy={busy || checking}
           provider={provider}
           config={'config' in configuration ? configuration.config : undefined}
-          staging={staging}
+          destinations={destinations}
           openSettings={openSettings}
         />
       </Popup>
@@ -210,14 +212,15 @@ function usePublishSetup(projectPath: string, publish: Props['publish']) {
 }
 
 async function preparePublishTarget(projectPath: string, choice: PublishChoice): Promise<PublishRequestTarget | undefined> {
-  // Staging reads its own settings when it runs, and never saves or changes production's.
-  if (choice === 'staging') {
+  // A destination reads its own settings when it runs, and never saves or changes production's.
+  if (choice !== 'default' && requestedDestination(choice) !== undefined) {
     return choice;
   }
   const file = await readMetadata(projectPath, 'publish');
   const config = parsePublishSource(file.source);
   // Resolve on click so edits from either host apply without restarting the editor.
   const target = choice === 'default' ? publishDefaultTarget(config) : choice;
+  assert(requestedDestination(target) === undefined, 'A destination request was answered above');
   if (target === 'github') {
     return target;
   }
