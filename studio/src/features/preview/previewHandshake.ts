@@ -75,6 +75,22 @@ export function retryOffered(attempt: number): boolean {
  */
 export const PREVIEW_ENTRY_PATH = '/__studio-entry';
 // `base` is required: a made-up host here would end up in the built bundle (the no-tracking scan rejects unknown hosts).
+/**
+ * Whether the page a frame reports is the page Studio asked for. Studio asks for
+ * slashless routes; a site with `trailingSlash: 'always'` serves them at /about/
+ * (pageNavigation.ts sends the frame there), so the two spellings are one page.
+ */
+export function samePage(reported: string, asked: string): boolean {
+  return withoutTrailingSlash(reported) === withoutTrailingSlash(asked);
+}
+
+function withoutTrailingSlash(path: string): string {
+  const query = path.indexOf('?');
+  const pathname = query === -1 ? path : path.slice(0, query);
+  const search = query === -1 ? '' : path.slice(query);
+  return (pathname.replace(/\/+$/, '') || '/') + search;
+}
+
 export function pagePath(url: string, base: string): string {
   const parsed = new URL(url, base);
   if (parsed.pathname === PREVIEW_ENTRY_PATH) {

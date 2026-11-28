@@ -1,6 +1,6 @@
 import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { handshakeWait, HANDSHAKE_LIMITS, pagePath, parsePreviewError, retryOffered, type HandshakeWait } from './previewHandshake';
+import { handshakeWait, HANDSHAKE_LIMITS, pagePath, parsePreviewError, retryOffered, samePage, type HandshakeWait } from './previewHandshake';
 import { STARTUP_LIMITS, type StartupView } from '../startup/startupStages';
 import { STARTUP_STAGE_KEYS } from '../startup/startupText';
 import { useElapsed } from '../startup/useElapsed';
@@ -66,7 +66,7 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
       window.removeEventListener('message', receive);
     };
   }, [url, container, key, session]);
-  const shown = url !== undefined && ready !== undefined && ready.session === session && ready.path === pagePath(url, location.href);
+  const shown = url !== undefined && ready !== undefined && ready.session === session && samePage(ready.path, pagePath(url, location.href));
   // The long-wait clock runs from when the loader appeared, not from the last URL change: an address
   // that keeps being replaced must not keep postponing the message that says what is missing.
   useEffect(() => {
