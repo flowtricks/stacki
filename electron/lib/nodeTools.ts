@@ -352,28 +352,56 @@ export function findFreePortProbe(port: number): Promise<boolean> {
   });
 }
 
-export function stopProcessTree(proc: ChildProcess | undefined) {
+/** How a tree is stopped, handed in so the Windows way is tested on any machine. */
+export interface ProcessTreeHost {
+  readonly platform: NodeJS.Platform;
+  /** Starts Windows' `taskkill` on the tree under `processId`; it answers with `exit` or `error`. */
+  readonly taskkill: (processId: number) => Pick<ChildProcess, 'on'>;
+}
+
+const PROCESS_TREE_HOST: ProcessTreeHost = {
+  platform: process.platform,
+  taskkill: (processId) => spawn('taskkill', ['/pid', String(processId), '/T', '/F'], { windowsHide: true }),
+};
+
+type StoppableProcess = Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>;
+
+function stopProcessAlone(proc: StoppableProcess): void {
+  try {
+    proc.kill('SIGTERM');
+  } catch {
+    /* already gone */
+  }
+}
+
+function stopProcessTreeWindows(proc: StoppableProcess, processId: number, host: ProcessTreeHost): void {
+  // Windows gives an ended process's id to the next one that asks: `/T /F` on it would end a stranger's tree.
+  if (typeof proc.exitCode === 'number' || typeof proc.signalCode === 'string') {
+    return;
+  }
+  const taskkill = host.taskkill(processId);
+  taskkill.on('error', () => stopProcessAlone(proc));
+  // A taskkill that ran and refused (access denied, a tree it could not walk) raises no `error`, only this code.
+  taskkill.on('exit', (code) => {
+    if (code !== 0) {
+      stopProcessAlone(proc);
+    }
+  });
+}
+
+export function stopProcessTree(proc: StoppableProcess | undefined, host: ProcessTreeHost = PROCESS_TREE_HOST) {
   if (!proc?.pid) {
     return;
   }
   try {
-    if (isWin) {
-      spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { windowsHide: true }).on('error', () => {
-        try {
-          proc.kill('SIGTERM');
-        } catch {
-          /* already gone */
-        }
-      });
+    if (host.platform === 'win32') {
+      stopProcessTreeWindows(proc, proc.pid, host);
     } else {
+      // The group outlives its leader, so it is signalled even when the process itself has ended.
       process.kill(-proc.pid, 'SIGTERM');
     }
   } catch {
-    try {
-      proc.kill('SIGTERM');
-    } catch {
-      /* already gone */
-    }
+    stopProcessAlone(proc);
   }
 }
 

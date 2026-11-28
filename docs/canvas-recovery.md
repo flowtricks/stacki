@@ -75,7 +75,10 @@ Everything above needs the dev server to send something. These send nothing:
 
 - **Cause, removed:** every Astro server starts with `ASTRO_DEV_BACKGROUND=1`, so it stays Stacki's own
   process. `dev:start` asks a held server whether it still serves and replaces one that does not.
-  `astro dev stop` (the detached fallback) runs only while the project's lock names our port.
+  `astro dev stop` (the detached fallback) runs only while the project's lock names our port, and a
+  replacement starts after it has ended: still running, it would read the new server's lock and end it.
+- **On Windows** a tree is ended by `taskkill /T /F`. When that fails, the process itself is killed; a
+  process that has ended is never passed to it, since Windows reuses ids.
 - **Watched:** `src/features/preview/previewSupervisor.ts` asks the server (`/@vite/client`) and the loaded
   frames (`avb:alive`, `electron/preload/frameAlive.ts`) every 5 s while the window is visible, and at once
   on return to the window, on a failed navigation, on `dev:exit`, and when the person reloads.
@@ -90,7 +93,8 @@ Everything above needs the dev server to send something. These send nothing:
   own port and was reported as ended: "Preview is offline" (v1.4.17 to v1.4.21).
 
 Guard tests: `test/renderer/preview/previewSupervisor.test.js`, `previewFramesAlive.test.js`,
-`test/electron/preview/previewServerDeath.test.js`, `networkPreview.test.js`, `contentConfigRestart.test.js`.
+`test/electron/preview/previewServerDeath.test.js`, `stopProcessTree.test.js`, `networkPreview.test.js`,
+`contentConfigRestart.test.js`.
 
 ## Measured (generated fixture, real Astro dev server, `npm run integration:recovery`)
 
