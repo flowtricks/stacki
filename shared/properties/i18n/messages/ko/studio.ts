@@ -62,6 +62,7 @@ export const messages = {
   'studio.collab.sessionChanged': '세션이 변경되었습니다. 요소를 다시 선택하세요.',
   'studio.collab.sessionExpired': '세션이 만료되었거나 저장소 접근 권한이 변경되었습니다. 로컬 편집 내용은 보존되어 있습니다. 다시 로그인하세요.',
   'studio.collab.sourceProtected': 'Client 모드에서는 컴포넌트 소스가 보호됩니다.',
+  'studio.collab.roleCannot': '내 역할({role})로는 할 수 없습니다. 관리자에게 액세스를 요청하세요.',
   'studio.collab.takeOver': '넘겨받기',
   'studio.component.packageReadOnly': '패키지 컴포넌트는 읽기 전용입니다. 페이지에서 인스턴스 속성을 편집하세요.',
   'studio.components.createInSource': '컴포넌트 템플릿은 프로젝트 소스에서 만드세요.',

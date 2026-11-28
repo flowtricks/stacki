@@ -1,4 +1,12 @@
 import { usePublishSettingsConfig } from './usePublishSettingsConfig';
+import { PublishCustomFields } from './PublishCustomFields';
+import { PublishStaging } from './PublishStaging';
+import { ScriptListField, TextField } from './publishFields';
+import { useCustomHostInfo } from './useCustomHostInfo';
+import { readStoredDestinations, useStagingDefaults, useStagingSettings, type StoredDestinations } from './useStagingSettings';
+import { NO_LINK_DRAFTS, saveDeployLinks, settingsRefusal, type LinkDrafts } from './saveDeployLinks';
+import { findMissingStagingField, type MissingStagingField } from '../../../shared/properties/publishMissing';
+import type { Destination } from '../../../shared/properties/publishDestinations';
 import { PublishedSiteField } from './PublishedSiteField';
 import { PublishWorkflow } from './PublishWorkflow';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -12,7 +20,14 @@ import { UploadCloudIcon } from '../../ui/Icons';
 import { PublishConnections } from './PublishConnections';
 import { useEffect, useRef, useState } from 'react';
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
-import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, parsePublishSource, type PublishConfig, type Hosting } from '../../../shared/properties/publishConfig';
+import {
+  DEFAULT_PUBLISH_CONFIG,
+  parsePublishConfig,
+  parsePublishSource,
+  publishDefaultTarget,
+  type PublishConfig,
+  type Hosting,
+} from '../../../shared/properties/publishConfig';
 import { findMissingPublishField, type MissingPublishField } from '../../../shared/properties/publishMissing';
 import { PublishInvalidFieldContext } from './publishInvalidField';
 import { PublishSettingsRebaseContext } from './setUpWorker';
@@ -28,7 +43,7 @@ interface Props {
 type SettingsState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string }
-  | { readonly kind: 'ready'; readonly base: string | undefined; readonly config: PublishConfig };
+  | { readonly kind: 'ready'; readonly base: string | undefined; readonly config: PublishConfig; readonly destinations: StoredDestinations };
 
 export function PublishSettings(props: Props) {
   const translate = useTranslate();
@@ -36,11 +51,11 @@ export function PublishSettings(props: Props) {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
-    void readMetadata(props.projectPath, 'publish')
-      .then((file) => {
+    void Promise.all([readMetadata(props.projectPath, 'publish'), readStoredDestinations(props.projectPath)])
+      .then(([file, destinations]) => {
         const config = parsePublishSource(file.source);
         if (active) {
-          setState({ kind: 'ready', base: file.source, config });
+          setState({ kind: 'ready', base: file.source, config, destinations });
         }
       })
       .catch((error: unknown) => {
@@ -138,22 +153,30 @@ function PublishSettingsForm({
 }) {
   const translate = useTranslate();
   const { config, changeConfig: setConfig, changeHosting, discoveringHosting } = usePublishSettingsConfig(projectPath, stored);
+  const staging = useStagingSettings(stored.destinations);
+  const [drafts, setDrafts] = useState<LinkDrafts>(NO_LINK_DRAFTS);
+  const { info, removeLink } = useCustomHostInfo(projectPath, {
+    needed: config.customHosting !== undefined || staging.staging !== undefined,
+  });
+  const stagingDefaults = useStagingDefaults(config, staging, info);
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
-  const [refused, setRefused] = useState<{ readonly field: MissingPublishField; readonly attempt: number }>();
+  const [refused, setRefused] = useState<{ readonly field: MissingSettingsField; readonly attempt: number }>();
   const { error, saving, save, rebase } = usePublishSettingsSave({
     projectPath,
     config,
     base: stored.base,
     repository,
+    staging,
+    drafts,
     close,
     translate,
     refuse: (field) => setRefused({ field, attempt: (refused?.attempt ?? 0) + 1 }),
   });
   // The mark clears itself: it shows only while the refused field is still the first one missing.
-  const missing = findMissingPublishField(config);
-  const invalidField = refused !== undefined && !missing.ok && missing.error.field === refused.field ? refused.field : undefined;
+  const missing = findMissingSettingsField(config, staging.staging);
+  const invalidField = refused !== undefined && missing === refused.field ? refused.field : undefined;
   useEffect(() => {
     // Each refused Save brings the empty field into view, even when it was already marked.
     if (refused !== undefined) {
@@ -163,7 +186,7 @@ function PublishSettingsForm({
     }
   }, [refused]);
   return (
-    <PublishInvalidFieldContext.Provider value={invalidField}>
+    <PublishInvalidFieldContext.Provider value={isStagingField(invalidField) ? undefined : invalidField}>
       <PublishSettingsRebaseContext.Provider value={rebase}>
         <div className="publish-settings-scroll" ref={scroll}>
           <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
@@ -186,10 +209,42 @@ function PublishSettingsForm({
               />
             </section>
             <section className="publish-settings-section" aria-label={translate('publish.settings.hosting')}>
-              <HostingFields projectPath={projectPath} hosting={config.hosting} discoveringHosting={discoveringHosting} change={changeHosting} />
-              <PublishedSiteField config={config} change={setConfig} />
+              <HostingFields
+                projectPath={projectPath}
+                config={config}
+                discoveringHosting={discoveringHosting}
+                change={changeHosting}
+                changeConfig={setConfig}
+              />
+              {config.customHosting === undefined ? (
+                <PublishedSiteField config={config} change={setConfig} />
+              ) : (
+                <PublishCustomFields
+                  config={config}
+                  custom={config.customHosting}
+                  change={setConfig}
+                  info={info}
+                  draft={drafts.production}
+                  changeDraft={(production) => setDrafts({ ...drafts, production })}
+                  removeLink={() => void removeLink('production')}
+                />
+              )}
             </section>
-            <AdvancedFields config={config} setConfig={setConfig} />
+            <PublishStaging
+              access={staging.access}
+              production={config}
+              staging={staging.staging}
+              add={stagingDefaults.add}
+              remove={stagingDefaults.remove}
+              change={staging.change}
+              changeHost={stagingDefaults.changeHost}
+              info={info}
+              draft={drafts.staging}
+              changeDraft={(draft) => setDrafts({ ...drafts, staging: draft })}
+              removeLink={() => void removeLink('staging')}
+              invalid={isStagingField(invalidField) ? invalidField : undefined}
+            />
+            {config.customHosting?.deploy !== 'github' && <AdvancedFields config={config} setConfig={setConfig} />}
             {error && <ErrorToast message={error} />}
           </fieldset>
         </div>
@@ -225,17 +280,20 @@ function PublishTargetToggle({
 }) {
   const translate = useTranslate();
   const other = target === 'github' ? 'hosting' : 'github';
-  const lastEnabled = config.defaultTarget === target;
+  const fromGitHub = config.customHosting?.deploy === 'github';
+  const enabled = publishDefaultTarget(config);
+  const lastEnabled = enabled === target;
+  const why = fromGitHub ? 'publish.custom.targetAuto' : lastEnabled ? 'publish.settings.keepOneDestination' : undefined;
   return (
-    <label className="publish-target-card" title={lastEnabled ? translate('publish.settings.keepOneDestination') : undefined}>
+    <label className="publish-target-card" title={why === undefined ? undefined : translate(why)}>
       {target === 'github' ? <PublishProviderIcon provider="github" /> : <UploadCloudIcon />}
       <span>{target === 'github' ? 'GitHub' /* i18n-ignore: product name. */ : translate('publish.settings.hosting')}</span>
       <input
         className="publish-target-switch"
         type="checkbox"
         role="switch"
-        checked={config.defaultTarget !== other}
-        disabled={lastEnabled}
+        checked={enabled !== other}
+        disabled={lastEnabled || fromGitHub}
         onChange={(event) => setConfig({ ...config, defaultTarget: event.currentTarget.checked ? 'all' : other })}
       />
     </label>
@@ -247,12 +305,16 @@ function usePublishSettingsSave({
   config,
   base: initialBase,
   repository,
+  staging,
+  drafts,
   close,
   translate,
   refuse,
 }: {
   readonly translate: Translator;
-  readonly refuse: (field: MissingPublishField) => void;
+  readonly refuse: (field: MissingSettingsField) => void;
+  readonly staging: ReturnType<typeof useStagingSettings>;
+  readonly drafts: LinkDrafts;
   readonly projectPath: string;
   readonly config: PublishConfig;
   readonly base: string | undefined;
@@ -264,16 +326,23 @@ function usePublishSettingsSave({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save() {
-    const missing = findMissingPublishField(config);
-    if (!missing.ok) {
+    const missing = findMissingSettingsField(config, staging.staging);
+    if (missing !== undefined) {
       // Said as a toast (never a paragraph) that names the field; the form marks it and takes the person to it.
-      reportErrorToast(translate(MISSING_FIELD_MESSAGES[missing.error.field]));
-      refuse(missing.error.field);
+      reportErrorToast(translate(MISSING_FIELD_MESSAGES[missing]));
+      refuse(missing);
       return;
     }
     setSaving(true);
     try {
       const validated = validateSettings(config);
+      // Everything that can be refused is refused before anything is written.
+      const refusal = settingsRefusal(validated, staging, drafts);
+      if (refusal !== undefined) {
+        reportErrorToast(translateDescribed(refusal));
+        return;
+      }
+      await staging.save(projectPath);
       const written = await writeMetadata(projectPath, {
         kind: 'publish',
         source: JSON.stringify(validated, undefined, 2) + '\n',
@@ -287,6 +356,12 @@ function usePublishSettingsSave({
           return;
         }
       }
+      // Last, because a link is bound to the repository connected above.
+      const linkProblem = await saveDeployLinks(projectPath, validated, staging, drafts);
+      if (linkProblem !== undefined) {
+        setError(translate('publish.settings.savedWithError', { message: translateDescribed(linkProblem) }));
+        return;
+      }
       close();
     } catch (failure: unknown) {
       setError(cleanError(failure));
@@ -299,21 +374,25 @@ function usePublishSettingsSave({
 
 function HostingFields({
   projectPath,
-  hosting,
+  config,
   discoveringHosting,
   change,
+  changeConfig,
 }: {
   readonly projectPath: string;
-  readonly hosting: Hosting;
+  readonly config: PublishConfig;
   readonly discoveringHosting: boolean;
   readonly change: (value: Hosting) => void;
+  readonly changeConfig: (config: PublishConfig) => void;
 }) {
   const translate = useTranslate();
+  const { hosting } = config;
+  const custom = config.customHosting !== undefined;
   return (
     <>
       <div className="publish-field" aria-busy={discoveringHosting}>
         <span className="publish-label">{translate('publish.settings.provider')}</span>
-        <Dropdown<Hosting['provider'] | undefined>
+        <Dropdown<Hosting['provider'] | 'custom' | undefined>
           ariaLabel={translate('publish.settings.provider')}
           placeholder={translate('publish.settings.providerChecking')}
           options={[
@@ -329,18 +408,24 @@ function HostingFields({
             },
             { value: 'vercel', label: 'Vercel' /* i18n-ignore: product name. */, icon: <PublishProviderIcon provider="vercel" /> },
             { value: 'netlify', label: 'Netlify' /* i18n-ignore: product name. */, icon: <PublishProviderIcon provider="netlify" /> },
+            { value: 'custom', label: translate('publish.custom.provider'), icon: <PublishProviderIcon provider="custom" /> },
           ]}
           menuClassName="publish-dropdown"
           livePreview={false}
-          value={discoveringHosting ? undefined : hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
+          value={discoveringHosting ? undefined : custom ? 'custom' : hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
           onChange={(provider) => {
-            if (provider !== undefined) {
+            if (provider === 'custom') {
+              if (!custom) {
+                // A new hosting object also ends any hosting discovery still running.
+                changeConfig({ ...config, hosting: { provider: 'none' }, customHosting: { deploy: 'github' } });
+              }
+            } else if (provider !== undefined) {
               change(emptyHosting(provider));
             }
           }}
         />
       </div>
-      {hosting.provider === 'none' ? (
+      {custom ? undefined : hosting.provider === 'none' ? (
         <div className="publish-field">
           <span className="publish-label">{translate('publish.hosting.project')}</span>
           <button className="dd-trigger" aria-label={translate('publish.hosting.project')} disabled>
@@ -360,46 +445,6 @@ function HostingFields({
   );
 }
 
-function TextField({ label, value, change }: { readonly label: string; readonly value: string; readonly change: (value: string) => void }) {
-  return (
-    <label>
-      {label}
-      <input value={value} maxLength={256} onChange={(event) => change(event.target.value)} />
-    </label>
-  );
-}
-
-function ScriptField({
-  label,
-  values,
-  change,
-}: {
-  readonly label: string;
-  readonly values: readonly string[];
-  readonly change: (values: readonly string[]) => void;
-}) {
-  const [draft, setDraft] = useState(values.join(', '));
-  return (
-    <label>
-      {label}
-      <input
-        value={draft}
-        maxLength={808}
-        onChange={(event) => {
-          const value = event.target.value;
-          setDraft(value);
-          change(
-            value
-              .split(',')
-              .map((entry) => entry.trim())
-              .filter(Boolean),
-          );
-        }}
-      />
-    </label>
-  );
-}
-
 function AdvancedFields({ config, setConfig }: { readonly config: PublishConfig; readonly setConfig: (config: PublishConfig) => void }) {
   const translate = useTranslate();
   return (
@@ -407,17 +452,20 @@ function AdvancedFields({ config, setConfig }: { readonly config: PublishConfig;
       <summary>{translate('publish.common.advanced')}</summary>
       <div className="publish-advanced-fields">
         <ManualHosting hosting={config.hosting} change={(hosting) => setConfig({ ...config, hosting })} />
-        <TextField
-          label={translate('publish.settings.advanced.buildScript')}
-          value={config.buildScript}
-          change={(buildScript) => setConfig({ ...config, buildScript })}
-        />
-        <ScriptField
+        {config.customHosting?.deploy !== 'link' && (
+          // A deploy link's host does its own build, so there is no local build to name.
+          <TextField
+            label={translate('publish.settings.advanced.buildScript')}
+            value={config.buildScript}
+            change={(buildScript) => setConfig({ ...config, buildScript })}
+          />
+        )}
+        <ScriptListField
           label={translate('publish.settings.advanced.beforePublish')}
           values={config.beforePublish}
           change={(beforePublish) => setConfig({ ...config, beforePublish })}
         />
-        <ScriptField
+        <ScriptListField
           label={translate('publish.settings.advanced.afterPublish')}
           values={config.afterPublish}
           change={(afterPublish) => setConfig({ ...config, afterPublish })}
@@ -520,10 +568,37 @@ const MISSING_FIELD_MESSAGES = {
   cloudflareAccount: 'publish.settings.missing.cloudflareAccount',
   hostingProject: 'publish.settings.missing.hostingProject',
   vercelOrganization: 'publish.settings.missing.vercelOrganization',
+  deployScript: 'publish.settings.missing.deployScript',
   buildScript: 'publish.settings.missing.buildScript',
-} as const satisfies Record<MissingPublishField, MessageKey>;
+  stagingEnvironment: 'publish.staging.missing.environment',
+  stagingWorker: 'publish.staging.missing.worker',
+  stagingBranch: 'publish.staging.missing.branch',
+  stagingAlias: 'publish.staging.missing.alias',
+  stagingScript: 'publish.staging.missing.script',
+} as const satisfies Record<MissingSettingsField, MessageKey>;
+
+type MissingSettingsField = MissingPublishField | MissingStagingField;
+
+function findMissingSettingsField(config: PublishConfig, staging: Destination | undefined): MissingSettingsField | undefined {
+  const production = findMissingPublishField(config);
+  if (!production.ok) {
+    return production.error.field;
+  }
+  const other = staging === undefined ? undefined : findMissingStagingField(staging);
+  return other === undefined || other.ok ? undefined : other.error.field;
+}
+
+function isStagingField(field: MissingSettingsField | undefined): field is MissingStagingField {
+  return field?.startsWith('staging') === true;
+}
 
 function validateSettings(config: PublishConfig): PublishConfig {
   const saved = config.publishedSite;
-  return parsePublishConfig(saved === undefined ? config : { ...config, publishedSite: { ...saved, url: saved.url.trim().replace(/\/$/, '') } });
+  const trimmed = (url: string) => url.trim().replace(/\/$/, '');
+  const custom = config.customHosting;
+  return parsePublishConfig({
+    ...config,
+    ...(saved === undefined ? {} : { publishedSite: { ...saved, url: trimmed(saved.url) } }),
+    ...(custom?.siteUrl === undefined ? {} : { customHosting: { ...custom, siteUrl: trimmed(custom.siteUrl) } }),
+  });
 }

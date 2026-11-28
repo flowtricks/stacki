@@ -1,5 +1,6 @@
 import { parsePreviewSnapshotMessage, parsePreviewUnchangedMessage } from '../../../shared/properties/previewSnapshot';
 import { parseComponentPreviewMessage } from './paletteModel';
+import { STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 import { RENDER_TIMEOUT_MS, type ProduceOutcome, type Producer, type TileSource } from './previewSnapshotStore';
 
 // Renders a tile the one way there is: load the preview route in a frame nobody sees and wait for the page
@@ -41,6 +42,8 @@ export function createFrameProducer({ document: hostDocument, resolve }: FramePr
       frame.title = `${source.name} preview`;
       frame.tabIndex = -1;
       frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+      // The component is measured at the frame's whole width.
+      frame.setAttribute('scrolling', STILL_PAGE_FRAME.scrolling);
       frame.style.cssText = 'width:1200px;height:800px;border:0';
       let silence: ReturnType<typeof setTimeout> | undefined;
       let sawReady = false;

@@ -66,7 +66,25 @@ function mergeConfirmed(previous: PublishAvailability | undefined, result: Publi
   const github = result.github === 'unknown' ? (previous?.github ?? 'unknown') : result.github;
   const hosting = keepUnknown(previous?.hosting, result.hosting);
   const githubPush = result.github === 'unknown' ? previous?.githubPush : result.githubPush;
-  return githubPush === undefined ? { github, hosting } : { github, hosting, githubPush };
+  const staging = mergeStaging(previous?.staging, result.staging);
+  const { hostingPublishedAtMs } = result;
+  return {
+    github,
+    hosting,
+    ...(githubPush === undefined ? {} : { githubPush }),
+    ...(hostingPublishedAtMs === undefined ? {} : { hostingPublishedAtMs }),
+    ...(staging === undefined ? {} : { staging }),
+  };
+}
+
+// Absent means the project has no staging, which replaces what was shown; unjudged keeps what was confirmed.
+function mergeStaging(previous: PublishAvailability['staging'], next: PublishAvailability['staging']): PublishAvailability['staging'] {
+  if (next?.state !== 'unknown') {
+    return next;
+  }
+  const shown = previous ?? next;
+  assert(next.state === 'unknown', 'Only an unjudged check keeps what was shown');
+  return shown;
 }
 
 function keepUnknown(previous: PublishDestinationState | undefined, next: PublishDestinationState): PublishDestinationState {
@@ -81,6 +99,11 @@ function flipsToPending(previous: PublishAvailability, next: PublishAvailability
   }
   if (previous.hosting === 'current') {
     if (next.hosting === 'pending') {
+      return true;
+    }
+  }
+  if (previous.staging?.state === 'current') {
+    if (next.staging?.state === 'pending') {
       return true;
     }
   }

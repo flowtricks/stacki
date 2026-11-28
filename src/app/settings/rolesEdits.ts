@@ -16,6 +16,7 @@ import {
   type ComponentTarget,
 } from '../../../shared/properties/componentAccess';
 import { DescribedError } from '../../../shared/properties/describedError';
+import { EDITOR_PARTS, type EditorPart } from '../../../shared/properties/projectRoles';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { described, type Translator } from '../../../shared/properties/i18n/messageRef';
 import {
@@ -52,7 +53,7 @@ export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
   );
   const next = {
     ...roles,
-    roles: [...roles.roles, { id, name: trimmed, members: [], access: NEW_ROLE_ACCESS, appPermissions: {}, pinnedApps: [], componentRules: [] }],
+    roles: [...roles.roles, { id, name: trimmed, members: [], access: NEW_ROLE_ACCESS, appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] }],
   };
   assert(next.roles.length === roles.roles.length + 1, 'Adding a role adds one');
   return next;
@@ -94,6 +95,7 @@ export function duplicateRole(
     appPermissions: source.appPermissions,
     pinnedApps: [...source.pinnedApps],
     componentRules: source.componentRules,
+    editorOff: source.editorOff,
   };
   const at = Math.max(sourceIndex + 1, BUILT_IN_ROLE_COUNT);
   const next = { ...roles, roles: [...roles.roles.slice(0, at), copy, ...roles.roles.slice(at)] };
@@ -225,6 +227,25 @@ export function setAccess(roles: ProjectRoles, id: string, feature: AccessFeatur
     const without = role.access.filter((item) => item !== feature);
     return { ...role, access: change === 'grant' ? [...without, feature] : without };
   });
+}
+
+/**
+ * Switches editing options on (`grant`) or off (`withdraw`) for a role. They only
+ * ever take away: switching one on gives back what the role's permissions allow.
+ */
+export function setEditorParts(roles: ProjectRoles, id: string, parts: readonly EditorPart[], change: 'grant' | 'withdraw'): ProjectRoles {
+  assert(id !== ADMIN_ROLE_ID, 'Admin has every editing option and is never edited');
+  assert(parts.length > 0, 'An editing change names an option');
+  assert(parts.length <= EDITOR_PARTS.length, 'Editing options are bounded');
+  const next = updateRole(roles, id, (role) => {
+    const off = EDITOR_PARTS.filter((part) => (parts.includes(part) ? change === 'withdraw' : role.editorOff.includes(part)));
+    return { ...role, editorOff: off };
+  });
+  assert(
+    parts.every((part) => roleOf(next, id).editorOff.includes(part) === (change === 'withdraw')),
+    'Every named option is set',
+  );
+  return next;
 }
 
 /** Grants or withdraws a whole group of features at once: the group's "All" switch. */

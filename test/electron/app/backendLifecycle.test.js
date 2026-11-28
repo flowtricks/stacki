@@ -397,6 +397,7 @@ test('an edit during thumbnail rendering remains ' + 'stale and a missing image 
       constructor() {
         this.webContents = {
           executeJavaScript: async () => {},
+          insertCSS: async () => 'inserted',
           capturePage: async () => {
             fs.writeFileSync(fixture.source, '<h1>Edited while rendering</h1>');
             return {

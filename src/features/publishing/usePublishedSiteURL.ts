@@ -8,7 +8,9 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function usePublishedSiteURL(projectPath: string, config: PublishConfig | undefined) {
   const translate = useTranslate();
-  const destination = config === undefined ? undefined : hostingSiteKey(config.hosting);
+  // A custom host's address is only what the person typed; there is no provider to ask.
+  const custom = config?.customHosting;
+  const destination = config === undefined || custom !== undefined ? undefined : hostingSiteKey(config.hosting);
   const saved = config === undefined ? undefined : savedPublishedSite(config);
   const savedURL = saved?.url;
   const manual = saved?.source === 'manual';
@@ -46,6 +48,9 @@ export function usePublishedSiteURL(projectPath: string, config: PublishConfig |
       active = false;
     };
   }, [projectPath, destination, manual, savedURL, translate]);
+  if (custom !== undefined) {
+    return custom.siteUrl;
+  }
   if (manual) {
     return savedURL;
   }

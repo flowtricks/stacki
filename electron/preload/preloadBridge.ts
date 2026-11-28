@@ -134,6 +134,7 @@ function projectBridge() {
     publishingAccount: invoke('publish:account'),
     setUpPublishWorker: invoke('publish:workerSetup'),
     createNetlifySite: invoke('publish:netlifySite'),
+    publishingCustomHost: invoke('publish:custom'),
     listInstructions: invoke('instructions:list'),
     readInstruction: invoke('instructions:read'),
     writeInstruction: invoke('instructions:write'),

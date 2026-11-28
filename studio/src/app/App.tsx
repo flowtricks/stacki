@@ -29,10 +29,10 @@ export function App() {
   const startup = useStartupView(!project, 0);
   useAstroFileNotifications(report, refresh, reconcile);
   const session = useSession(report);
-  useStudioRoles(session, revision, report);
+  const roles = useStudioRoles(session, revision, report);
   return (
     <>
-      {project ? (
+      {project && roles === 'ready' ? (
         <Editor
           {...navigation}
           view={view}

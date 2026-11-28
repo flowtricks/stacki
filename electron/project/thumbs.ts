@@ -5,6 +5,7 @@ import { BrowserWindow, type NativeImage, type WebContents } from 'electron';
 import { ok, err, type Result } from '../../shared/core/result';
 
 import { toRecord } from '../../shared/core/record';
+import { CANVAS_SCROLLBAR_CSS } from '../../shared/properties/canvasScrollbar';
 
 // The picture of a project on the start screen.
 //
@@ -212,6 +213,9 @@ async function capture(userDataPath: string, projectPath: string, url: string): 
     // successful page. Race the load itself: awaiting it before the timeout
     // promise would leave a stalled navigation holding the capture queue.
     await within(win.loadURL(url), LOAD_TIMEOUT, 'the page did not finish loading');
+    // The picture is the page at the viewport's whole width: on a computer that draws classic scrollbars the page's
+    // own bar would be in it, and the page laid out beside it. As a user stylesheet, no rule of the page outranks it.
+    await within(win.webContents.insertCSS(CANVAS_SCROLLBAR_CSS, { cssOrigin: 'user' }), 3000, 'the page did not take a stylesheet').catch(() => '');
 
     // Wait for the things that arrive after the load event and change what the
     // hero looks like, then put the page back at the top: a fragment in the

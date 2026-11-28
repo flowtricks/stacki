@@ -20,6 +20,13 @@ import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideO
 import { studioGuideSubject, useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo, outlineNode } from './outlineInfo';
 import { useMemo, useRef, type CSSProperties } from 'react';
+import { InspectorOnlyBar } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
+import { CanvasDropOverlay } from '../../../vendor/stacki/src/features/preview/CanvasDropOverlay';
+import { can, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { limitsEditing } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { useStudioRole } from '../roles/useEditorRole';
+import { canvasGestures } from '../roles/canvasGestures';
+import { useStudioCanvasGestures, type CanvasGestureHost } from './useStudioCanvasGestures';
 import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { useProjectBreakpoints } from '../../../vendor/stacki/src/ipc/useProjectBreakpoints';
@@ -56,13 +63,27 @@ interface Props {
   readonly onDevice: (device: PreviewDevice) => void;
   readonly inspector: PreviewInspectorActions | undefined;
   readonly openComponent?: ((name: string, id: string, occurrence: number) => void) | undefined;
+  readonly move: CanvasGestureHost['move'];
 }
 export function PreviewCanvas(props: Props) {
-  useStudioCanvasText(props);
+  const role = useStudioRole();
+  const gestures = canvasGestures(role);
+  useStudioCanvasText(props, role);
+  useStudioCanvasGestures({
+    role,
+    file: props.file,
+    source: props.document?.ready ? props.document.text.toString() : undefined,
+    nodes: props.nodes,
+    components: props.components,
+    preview: props.preview,
+    select: props.select,
+    move: props.move,
+  });
   const interaction = useCanvasInteraction({
     projectKey: props.projectName,
     url: props.preview.url,
-    available: props.device !== 'canvas' && !props.collection,
+    // Interact mode is switched from the bar, so a role without the bar stays in select mode.
+    available: gestures.bar && props.device !== 'canvas' && !props.collection,
     frame: props.preview.frame,
     post: props.preview.send,
     subscribeLoad: props.preview.subscribeLoad,
@@ -72,7 +93,8 @@ export function PreviewCanvas(props: Props) {
   });
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
   const viewKey = `${props.projectName}\n${props.file}`;
-  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx, viewKey }, props.onDevice);
+  // The device keys belong to the bar's buttons, so they go with it.
+  const sizing = usePreviewSizing(props.device, props.dimensions, breakpoints, { deviceShortcuts: gestures.bar, desktopFramePx, viewKey }, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,
@@ -82,34 +104,44 @@ export function PreviewCanvas(props: Props) {
   const columnGuide = useColumnGuide({
     projectKey: `${location.origin} ${props.projectName}`,
     metrics: props.preview.guide,
-    available: props.device !== 'canvas' && !props.collection,
+    available: gestures.bar && props.device !== 'canvas' && !props.collection,
     frame: { post: props.preview.send, subscribeLoad: props.preview.subscribeLoad },
     subject: studioGuideSubject(props.file),
   });
   return (
     <main className="studio-center" data-canvas-interactive={interaction.active}>
-      <div className="studio-preview-toolbar">
-        <PreviewToolbar
-          breakpoints={breakpoints}
-          crumbs={[...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []), ...crumbsFor(props.nodes, props.selected)]}
-          onCrumb={(id) => props.select(id ?? 'layout')}
-          activeDevice={sizing.activeDevice}
-          onDevice={sizing.pickDevice}
-          {...(props.device === 'canvas'
-            ? {}
-            : {
-                sizing: {
-                  width: sizing.viewport.width,
-                  scale: sizing.viewport.scale,
-                  onWidth: sizing.setWidth,
-                  onFit: () => sizing.pickDevice('desktop'),
-                },
-              })}
-          guide={columnGuide.menu}
-          interaction={interaction}
-          inspector={props.collection ? undefined : props.inspector}
-        />
-      </div>
+      {gestures.bar ? (
+        <div className="studio-preview-toolbar">
+          <PreviewToolbar
+            breakpoints={breakpoints}
+            crumbs={[...(props.pageLabel ? [{ id: undefined, label: props.pageLabel }] : []), ...crumbsFor(props.nodes, props.selected)]}
+            onCrumb={(id) => props.select(id ?? 'layout')}
+            activeDevice={sizing.activeDevice}
+            onDevice={sizing.pickDevice}
+            {...(props.device === 'canvas'
+              ? {}
+              : {
+                  sizing: {
+                    width: sizing.viewport.width,
+                    scale: sizing.viewport.scale,
+                    onWidth: sizing.setWidth,
+                    onFit: () => sizing.pickDevice('desktop'),
+                  },
+                })}
+            guide={columnGuide.menu}
+            interaction={interaction}
+            inspector={props.collection ? undefined : props.inspector}
+          />
+        </div>
+      ) : (
+        // Collapsed, the bar's button is the only way to open the right panel: it alone stays.
+        !props.collection &&
+        props.inspector && (
+          <div className="studio-preview-toolbar">
+            <InspectorOnlyBar inspector={props.inspector} />
+          </div>
+        )
+      )}
       {props.collection && props.document ? (
         <CollectionEditor document={props.document} />
       ) : (
@@ -123,20 +155,23 @@ export function PreviewCanvas(props: Props) {
 }
 // Text editing on the canvas, with the text the selected instance's props and
 // slot show marked and editable as on the page itself.
-function useStudioCanvasText(props: Props) {
+function useStudioCanvasText(props: Props, role: RoleView) {
   const components = useSameComponents(props.components);
   const translate = useTranslate();
+  const text = studioCanvasText(
+    props.file,
+    props.document,
+    props.nodes,
+    {
+      components,
+      selected: props.selected,
+      // A limited role without the CMS is not offered CMS text it could not save.
+      content: limitsEditing(role.editorOff) && !can(role, 'panel:cms') ? 'page' : 'all',
+    },
+    translate,
+  );
   useCanvasText({
-    document: studioCanvasText(
-      props.file,
-      props.document,
-      props.nodes,
-      {
-        components,
-        selected: props.selected,
-      },
-      translate,
-    ),
+    document: canvasGestures(role).text ? text : undefined,
     frame: props.preview.frame,
     url: props.preview.url,
     post: props.preview.send,
@@ -260,6 +295,7 @@ function CanvasOverlays({
     <div dir="ltr" className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>
       {/* First in the layer, so the outlines and spacing bands paint over it. */}
       {shownGuide && <GuideOverlay {...shownGuide} scale={sizing.viewport.scale} />}
+      <CanvasDropOverlay scale={sizing.viewport.scale} overlayInfo={(path) => outlineInfo(props.nodes, path)} />
       <CollaboratorOutlines
         peers={props.collaborators}
         nodes={props.nodes}

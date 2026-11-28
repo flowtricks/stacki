@@ -49,7 +49,8 @@ export function useEditorView() {
   return {
     role,
     studioRole,
-    device,
+    // The device buttons are on the canvas bar: without it the canvas is the ordinary fluid one.
+    device: studioRole.editorOff.has('canvasBar') ? ('desktop' as const) : device,
     setDevice,
     // A device an app asks for: a pick, as the toolbar's button is (usePreviewSizing DesktopPick).
     pickDevice: (next: PreviewDevice) => {
@@ -58,7 +59,7 @@ export function useEditorView() {
       }
       setDevice(next);
     },
-    panel: canStudioPanel(studioRole, panel) ? panel : ('navigator' as const),
+    panel: canStudioPanel(studioRole, panel) ? panel : studioRole.editorOff.has('navigator') ? undefined : ('navigator' as const),
     setPanel,
     tab: can(studioRole, 'panel:style') ? tab : ('settings' as const),
     setTab,

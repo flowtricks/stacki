@@ -65,6 +65,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'De sessie is gewijzigd. Selecteer het element opnieuw.',
   'studio.collab.sessionExpired': 'Je sessie is verlopen of de toegang tot de repository is gewijzigd. Je lokale bewerkingen blijven bewaard. Log opnieuw in.',
   'studio.collab.sourceProtected': 'De broncode van componenten is beveiligd in Clientmodus.',
+  'studio.collab.roleCannot': 'Je rol ({role}) mag dit niet. Vraag een beheerder om toegang.',
   'studio.collab.takeOver': 'Overnemen',
   'studio.component.packageReadOnly': 'Pakketcomponenten zijn alleen-lezen. Bewerk instantie-eigenschappen op de pagina.',
   'studio.components.createInSource': 'Maak componentsjablonen in de broncode van het project.',

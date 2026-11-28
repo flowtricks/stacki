@@ -55,6 +55,9 @@ export function gitWorkspaceRoutes(
           try {
             await rooms.persist();
             const state = await workspace.load();
+            // A Git command stopped at its time or disk limit leaves this lock, and every later command
+            // then fails. The coordinator held here admits one workspace index user, so the lock is stale.
+            await rm(path.join(state.git.directory, 'index.lock'), { force: true });
             return await runGitWorkspaceCommand(workspace, state, rooms, command, data);
           } finally {
             if (!gitWorkspaceNeedsRecovery(root)) {

@@ -188,7 +188,7 @@ test('without a host that can do it, or a role that may, the rows are left out',
 });
 
 function clientRole() {
-  return { id: 'client', name: 'Client', isAdmin: false, features: new Set(), appPermissions: {}, pinnedApps: [], componentRules: [] };
+  return { id: 'client', name: 'Client', isAdmin: false, editorOff: new Set(), features: new Set(), appPermissions: {}, pinnedApps: [], componentRules: [] };
 }
 
 test('every row of every "…" menu has an icon, whatever rows are added: the check reads the rendered rows, not a list', async () => {

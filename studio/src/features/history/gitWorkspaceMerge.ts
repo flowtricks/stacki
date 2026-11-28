@@ -7,14 +7,16 @@ import { mergeBranch, resolveMerge } from '../../../vendor/stacki/electron/git/g
 import type { Git } from '../../../vendor/stacki/electron/git/git';
 import { published } from '../publishing/publishFailure';
 import { publishTreeFiles } from '../publishing/publishSource';
-import { publishGitEnvironment, type PublishGit } from '../publishing/publishGit';
+import { publishGit, publishGitEnvironment, type PublishGit } from '../publishing/publishGit';
 import { gitRevision, gitWorkspaceBranch } from './gitWorkspaceContract';
 import type { GitWorkspaceState } from './gitWorkspace';
-import { gitWorkspaceRun, snapshotGitWorkspace, gitWorkspaceCommit } from './gitWorkspaceObjects';
+import { gitWorkspaceRun, snapshotGitWorkspace, gitWorkspaceCommit, hydrateGitTrees, HYDRATE_LIMITS } from './gitWorkspaceObjects';
 import { gitWorkspaceChanges } from './gitWorkspaceChanges';
 import { replaceGitWorkspaceReferences } from './gitWorkspaceCheckpoint';
 
 const execute = promisify(execFile);
+// Two histories rarely have more than one common ancestor; hydration takes the draft and target beside these.
+const MERGE_BASES_MAX = HYDRATE_LIMITS.revisionsMax - 2;
 /** Run Desktop's merge engine in an isolated checkout so conflicts never reach the preview. */
 export async function mergeGitWorkspace(state: GitWorkspaceState, branch: string, target: string, choices?: Record<string, unknown>) {
   const { git, manifest } = state;
@@ -36,6 +38,7 @@ export async function mergeGitWorkspace(state: GitWorkspaceState, branch: string
       },
     };
   }
+  await hydrateGitTrees(git, [draft, target, ...(await mergeBases(git, current.head, target))]);
   const temporary = await mkdtemp(path.join(git.root, '.stacki/studio/state/merge-'));
   try {
     const context = { ...git, root: temporary };
@@ -64,6 +67,14 @@ export async function mergeGitWorkspace(state: GitWorkspaceState, branch: string
     await rm(temporary, { recursive: true, force: true });
   }
 }
+
+// A merge reads the common ancestor of any file both sides changed. Unrelated histories have none, and the
+// merge itself reports that.
+async function mergeBases(git: PublishGit, head: string, target: string): Promise<readonly string[]> {
+  const bases = await publishGit(git, ['merge-base', '--all', head, target]);
+  return bases.ok ? bases.value.split('\n').filter(Boolean).slice(0, MERGE_BASES_MAX).map(gitRevision) : [];
+}
+
 async function prepareMergeCheckout(git: PublishGit, head: string, tree: string) {
   const files = published(await publishTreeFiles(git, tree));
   if (files.some((file) => isStudioLocalPath(file.path))) {
