@@ -2092,6 +2092,7 @@
     "src/features/style/embed/useEditorRuleEdits.ts",
     "src/features/style/embed/useEditorScanning.ts",
     "src/features/style/embed/useEditorWrites.ts",
+    "src/features/style/embed/useDraftOverSource.ts",
     "src/features/style/embed/useInlineTarget.ts",
     "src/features/style/embed/useNewStyleTagSettings.ts",
     "src/features/style/embed/useOptimisticEdits.ts",
