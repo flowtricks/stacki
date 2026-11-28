@@ -269,6 +269,23 @@
   white-space: nowrap;
   color: var(--text-dim);
 }
+.ai-queued-images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+  max-width: 50%;
+}
+.ai-queued-image {
+  border-radius: 4px;
+}
+.ai-queued-image img {
+  width: 22px;
+  height: 22px;
+  object-fit: cover;
+  border-radius: 4px;
+}
 .ai-queued-send {
   flex: none;
   padding: 2px 7px;

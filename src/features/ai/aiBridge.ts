@@ -11,6 +11,7 @@ import {
   parseAiEventsPush,
   parseAiResult,
   parseAiStatusPush,
+  parseChatImageReply,
   parseChatList,
   parseChatTranscript,
   parseCompactStarted,
@@ -31,6 +32,7 @@ import {
   type AiEventsPush,
   type AiFailure,
   type AiStatusPush,
+  type ChatImageReply,
   type ChatTranscript,
   type DiffReply,
   type ReviewOutcome,
@@ -185,6 +187,11 @@ export function aiSections(input: IpcPayloads['ai:sections']): Promise<AiReply<C
 }
 
 /** A pending file's text before and after a turn. */
+export function aiChatImage(input: IpcPayloads['ai:chatImage']): Promise<AiReply<ChatImageReply>> {
+  const payload = parseIpcPayload('ai:chatImage', input);
+  return callResult(() => window.avb.aiChatImage(payload), parseChatImageReply);
+}
+
 export function aiDiff(input: IpcPayloads['ai:diff']): Promise<AiReply<DiffReply>> {
   const payload = parseIpcPayload('ai:diff', input);
   return callResult(() => window.avb.aiDiff(payload), parseDiffReply);

@@ -2921,11 +2921,11 @@ pixels within `SCREENSHOT_RECT_PX_MAX`) photographs that rect of the sender's ow
 `webContents.capturePage` and answers `Result<{ mimeType: 'image/png' | 'image/jpeg', data, width, height }>`:
 scaled to `SCREENSHOT_EDGE_PX_MAX` (1600) on the longer side, PNG when its base64 is within 1.5 million
 characters, else JPEG at 90, 75, 60, 45; a failed, empty or too detailed capture is `invalid`.
-**Privacy.** The bytes are never written to disk and never logged: a NativeImage in main's memory, the invoke
-reply, the draft's in-memory attachment (browser-stored drafts keep no attachments), then the `ai:prompt`
-payload and the ACP `image` block (base64 `data`) on the adapter's stdin. No temporary file exists, so there is
-none to sweep: the Claude adapter passes the block to the CLI as a base64 `source` (read in the installed 0.105.0 adapter); the Codex adapter
-is not installed here, so its handling of the block is unverified. The transcript stores only the attachment's name (`Screenshot 2 (1600×900)`). What the
+**Privacy.** Capturing and drafting write nothing to disk and the bytes are never logged: a NativeImage in main's
+memory, the invoke reply, the draft's in-memory attachment (browser-stored drafts keep no attachments), then the
+`ai:prompt` payload and the ACP `image` block (base64 `data`) on the adapter's stdin. No temporary file carries it
+to the agent, so there is none to sweep; only a sent image is kept (**Sent images** below): the Claude adapter passes the block to the CLI as a base64 `source` (read in the installed 0.105.0 adapter); the Codex adapter
+is not installed here, so its handling of the block is unverified. The transcript stores the attachment's name (`Screenshot 2 (1600×900)`) and, for an image, a small preview. What the
 person's own CLI keeps in its own session history (`~/.claude/projects`, `~/.codex/sessions`) is the CLI's,
 outside Stacki's control. **Note.** An image attachment may carry `note` (one line, at most
 `SCREENSHOT_NOTE_CHARS_MAX` characters, no control characters), sent as a text block right before the image and
@@ -2933,10 +2933,25 @@ never stored: `Screenshot 1: region, 768px breakpoint`, `Screenshot 2: panel` (a
 off the canvas). **Bounds.** Every attachment, pasted, dropped, picked or captured, enters the draft through
 `appendAttachments` (`screenshot/draftAttachments.ts`): at most `attachmentsMax` (16: twice the 8 the "Pick frames" sheet once
 offered) and at most `DRAFT_IMAGE_CHARS_MAX` (`attachmentsImageCharsMax`, 24 million, about 18 MB) base64 characters of images in all,
-which the `ai:prompt` parser checks again (16 is far under the Claude API's 100 images per request; the Codex adapter's cap is unverified). Chips show the thumbnail, open it in a lightbox
-(`AttachmentChips.tsx`, the app's `Popup`) and remove. Proofs: `test/electron/handlers/ai/screenshotCapture.test.ts`,
+which the `ai:prompt` parser checks again (16 is far under the Claude API's 100 images per request; the Codex adapter's cap is unverified). Chips show the thumbnail, open it in the image viewer
+(`AttachmentChips.tsx`) and remove. Proofs: `test/electron/handlers/ai/screenshotCapture.test.ts`,
 `test/shared/ipc/screenshotContract.test.ts`, `test/renderer/ai/screenshot.test.js`, and in
 `agentHost.test.ts` and `promptBlocks.test.ts` the stored chat without bytes or note and the note block.
+
+**Sent images.** Every image in a chat opens large in one viewer (`src/ui/ImageViewer.tsx`: draft chips, sent
+attachments, comment-pin crops, queued messages, and Studio's message images; Escape, an outside press and its
+close button close it; no stepping between images). When a message is recorded with a preview, main also keeps the
+image's full copy (`chatImageStore.ts`) at `userData/ai/projects/<sha256>/images/<chat>/<32 hex>.<png|jpg|webp|gif>`,
+never in the project, and the stored attachment names it as `original` (a file name that parses as `ChatImageId`,
+never a path; the note is not kept). Bounds: `chatImagesMax` (256) files and `chatImagesBytesMax` (64 MiB) a chat,
+`projectImagesMax` (2000) and `projectImagesBytesMax` (512 MiB) a project, oldest removed first; a chat's copies go
+with the chat, a fork gets its own, and a copy that cannot be written never fails a send. `ai:chatImage`
+(`{ projectPath, chat, image }`) answers `Result<{ mimeType, data }>` for a chat of the open project, reading
+regular files only, and the panel reads it only when the viewer opens. An older chat, or a removed copy, opens the
+preview (320 px), whose tooltip says only a small copy was saved; a message stored with no preview has nothing to
+open and is not a button. Agent replies and tool output draw no images. A comment pin keeps its first picture only.
+Proofs: `test/electron/handlers/ai/chatImageStore.test.ts`, `agentHost.test.ts`, `test/renderer/ai/chatImageViewer.test.js`,
+`pinsMessage.test.js`.
 
 **Recording.** The capture control is one bar (`ScreenshotButton.tsx`): at rest the crop button alone; on hover or
 focus it grows upward (160 ms, anchored at the crop button's bottom, overlaying, closing after 180 ms) to reveal
@@ -3142,7 +3157,8 @@ thumbnail.
 
 **Transcript.** A message with a `pins` part is drawn by `pins/PinsMessage.tsx`: each pin's words and names, its
 status (opening its subagent when it has one) and its thumbnail at the row's end; no pin numbers (the chat refers to
-none: subagent titles are shown without their `Pin <n>:`, `withoutPinNumber`, which matching still reads). A pin still
+none: subagent titles are shown without their `Pin <n>:`, `withoutPinNumber`, which matching still reads). The
+thumbnail opens large (**Sent images**). A pin still
 on the board opens on the canvas. No
 Edit or Resend. Proofs: `test/shared/properties/ai/commentPins.test.ts`, `test/electron/handlers/ai/pinBoardStore.test.ts`,
 `test/electron/handlers/ai/agentHostPins.test.ts` (the stand-in adapter as Claude's coordinator),

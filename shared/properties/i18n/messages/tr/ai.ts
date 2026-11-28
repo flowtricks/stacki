@@ -621,6 +621,7 @@ export const messages = {
   'ai.screenshot.button': 'Ekran görüntüsü',
   'ai.screenshot.close': 'Önizlemeyi kapat',
   'ai.screenshot.enlarge': '{name} görselini büyüt',
+  'ai.images.smallOnly': 'Bu görselin yalnızca küçük bir kopyası kaydedildi',
   'ai.screenshot.failed': 'Ekran görüntüsü alınamadı. Yeniden deneyin.',
   'ai.screenshot.hint': 'Pencerenin herhangi bir bölümünün üzerinde sürükleyin. Esc iptal eder.',
   'ai.screenshot.name': 'Ekran görüntüsü {number} ({width}×{height})',
@@ -869,7 +870,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Sesli giriş bu tarayıcıda kullanılamıyor. Chrome veya Safari deneyin.',
   'ai.studio.discard': 'Vazgeç',
   'ai.studio.discarded': 'Vazgeçildi. Hiçbir değişiklik uygulanmadı.',
-  'ai.studio.download': '{name} indir',
   'ai.studio.dragPin': 'Sabitlemek için bir sohbeti buraya sürükleyin.',
   'ai.studio.dropImages': 'Görselleri buraya bırakın',
   'ai.studio.filesToChange': {

@@ -623,6 +623,7 @@ export const messages = {
   'ai.screenshot.button': 'Screenshot', // same
   'ai.screenshot.close': 'Voorbeeld sluiten',
   'ai.screenshot.enlarge': '{name} vergroten',
+  'ai.images.smallOnly': 'Van deze afbeelding is alleen een kleine kopie opgeslagen',
   'ai.screenshot.failed': 'De screenshot kon niet worden gemaakt. Probeer het opnieuw.',
   'ai.screenshot.hint': 'Sleep over een deel van het venster. Esc annuleert.',
   'ai.screenshot.name': 'Screenshot {number} ({width}×{height})', // same
@@ -871,7 +872,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Spraakinvoer is niet beschikbaar in deze browser. Probeer Chrome of Safari.',
   'ai.studio.discard': 'Negeren',
   'ai.studio.discarded': 'Genegeerd. Er zijn geen wijzigingen toegepast.',
-  'ai.studio.download': '{name} downloaden',
   'ai.studio.dragPin': 'Sleep een chat hierheen om hem vast te zetten.',
   'ai.studio.dropImages': 'Sleep afbeeldingen hierheen',
   'ai.studio.filesToChange': {

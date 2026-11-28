@@ -591,6 +591,7 @@ export const messages = {
   'ai.screenshot.button': '螢幕截圖',
   'ai.screenshot.close': '關閉預覽',
   'ai.screenshot.enlarge': '放大 {name}',
+  'ai.images.smallOnly': '此圖片僅儲存了縮小的副本',
   'ai.screenshot.failed': '無法擷取螢幕截圖。請再試一次。',
   'ai.screenshot.hint': '在視窗的任何位置拖曳。按 Esc 取消。',
   'ai.screenshot.name': '螢幕截圖 {number}（{width}×{height}）',
@@ -813,7 +814,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': '此瀏覽器無法使用語音輸入。請試試 Chrome 或 Safari。',
   'ai.studio.discard': '捨棄',
   'ai.studio.discarded': '已捨棄。未套用任何變更。',
-  'ai.studio.download': '下載 {name}',
   'ai.studio.dragPin': '將對話拖曳到這裡以釘選。',
   'ai.studio.dropImages': '將圖片拖放到這裡',
   'ai.studio.filesToChange': {

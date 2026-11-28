@@ -29,6 +29,7 @@ import { applyRemember, NO_REMEMBERED_SETTINGS, type RememberedSettings } from '
 import type {
   ChatEvent,
   ChatId,
+  ChatImageId,
   ChatList,
   ChatOption,
   ChatSection,
@@ -63,6 +64,7 @@ import {
   aiChats,
   aiChatUpdate,
   aiCompact,
+  aiChatImage,
   aiDiff,
   aiInstallAgent,
   aiMentions,
@@ -576,6 +578,12 @@ export async function moveSection(section: SectionId, target: { readonly before:
 /** The `@` picker's rows for `query`: project files and skills. A failure is the caller's to show or ignore. */
 export function mentionCandidates(query: string, kinds: readonly MentionKind[]): Promise<AiReply<readonly MentionCandidate[]>> {
   return aiMentions({ projectPath: requireProject(), query, kinds });
+}
+
+/** The full copy of an image `chat` was sent, as a data URL; undefined when it is no longer kept. */
+export async function readSentImage(chat: ChatId, image: ChatImageId): Promise<string | undefined> {
+  const reply = await aiChatImage({ projectPath: requireProject(), chat, image });
+  return reply.ok ? `data:${reply.value.mimeType};base64,${reply.value.data}` : undefined;
 }
 
 /** One pending file's text before and after a turn, for the changes card's inline diff. */

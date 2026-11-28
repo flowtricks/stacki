@@ -141,6 +141,20 @@ export interface ChatAttachmentName {
   readonly name: string;
   /** A small JPEG data URL of a sent image (`THUMBNAIL_PREFIX`); absent for files and in chats stored before thumbnails. */
   readonly thumbnail?: string | undefined;
+  /** The full copy of a sent image, kept beside the chat; absent in older chats, and the file may since have been removed. */
+  readonly original?: ChatImageId | undefined;
+}
+
+/** The file name of a kept image: 32 hex of its digest and its type's extension. Never a path. */
+export type ChatImageId = Brand<string, 'ChatImageId'>;
+const CHAT_IMAGE_ID = /^[0-9a-f]{32}\.(png|jpg|webp|gif)$/;
+
+export function toChatImageId(value: string): ChatImageId {
+  if (!CHAT_IMAGE_ID.test(value)) {
+    throw new Error('ChatImageId: expected <32 hex>.<png|jpg|webp|gif>');
+  }
+  assert(!value.includes('/'), 'ChatImageId: a file name, not a path');
+  return value as ChatImageId;
 }
 
 /** The only form a stored thumbnail takes: a JPEG, so the transcript never draws an unvetted media type. */
@@ -454,7 +468,12 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
           const attachment = object(entry, 'attachment');
           const kind = oneOf(attachment['kind'], ['image', 'file'] as const, 'attachment.kind');
           const name = label(attachment['name']);
-          return attachment['thumbnail'] === undefined ? { kind, name } : { kind, name, thumbnail: thumbnailOf(kind, attachment['thumbnail']) };
+          return {
+            kind,
+            name,
+            ...(attachment['thumbnail'] === undefined ? {} : { thumbnail: thumbnailOf(kind, attachment['thumbnail']) }),
+            ...(attachment['original'] === undefined ? {} : { original: originalOf(kind, attachment['original']) }),
+          };
         }),
         at: count(value['at'], 'user.at'),
         parts: value['parts'] === undefined ? undefined : list(value['parts'], AI_LIMITS.promptPartsMax, 'user.parts').map(parseSentPart),
@@ -677,6 +696,13 @@ function label(input: unknown): string {
 }
 
 /** An attachment's stored preview: a bounded JPEG data URL, and only on an image. Throws on anything else. */
+function originalOf(kind: 'image' | 'file', input: unknown): ChatImageId {
+  if (kind !== 'image') {
+    throw new Error('attachment.original: only an image has one');
+  }
+  return toChatImageId(text(input, AI_LIMITS.idCharsMax, 'attachment.original'));
+}
+
 function thumbnailOf(kind: 'image' | 'file', input: unknown): string {
   const value = text(input, AI_LIMITS.thumbnailCharsMax, 'attachment.thumbnail');
   if (kind !== 'image') {

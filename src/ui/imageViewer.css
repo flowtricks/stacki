@@ -1,0 +1,69 @@
+/* The viewer is as large as its image: ImageViewer sizes the image to the window (fitContain), so the whole
+   image shows at its own aspect; `.modal.` out-ranks the shared dialog's fixed 420 px width and clipping.
+   Complete by itself, since Studio has no `.modal` of its own. */
+.modal.ai-lightbox {
+  position: relative;
+  width: auto;
+  max-width: none;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--bg-panel);
+}
+.ai-lightbox-image {
+  display: block;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.ai-lightbox-loading {
+  display: block;
+  width: min(480px, 80vw);
+  height: min(300px, 70vh);
+  border-radius: 4px;
+}
+.ai-lightbox-loading .ui-skeleton {
+  display: block;
+}
+/* A dark fill that stays readable over any picture; two classes, so no button style of the app's empties it. */
+.ai-lightbox button.ai-lightbox-close {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  border: 0;
+  background: rgba(0, 0, 0, 0.66);
+  color: #fff;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-lightbox button.ai-lightbox-close:hover,
+.ai-lightbox button.ai-lightbox-close:focus-visible {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* A picture in a chat that opens in the viewer: the picture itself is the button. A fill, no border. */
+.ai-image-open {
+  flex: none;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+  line-height: 0;
+}
+.ai-image-open img {
+  display: block;
+  transition: filter 120ms ease;
+}
+.ai-image-open:hover img,
+.ai-image-open:focus-visible img {
+  filter: brightness(1.18);
+}
+.ai-image-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

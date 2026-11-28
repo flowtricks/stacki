@@ -71,6 +71,7 @@ import {
   type ChatContext,
   type ChatEvent,
   type ChatId,
+  type ChatImageId,
   type ChatOption,
   type CompactionStatus,
   type PermissionRequestId,
@@ -735,7 +736,7 @@ export class AgentHost {
     const now = this.deps.now();
     this.emit(runtime, [
       { kind: 'turn-start', turn, at: now },
-      userEvent(turn, now, { text, attachments: built.value.shown ?? attachments, sent: built.value.sent, mode: undefined }, this.deps.thumbnail),
+      userEvent(turn, now, { text, attachments: built.value.shown ?? attachments, sent: built.value.sent, mode: undefined }, this.pictureCopies(runtime)),
     ]);
     if (record.title === NEW_CHAT_TITLE) {
       // The title is made of what the person typed: selected code and its place would only name the file.
@@ -805,12 +806,12 @@ export class AgentHost {
     if (!outcome.ok) {
       // The reason goes to the log (the shape only, never the message text) so a new adapter reply is diagnosable.
       console.warn(`[ai] ${runtime.agent}: unreadable steering answer: ${outcome.error.message}; answer=${JSON.stringify(answer.value)?.slice(0, 200)}`);
-      this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
+      this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.pictureCopies(runtime))]);
       return err({ code: 'delivered', ...described('ai.error.misunderstood', { agent: AGENTS[runtime.agent].label }) });
     }
     switch (outcome.value.outcome) {
       case 'steered': {
-        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.pictureCopies(runtime))]);
         return ok({ turn, outcome: 'steered' });
       }
       case 'promptRequired': {
@@ -825,7 +826,7 @@ export class AgentHost {
       case 'startedNewTurn':
         // An adapter that ignores the opt-in began a turn on its own; Stacki cannot follow it, so say so. The message is
         // still delivered, so it is shown and never queued for a second send.
-        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.deps.thumbnail)]);
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' }, this.pictureCopies(runtime))]);
         return err({ code: 'delivered', ...described('ai.error.separateTurn', { agent: AGENTS[runtime.agent].label }) });
       default: {
         const exhaustive: never = outcome.value.outcome;
@@ -1029,6 +1030,11 @@ export class AgentHost {
       return err({ code: 'read-only', ...described('ai.error.chatFull') });
     }
     return ok({ record, runtime: this.runtimeFor(root, record) });
+  }
+
+  // What a message of this chat keeps of each image it was sent with.
+  private pictureCopies(runtime: { readonly root: string; readonly chat: ChatId }): PictureCopies {
+    return { thumbnail: this.deps.thumbnail, keep: (image) => this.deps.store.saveImage(runtime.root, runtime.chat, image) };
   }
 
   // The blocks of a message for this agent: what it accepts (embedded files) and advertises (slash commands) decide them.
@@ -2400,6 +2406,12 @@ export interface PromptOptions {
   readonly pins?: PinBrief | undefined;
 }
 
+/** What a sent image leaves in its chat: a small preview in the transcript, and the full copy beside it. */
+interface PictureCopies {
+  readonly thumbnail: AgentHostDeps['thumbnail'];
+  readonly keep: (image: Extract<PromptAttachment, { readonly kind: 'image' }>) => ChatImageId | undefined;
+}
+
 function userEvent(
   turn: TurnId,
   at: number,
@@ -2409,7 +2421,7 @@ function userEvent(
     readonly sent: readonly SentPart[] | undefined;
     readonly mode: 'steer' | undefined;
   },
-  thumbnail: AgentHostDeps['thumbnail'],
+  copies: PictureCopies,
 ): ChatEvent {
   return {
     kind: 'user',
@@ -2417,9 +2429,11 @@ function userEvent(
     text: sent.text,
     attachments: sent.attachments.map((attachment): ChatAttachmentName => {
       if (attachment.kind === 'image') {
-        const preview = thumbnail?.(attachment);
+        const preview = copies.thumbnail?.(attachment);
         if (preview !== undefined && preview.length <= AI_LIMITS.thumbnailCharsMax) {
-          return { kind: 'image', name: attachment.name, thumbnail: preview };
+          // The full copy is kept only beside a preview: without one the transcript draws nothing to open it from.
+          const original = copies.keep(attachment);
+          return { kind: 'image', name: attachment.name, thumbnail: preview, ...(original === undefined ? {} : { original }) };
         }
         return { kind: 'image', name: attachment.name };
       }

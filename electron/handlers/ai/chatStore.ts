@@ -24,10 +24,11 @@ import { createHash, randomBytes } from 'node:crypto';
 import { assert } from '../../../shared/core/assert';
 import { toArray, toRecord } from '../../../shared/core/record';
 import { err, ok, type Result } from '../../../shared/core/result';
-import { parseChatSettings, type AiFailure, type ChatSetting } from '../../../shared/ipc/aiChat';
+import { parseChatSettings, type AiFailure, type ChatImageReply, type ChatSetting } from '../../../shared/ipc/aiChat';
 import type { AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { described } from './aiMessages';
+import { copyChatImages, deleteChatImages, readChatImage, saveChatImage, type KeptImage } from './chatImageStore';
 import {
   parseChatEvent,
   parseChatSection,
@@ -37,6 +38,7 @@ import {
   toSectionId,
   type ChatEvent,
   type ChatId,
+  type ChatImageId,
   type ChatList,
   type ChatSection,
   type ChatSummary,
@@ -199,7 +201,17 @@ export class ChatStore {
     if (copied.length > 0) {
       this.append(projectPath, created.value.record.id, copied);
     }
+    copyChatImages(this.projectDirectory(projectPath), chat, created.value.record.id);
     return ok(created.value.record);
+  }
+
+  /** Keeps the full copy of a sent image for `chat`; undefined when it could not be kept (chatImageStore.ts). */
+  saveImage(projectPath: string, chat: ChatId, image: KeptImage): ChatImageId | undefined {
+    return saveChatImage(this.projectDirectory(projectPath), toChatId(chat), image);
+  }
+
+  readImage(projectPath: string, chat: ChatId, image: ChatImageId): ChatImageReply | undefined {
+    return readChatImage(this.projectDirectory(projectPath), toChatId(chat), image);
   }
 
   delete(projectPath: string, chat: ChatId): void {
@@ -208,6 +220,7 @@ export class ChatStore {
     const directory = this.projectDirectory(projectPath);
     fs.rmSync(path.join(directory, 'chats', `${chat}.jsonl`), { force: true });
     fs.rmSync(path.join(directory, 'reviews', `${chat}.json`), { force: true });
+    deleteChatImages(directory, toChatId(chat));
     assert(!fs.existsSync(path.join(directory, 'chats', `${chat}.jsonl`)), 'delete: the transcript is gone');
   }
 

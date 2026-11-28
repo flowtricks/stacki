@@ -1,5 +1,5 @@
 // The small preview kept beside a sent image's name in its chat, so the transcript can show the picture
-// after a restart, when the full image (which only travels to the agent) is long gone. Why here: the main
+// without reading the full copy (chatImageStore.ts), and still can once that copy is gone. Why here: the main
 // process has the image's bytes at the moment the message is recorded, so capture and the composer stay
 // untouched. A JPEG 320 px wide is a few KB; one that would not fit the bound, or an image Electron cannot
 // decode, gives no thumbnail, and the transcript falls back to the plain label.

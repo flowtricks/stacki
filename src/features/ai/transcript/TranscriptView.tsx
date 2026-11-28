@@ -22,7 +22,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatId, SentPart, TurnId, TurnStop } from '../../../../shared/properties/ai/chatModel';
 import { ArrowDownIcon } from '../../../ui/Icons';
 import { currentDesktopPlatform } from '../../../lib/shortcutLabel';
-import { answerPermission, newChat, preferredAgent, sendPrompt, resendMessage, setDraft, stopChat } from '../aiStore';
+import { answerPermission, newChat, preferredAgent, sendPrompt, readSentImage, resendMessage, setDraft, stopChat } from '../aiStore';
 import { chatShortcut } from '../chatShortcuts';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from '../chatReducer';
 import { useFormat, useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
@@ -529,6 +529,7 @@ function UserRow({ item, chatId, resendable }: { readonly item: UserItem; readon
     <UserMessage
       text={item.text}
       attachments={item.attachments}
+      loadImage={(image) => readSentImage(chatId, image)}
       at={item.at}
       partsView={sentPartsView(item.parts)}
       copyText={sentReadableText(item.text, item.parts)}

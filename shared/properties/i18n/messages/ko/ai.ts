@@ -593,6 +593,7 @@ export const messages = {
   'ai.screenshot.button': '스크린샷',
   'ai.screenshot.close': '미리보기 닫기',
   'ai.screenshot.enlarge': '{name} 확대',
+  'ai.images.smallOnly': '이 이미지는 작은 사본만 저장되었습니다',
   'ai.screenshot.failed': '스크린샷을 찍지 못했습니다. 다시 시도하세요.',
   'ai.screenshot.hint': '창의 원하는 부분을 드래그하세요. Esc로 취소합니다.',
   'ai.screenshot.name': '스크린샷 {number} ({width}×{height})',
@@ -818,7 +819,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': '이 브라우저에서는 음성 입력을 사용할 수 없습니다. Chrome이나 Safari를 사용해 보세요.',
   'ai.studio.discard': '취소',
   'ai.studio.discarded': '취소했습니다. 적용된 변경 사항이 없습니다.',
-  'ai.studio.download': '{name} 다운로드',
   'ai.studio.dragPin': '고정하려면 채팅을 여기로 드래그하세요.',
   'ai.studio.dropImages': '여기에 이미지를 놓으세요',
   'ai.studio.filesToChange': {

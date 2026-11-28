@@ -19,6 +19,7 @@ import {
   parseChatSummary,
   parseSectionName,
   toChatId,
+  toChatImageId,
   toPermissionRequestId,
   toSectionId,
   toTurnId,
@@ -84,6 +85,29 @@ export type PromptAttachment =
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 
+/** The success value of `ai:chatImage`: the full copy of a sent image. */
+export interface ChatImageReply {
+  readonly mimeType: (typeof IMAGE_TYPES)[number];
+  readonly data: string;
+}
+
+export function parseChatImageReply(input: unknown): ChatImageReply {
+  const value = record(input);
+  const mimeType = IMAGE_TYPES.find((type) => type === value['mimeType']);
+  if (mimeType === undefined) {
+    throw new Error('chatImage.mimeType: unsupported image type');
+  }
+  return { mimeType, data: imageData(value['data'], 'chatImage.data') };
+}
+
+function imageData(input: unknown, name: string): string {
+  const data = bounded(AI_LIMITS.imageBase64CharsMax, name)(input);
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
+    throw new Error(`${name}: expected base64`);
+  }
+  return data;
+}
+
 /** A screenshot note's characters: one short line (`Screenshot 1: region, 768px breakpoint`). */
 export const SCREENSHOT_NOTE_CHARS_MAX = 500;
 
@@ -106,10 +130,7 @@ export function parsePromptAttachment(input: unknown): PromptAttachment {
     if (mimeType === undefined) {
       throw new Error('attachment.mimeType: unsupported image type');
     }
-    const data = bounded(AI_LIMITS.imageBase64CharsMax, 'attachment.data')(value['data']);
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
-      throw new Error('attachment.data: expected base64');
-    }
+    const data = imageData(value['data'], 'attachment.data');
     const name = bounded(AI_LIMITS.labelCharsMax, 'attachment.name')(value['name']);
     const note = value['note'] === undefined ? undefined : screenshotNote(value['note']);
     return note === undefined ? { kind: 'image', name, mimeType, data } : { kind: 'image', name, mimeType, data, note };
@@ -370,6 +391,8 @@ export const AI_PAYLOADS = {
   }),
   'ai:chatDelete': object({ projectPath, chat }),
   'ai:chatRead': object({ projectPath, chat }),
+  /** The full copy of an image a message of the chat was sent with (electron/handlers/ai/chatImageStore.ts). */
+  'ai:chatImage': object({ projectPath, chat, image: (input: unknown) => toChatImageId(text(input)) }),
   'ai:prompt': promptPayload,
   'ai:steer': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts) }),
   'ai:compact': object({ projectPath, chat }),
@@ -544,6 +567,7 @@ export interface AiResults {
   readonly 'ai:chatUpdate': Result<ChatSummary, AiFailure>;
   readonly 'ai:chatDelete': { readonly ok: true };
   readonly 'ai:chatRead': Result<ChatTranscript, AiFailure>;
+  readonly 'ai:chatImage': Result<ChatImageReply, AiFailure>;
   readonly 'ai:prompt': Result<{ readonly turn: TurnId }, AiFailure>;
   readonly 'ai:steer': Result<SteerReply, AiFailure>;
   readonly 'ai:compact': Result<{ readonly started: true }, AiFailure>;

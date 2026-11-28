@@ -594,6 +594,7 @@ export const messages = {
   'ai.screenshot.button': 'スクリーンショット',
   'ai.screenshot.close': 'プレビューを閉じる',
   'ai.screenshot.enlarge': '{name} を拡大',
+  'ai.images.smallOnly': 'この画像は小さいコピーのみ保存されています',
   'ai.screenshot.failed': 'スクリーンショットを撮影できませんでした。もう一度お試しください。',
   'ai.screenshot.hint': 'ウィンドウ内の任意の範囲をドラッグします。Esc でキャンセルします。',
   'ai.screenshot.name': 'スクリーンショット {number}（{width}×{height}）',
@@ -819,7 +820,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'このブラウザでは音声入力を利用できません。Chrome または Safari をお試しください。',
   'ai.studio.discard': '破棄',
   'ai.studio.discarded': '破棄しました。変更は適用されていません。',
-  'ai.studio.download': '{name} をダウンロード',
   'ai.studio.dragPin': 'ここにチャットをドラッグしてピン留め',
   'ai.studio.dropImages': 'ここに画像をドロップ',
   'ai.studio.filesToChange': {

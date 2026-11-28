@@ -12,6 +12,7 @@ import { CheckIcon, CopyIcon, PencilIcon, RefreshIcon } from '../../../ui/Icons'
 import { ChatText } from '../ChatText';
 import { useCopy, type CopyState } from '../../../ui/copyText';
 import { SentAttachments } from './SentAttachments';
+import type { LoadSentImage } from './SentImageViewer';
 import { exceedsClamp, fullTimeLabel, timeLabel } from './messageModel';
 import './chrome.css';
 
@@ -34,8 +35,11 @@ export function UserMessage({
   foldText,
   onEdit,
   onResend,
+  loadImage,
   ...fold
 }: FoldProps & {
+  /** Reads the full copy of a sent image for the viewer; absent: only the stored preview can be shown. */
+  readonly loadImage?: LoadSentImage | undefined;
   readonly text: string;
   readonly attachments: readonly ChatAttachmentName[];
   readonly at: number | undefined;
@@ -57,7 +61,7 @@ export function UserMessage({
     <div className="ai-message ai-message-user ai-msg ai-msg-user">
       <div className="ai-msg-bubble">
         <div className={`ai-user-text ai-msg-body${folding.folded ? ' ai-msg-folded' : ''}`}>{partsView ?? text}</div>
-        <SentAttachments attachments={attachments} />
+        <SentAttachments attachments={attachments} loadImage={loadImage} />
         <ShowMore folding={folding} />
       </div>
       {/* The actions sit below the bubble, never on its edge, so they cannot overlap or clip the text. */}

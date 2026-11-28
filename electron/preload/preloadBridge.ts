@@ -439,6 +439,7 @@ function aiBridge() {
     aiChatUpdate: invoke('ai:chatUpdate'),
     aiChatDelete: invoke('ai:chatDelete'),
     aiChatRead: invoke('ai:chatRead'),
+    aiChatImage: invoke('ai:chatImage'),
     aiPrompt: invoke('ai:prompt'),
     aiSteer: invoke('ai:steer'),
     aiCompact: invoke('ai:compact'),

@@ -167,6 +167,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:chatUpdate': { ...aiChat, title: 'Hero copy' },
   'ai:chatDelete': aiChat,
   'ai:chatRead': aiChat,
+  'ai:chatImage': { ...aiChat, image: `${'a'.repeat(32)}.png` },
   'ai:prompt': { ...aiChat, text: 'Tighten the hero copy', attachments: [] },
   'ai:steer': { ...aiChat, text: 'Also fix the footer', attachments: [] },
   'ai:compact': aiChat,
