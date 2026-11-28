@@ -5,12 +5,13 @@
 // A short pause commits the branch, as the rule editor does.
 
 import { useTranslate, useTranslateRef } from '../../../lib/i18n/useTranslate';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 import { RangeSetBuilder, type Extension } from '@codemirror/state';
 import Dropdown from '../../../ui/Dropdown';
 import { assert } from '../../../../shared/core/assert';
 import { CodeEditor } from '../components/CssCodeEditor';
+import { useDraftOverSource } from './useDraftOverSource';
 import {
   STYLE_BLOCK_PREFIX,
   STYLE_BLOCK_SUFFIX,
@@ -60,14 +61,8 @@ export function InlineBranchEditor({ view, busy }: { readonly view: InlineBranch
   // element's inline style; only the text between the edges is edited and written.
   const body = view.selected.body;
   const source = `${STYLE_BLOCK_PREFIX}${displayStyleDeclarations(body)}${STYLE_BLOCK_SUFFIX}`;
-  const [draft, setDraft] = useState(source);
-  const previousRef = useRef(source);
+  const [draft, setDraft] = useDraftOverSource(source);
   const attemptedRef = useRef<string | undefined>(undefined);
-  // An outside edit (the panel's controls, undo) replaces a clean draft only.
-  useEffect(() => {
-    setDraft((current) => (current === previousRef.current ? source : current));
-    previousRef.current = source;
-  }, [source]);
   const { onCommit } = view;
   useEffect(() => {
     if (draft === source) {

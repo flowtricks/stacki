@@ -76,6 +76,7 @@ async function panelEnvironment() {
         `export { setCanvasFrame, receiveCanvasReply, noteCanvasRendered } from './src/editor/canvasQuery'`,
         `export { toggleFollowMode } from './src/features/style/embed/contextFollow'`,
         `export { setInlineDefault } from './src/features/style/model/inlineDefault'`,
+        `export { EditorView } from '@codemirror/view'`,
       ].join('\n'),
       resolveDir: ROOT,
       loader: 'tsx',
@@ -274,6 +275,8 @@ async function mountStylePanel(fixture) {
     },
     /** The canvas announces a rendering (the frame patched, or showed a stand-in ahead of one). */
     noteRendered: () => env.noteCanvasRendered(),
+    /** The panel's own CodeMirror view drawn in `element`, for a test that types into a code editor. */
+    codeViewOf: (element) => env.EditorView.findFromDOM(element),
     /** Where a new selection starts, as Design mode sets it (model/inlineDefault.ts). */
     inlineDefault: (next) => env.setInlineDefault(next),
     /** The "0" key: what model/appKeys.ts calls for it, with the open project. True when it toggled. */
