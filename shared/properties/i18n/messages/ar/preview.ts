@@ -107,6 +107,8 @@ export const messages = {
   'preview.phone.help': 'مساعدة الاتصال',
   'preview.phone.label': 'معاينة على الهاتف',
   'preview.phone.qr': 'رمز QR لـ {url}',
+  'preview.phone.scannedOnly': 'عبر هذا الرمز فقط',
+  'preview.phone.settings': 'إعدادات المعاينة على الهاتف',
   'preview.phone.toggle': 'فتح على الشبكة المحلية',
   'preview.phone.url': 'العنوان لهاتفك',
   'preview.reload': 'إعادة تحميل المعاينة',

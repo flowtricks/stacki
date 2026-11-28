@@ -110,6 +110,8 @@ export const messages = {
   'preview.phone.help': 'Bantuan koneksi',
   'preview.phone.label': 'Pratinjau ponsel',
   'preview.phone.qr': 'Kode QR untuk {url}',
+  'preview.phone.scannedOnly': 'Hanya lewat kode ini',
+  'preview.phone.settings': 'Pengaturan pratinjau ponsel',
   'preview.phone.toggle': 'Buka di jaringan lokal',
   'preview.phone.url': 'Alamat untuk ponsel Anda',
   'preview.reload': 'Muat ulang pratinjau',

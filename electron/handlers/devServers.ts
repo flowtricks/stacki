@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { execFile, type ChildProcess } from 'child_process';
+import { randomBytes } from 'crypto';
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
 import type { IpcResults } from '../../shared/ipc/ipcResults';
@@ -49,7 +50,18 @@ import { configOf } from '../../shared/properties/projectFolders';
 import type { Thumbnails } from './thumbnails';
 import { devServerArgs, devServerURL, networkAllowedHosts } from '../preview/devServerArgs';
 import { selectLanAddresses, type InterfaceTable } from '../preview/lanAddresses';
-import { DEV_NETWORK_OFF, type DevNetworkMode, type DevNetworkReply, type DevNetworkState } from '../../shared/ipc/devNetwork';
+import {
+  DEV_NETWORK_OFF,
+  NETWORK_ACCESS_OPEN,
+  PREVIEW_KEY_ENV,
+  toPreviewKey,
+  type DevNetworkMode,
+  type DevNetworkReply,
+  type DevNetworkRequest,
+  type DevNetworkState,
+  type NetworkAccess,
+  type PreviewKey,
+} from '../../shared/ipc/devNetwork';
 import { err, ok } from '../../shared/core/result';
 
 // Subscribe before sending the stop signal so a fast exit cannot be missed.
@@ -132,6 +144,13 @@ const TOUCHABLE_FILE = /\.(astro|md|mdx)$/i;
 /** A touch that gets no answer by now is left to the file watcher. */
 const TOUCH_TIMEOUT_MS = 1500;
 
+/** The key only scanned devices hold: 32 random bytes, 43 base64url characters, made new each time the option is turned on. */
+function newPreviewKey(): PreviewKey {
+  const key = toPreviewKey(randomBytes(32).toString('base64url'));
+  assert(key.length === 43, 'newPreviewKey: 32 bytes in base64url');
+  return key;
+}
+
 export class DevServers {
   private server: DevServer | undefined = undefined;
   // Whether the running server's project had a content config when it started.
@@ -148,6 +167,10 @@ export class DevServers {
   // only: never written anywhere, so it is off at every launch, and cleared when the project closes or
   // the app quits (stop()). A restart for any other reason (an .env change, a branch switch) keeps it.
   private networkProject: string | undefined = undefined;
+  // Who may open it from the network, while it is open there: anyone, or only the devices that scanned the
+  // code, with the key the code carries. Kept like networkProject, in memory only, and cleared with it; a new
+  // key is made each time the option is turned on (restartInMode), so an older code stops working.
+  private networkAccess: NetworkAccess = NETWORK_ACCESS_OPEN;
   // One change of mode at a time: each is a restart of the dev server, and a second toggle while one
   // restarts would race it.
   private networkChange: 'idle' | 'changing' = 'idle';
@@ -214,6 +237,7 @@ export class DevServers {
       // A stop that cancels is the project closing or the app quitting, never a restart (pause): the
       // preview goes back to this computer only (see networkProject).
       this.networkProject = undefined;
+      this.networkAccess = NETWORK_ACCESS_OPEN;
     }
     if (!this.server) {
       return;
@@ -374,7 +398,7 @@ export class DevServers {
     const port = Number(new URL(server.url).port);
     assert(Number.isSafeInteger(port), 'networkState: the server has a port');
     assert(port > 0, 'networkState: the port is positive');
-    return { kind: 'on', port, addresses: selectLanAddresses(interfaces) };
+    return { kind: 'on', port, addresses: selectLanAddresses(interfaces), access: this.networkAccess };
   }
 
   /**
@@ -382,41 +406,55 @@ export class DevServers {
    * restarting its dev server with the other `--host` (devServerArgs.ts). The canvas keeps its loopback
    * address and reconnects by itself. A restart that fails leaves the mode off and the server started
    * again on loopback, once; the reply says it failed, for the renderer's toast. At most two restarts.
+   * While it is on, asking for the other access (anyone, or only scanned devices) restarts it the same way.
    */
-  async setNetwork(projectPath: string, mode: DevNetworkMode, interfaces: InterfaceTable = os.networkInterfaces()): Promise<DevNetworkReply> {
+  async setNetwork(request: DevNetworkRequest, interfaces: InterfaceTable = os.networkInterfaces()): Promise<DevNetworkReply> {
     // First: while a change restarts the server there is no server to judge, and the answer is "wait".
     if (this.networkChange === 'changing') {
       return err('busy');
     }
     const server = this.server;
-    if (server === undefined || !sameFilesystemPath(server.projectPath, projectPath)) {
+    if (server === undefined || !sameFilesystemPath(server.projectPath, request.projectPath)) {
       return err('no-server');
     }
     // A server the user runs themselves has no command line of ours to change.
     if (server.external === true) {
       return err('external');
     }
-    if (this.networkMode(projectPath) === mode) {
-      return ok(this.networkState(projectPath, interfaces));
+    if (this.runsAsAsked(request)) {
+      return ok(this.networkState(request.projectPath, interfaces));
     }
     // A machine on no network has no address for a phone to open: stay local and say so.
-    if (mode === 'network' && selectLanAddresses(interfaces).length === 0) {
+    if (request.mode === 'network' && selectLanAddresses(interfaces).length === 0) {
       return err('no-address');
     }
     this.networkChange = 'changing';
     try {
-      return await this.restartInMode(server.projectPath, server.url, mode, interfaces);
+      return await this.restartInMode(server.projectPath, server.url, request, interfaces);
     } finally {
       this.networkChange = 'idle';
     }
   }
 
-  private async restartInMode(projectPath: string, devUrl: string, mode: DevNetworkMode, interfaces: InterfaceTable): Promise<DevNetworkReply> {
+  /** Whether the server already runs as `request` asks: in its mode and, on the network, with its access. */
+  private runsAsAsked(request: DevNetworkRequest): boolean {
+    if (this.networkMode(request.projectPath) !== request.mode) {
+      return false;
+    }
+    if (request.mode === 'local') {
+      return true;
+    }
+    return this.networkAccess.kind === request.access;
+  }
+
+  private async restartInMode(projectPath: string, devUrl: string, request: DevNetworkRequest, interfaces: InterfaceTable): Promise<DevNetworkReply> {
     assert(this.networkChange === 'changing', 'restartInMode: one change at a time');
+    const mode: DevNetworkMode = request.mode;
     this.networkProject = mode === 'network' ? projectPath : undefined;
+    this.networkAccess = request.mode === 'network' && request.access === 'key' ? { kind: 'key', key: newPreviewKey() } : NETWORK_ACCESS_OPEN;
     this.pushLog(
       mode === 'network'
-        ? '\n[stacki] opening the preview on the local network; restarting it with --host 0.0.0.0.\n'
+        ? `\n[stacki] opening the preview on the local network${this.networkAccess.kind === 'key' ? ', to the devices that scan its code' : ''}; restarting it with --host 0.0.0.0.\n`
         : '\n[stacki] taking the preview back to this computer only; restarting it with --host 127.0.0.1.\n',
     );
     try {
@@ -428,6 +466,7 @@ export class DevServers {
     }
     // The second and last restart: back to this computer only, the mode that started before.
     this.networkProject = undefined;
+    this.networkAccess = NETWORK_ACCESS_OPEN;
     try {
       await this.restartAt(projectPath, devUrl);
     } catch {
@@ -435,6 +474,18 @@ export class DevServers {
     }
     assert(this.networkMode(projectPath) === 'local', 'restartInMode: a failed change ends local');
     return err('restart-failed');
+  }
+
+  /**
+   * The key the dev server checks (previewServer/loopbackGuard.ts), in its environment and nowhere else: only
+   * on the network, and only while only scanned devices may open the preview.
+   */
+  private previewKeyEnvironment(mode: DevNetworkMode): Readonly<Record<string, string>> {
+    const access = this.networkAccess;
+    if (mode === 'network' && access.kind === 'key') {
+      return { [PREVIEW_KEY_ENV]: access.key };
+    }
+    return {};
   }
 
   /** The generated config's path, or undefined when the dev server runs without it. `networkHosts`: the hosts Vite answers to on the local network, only in that mode. */
@@ -536,6 +587,7 @@ export class DevServers {
     // The mode belongs to the project that turned it on: another project starts on this computer only.
     if (this.networkProject !== undefined && !sameFilesystemPath(this.networkProject, projectPath)) {
       this.networkProject = undefined;
+      this.networkAccess = NETWORK_ACCESS_OPEN;
     }
     this.stop(false);
     this.logBuffer = [];
@@ -612,7 +664,7 @@ export class DevServers {
     const args = devServerArgs({ port, mode, configPath: markerConfig ? toPosix(path.relative(projectPath, markerConfig)) : undefined, force });
 
     const startedAtMs = Date.now();
-    const extra = this.previewEnvironment(fs.realpathSync(projectPath));
+    const extra = { ...this.previewEnvironment(fs.realpathSync(projectPath)), ...this.previewKeyEnvironment(mode) };
     const proc = spawnAstroServer(projectPath, localBin, args, extra);
 
     // Loopback in every mode: the canvas, thumbnails and main's own requests never change address.
@@ -776,7 +828,7 @@ export function registerDevServerHandlers({
 
   ipcMain.handle('dev:network', (_event, projectPath) => devServers.networkState(projectPath));
 
-  ipcMain.handle('dev:setNetwork', (_event, request) => devServers.setNetwork(request.projectPath, request.mode));
+  ipcMain.handle('dev:setNetwork', (_event, request) => devServers.setNetwork(request));
 
   ipcMain.handle('dev:diagnose', async (_event, projectPath) => {
     const nodePath = resolveNodeBin() ?? undefined;

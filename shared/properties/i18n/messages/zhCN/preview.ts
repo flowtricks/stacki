@@ -107,6 +107,8 @@ export const messages = {
   'preview.phone.help': '连接帮助',
   'preview.phone.label': '手机预览',
   'preview.phone.qr': '{url} 的二维码',
+  'preview.phone.scannedOnly': '仅限此码',
+  'preview.phone.settings': '手机预览设置',
   'preview.phone.toggle': '在局域网中打开',
   'preview.phone.url': '手机访问地址',
   'preview.reload': '重新加载预览',
