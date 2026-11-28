@@ -103,7 +103,10 @@ export function inlineChipClassName(chip: Pick<InlineChip, 'state' | 'active'>):
   return ['embed-editor_selector-chip', 'is-inline', chip.state === 'code' && 'is-code', chip.active && 'is-active'].filter(Boolean).join(' ');
 }
 
-export function inlineChipTitle(chip: Pick<InlineChip, 'state' | 'active'>, translate: Translator = ENGLISH_TRANSLATE): string {
+export function inlineChipTitle(chip: Pick<InlineChip, 'state' | 'active' | 'lockedReason'>, translate: Translator = ENGLISH_TRANSLATE): string {
+  if (chip.lockedReason !== undefined) {
+    return chip.lockedReason;
+  }
   const label = translate(INLINE_STYLE_LABEL_KEY);
   if (chip.state === 'code') {
     return translate('styleModel.embed.chip.titleCode', { label });

@@ -41,6 +41,7 @@ const {
   medium,
   large,
   class: className,
+  style,
   ...rest
 } = Astro.props;
 
@@ -76,7 +77,7 @@ const slides = await slotContent(Astro.slots);
   render && slides && (
     <div
       class:list={["slider_wrap", variant !== "bleed" && variant, className]}
-      style={visible}
+      style={[visible, style].filter(Boolean).join("; ") || undefined}
       {...rest}
     >
       <div class="slider_list" role="group" aria-label={label} tabindex="0">

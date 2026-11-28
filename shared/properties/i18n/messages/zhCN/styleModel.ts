@@ -296,6 +296,8 @@ export const messages = {
   'styleModel.inline.branch.whenSet': '当设置了 {name} 时',
   'styleModel.inline.label': '内联样式',
   'styleModel.inline.reason.componentUnreadable': '无法读取写入此样式的组件。',
+  'styleModel.inline.reason.componentDrops': '{file} 不会把样式传给它的元素，因此这里的内联样式会被忽略。',
+  'styleModel.inline.reason.componentWrites': '此元素的样式由 {file} 自行写入，因此仅针对此实例的样式会丢失，或替换组件的样式。',
   'styleModel.inline.reason.fromProp': '某个分支的值来自 prop 而非文本，因此需在设置中编辑。',
   'styleModel.inline.reason.onlyChain': '此处只能编辑每个分支都给出文本或模板的条件链。',
   'styleModel.inline.reason.rendersNothing': '此 style 属性不渲染任何内容。',

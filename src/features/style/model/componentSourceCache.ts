@@ -44,6 +44,30 @@ export function componentSource(path: string): string | undefined {
 }
 
 /**
+ * The file's text once its read has landed, or undefined when it cannot be read within `waitMsMax`. For a write
+ * that must not go ahead on a file not yet held.
+ */
+export function componentSourceSettled(path: string, waitMsMax: number): Promise<string | undefined> {
+  assert(waitMsMax > 0, 'componentSourceSettled: the wait is bounded');
+  if (!componentSourcePending(path)) {
+    return Promise.resolve(componentSource(path));
+  }
+  return new Promise((resolve) => {
+    const finish = (code: string | undefined): void => {
+      clearTimeout(timer);
+      stop();
+      resolve(code);
+    };
+    const timer = setTimeout(() => finish(undefined), waitMsMax);
+    const stop = onComponentSourceChange(() => {
+      if (!componentSourcePending(path)) {
+        finish(componentSource(path));
+      }
+    });
+  });
+}
+
+/**
  * Whether the file's text is on its way: asked and not landed. A file never asked
  * for is asked now, so it is on its way too. A chip whose colour waits on it keeps its
  * remembered colour meanwhile (chipProvenanceMemory.ts).

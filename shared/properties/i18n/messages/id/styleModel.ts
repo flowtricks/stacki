@@ -299,6 +299,9 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'saat {name} sudah diatur',
   'styleModel.inline.label': 'Gaya inline',
   'styleModel.inline.reason.componentUnreadable': 'Komponen yang menulis gaya ini tidak dapat dibaca.',
+  'styleModel.inline.reason.componentDrops': '{file} tidak meneruskan gaya ke elemennya, jadi gaya inline di sini akan diabaikan.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} menulis sendiri gaya elemen ini, jadi gaya khusus instans ini akan hilang atau menggantikan gaya komponen.',
   'styleModel.inline.reason.fromProp': 'Sebuah cabang memberikan nilai dari prop, bukan teks, jadi diedit di Pengaturan.',
   'styleModel.inline.reason.onlyChain': 'Hanya rangkaian kondisi, yang masing-masing memberikan teks atau template, yang dapat diedit di sini.',
   'styleModel.inline.reason.rendersNothing': 'Atribut style ini tidak merender apa pun.',

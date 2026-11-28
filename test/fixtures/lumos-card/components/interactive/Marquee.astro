@@ -17,6 +17,7 @@ const {
   label = "Marquee",
   direction = "forwards",
   class: className,
+  style,
   ...rest
 } = Astro.props;
 
@@ -75,7 +76,7 @@ const locals = `--_count: ${count}`;
       direction !== "forwards" && direction,
       className,
     ]}
-    style={locals}
+    style={[locals, style].filter(Boolean).join("; ") || undefined}
     role="group"
     aria-label={label}
     {...rest}

@@ -7,6 +7,11 @@ const heading = await readFile('test/fixtures/site/src/components/typography/Hea
 test('direct numeric width binding is read from Astro without changing its fields', () => {
   assert.deepEqual(numericStyleBindings(heading), [{ prop: 'maxWidth', variable: '--_mw', unit: 'ch', marker: '0.0.0' }]);
 });
+test('the binding is read the same where the component’s style stands alone', () => {
+  const alone = heading.replace(/style=\{\[maxWidth.*\}/, 'style={maxWidth ? `--_mw: ${maxWidth}ch;` : undefined}');
+  assert.notEqual(alone, heading);
+  assert.deepEqual(numericStyleBindings(alone), [{ prop: 'maxWidth', variable: '--_mw', unit: 'ch', marker: '0.0.0' }]);
+});
 test('numbers that change HTML, defaults or computed behavior use authoritative rendering', () => {
   for (const source of [
     heading.replace('const content =', "const extra = Astro.props['maxWidth'];\nconst content ="),

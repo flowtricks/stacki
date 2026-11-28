@@ -62,6 +62,7 @@ const {
   muted = true,
   transparent = false,
   class: className,
+  style,
   ...rest
 } = Astro.props as AllProps;
 
@@ -96,7 +97,7 @@ const isCustom = variant === "custom";
       transparent && "transparent",
       className,
     ]}
-    style={isCustom && ratio ? `aspect-ratio: ${ratio};` : undefined}
+    style={[isCustom && ratio && `aspect-ratio: ${ratio}`, style].filter(Boolean).join("; ") || undefined}
     loop={loop}
     autoplay={autoplay}
     muted={muted}

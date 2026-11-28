@@ -298,6 +298,9 @@ export const messages = {
   'styleModel.inline.branch.whenSet': '{name} ayarlı olduğunda',
   'styleModel.inline.label': 'Satır içi stiller',
   'styleModel.inline.reason.componentUnreadable': 'Bu stili yazan bileşen okunamadı.',
+  'styleModel.inline.reason.componentDrops': '{file} öğesine stil aktarmıyor, bu nedenle buradaki satır içi stil yok sayılır.',
+  'styleModel.inline.reason.componentWrites':
+    'Bu öğenin stilini {file} kendisi yazıyor, bu nedenle yalnızca bu örneğe ait bir stil kaybolur veya bileşenin stilinin yerini alır.',
   'styleModel.inline.reason.fromProp': 'Bir dal, metin yerine bir prop’tan değer veriyor, bu yüzden Ayarlar’da düzenlenir.',
   'styleModel.inline.reason.onlyChain': 'Burada yalnızca her biri bir metin veya şablon veren bir koşul zinciri düzenlenebilir.',
   'styleModel.inline.reason.rendersNothing': 'Bu style özniteliği hiçbir şey işlemiyor.',

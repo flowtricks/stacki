@@ -12,8 +12,10 @@
 // expression edited branch by branch (model/inlineBranches.ts): the CSS code section
 // picks the branch and edits its text, and the panel's controls edit the same
 // branch's declarations. An instance's style lives in its component file, and its
-// edits are written there (model/componentStyleWrite.ts). An expression the
-// conditional model cannot read is shown read-only, with the controls disabled.
+// edits are written there (model/componentStyleWrite.ts), unless the component
+// combines the instance's own style with its own (model/componentStyleForwarding.ts):
+// then the instance's tag is written. An expression the conditional model cannot
+// read is shown read-only, with the controls disabled.
 
 import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -46,6 +48,8 @@ import { usePseudoTarget } from './editorModel';
 import type { LiveSetProp, SetProp } from './EditorBasics';
 import type { InlineBranchView } from './InlineBranchEditor';
 import type { StyleCardProps } from './QueryForms';
+import { readableStyleCode, readableStyleText } from '../model/inlineCode';
+import { instanceStyleBlock, type InstanceStyleBlock, type StyledInstance } from '../model/componentStyleForwarding';
 import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 /** The chip as the well draws it. */
@@ -57,6 +61,8 @@ export interface InlineChip {
   readonly onDeselect: () => void;
   /** Remove the attribute; undefined when the panel cannot. */
   readonly onClear: (() => void) | undefined;
+  /** Why the target takes no edit here, said in its tooltip; undefined while the chip's own words hold. */
+  readonly lockedReason?: string | undefined;
 }
 
 /** What the CSS code section shows for the picked chip, in place of the rules. */
@@ -271,15 +277,9 @@ export function useInlineCard(
     leave();
     host.setInlineStyle(nodeId, undefined);
   };
-  const chip: InlineChip | undefined = shown
-    ? {
-        state: style.kind === 'declarations' ? 'editable' : 'code',
-        active,
-        onSelect: select,
-        onDeselect: leave,
-        onClear: style.kind === 'declarations' ? clear : undefined,
-      }
-    : undefined;
+  const lock = designInstanceLock(style, inline, card.snapshot);
+  const lockedReason = lock === undefined ? undefined : translate(LOCK_MESSAGES[lock.block], { file: lock.file });
+  const chip: InlineChip | undefined = shown ? inlineChipOf(style, { lockedReason, active, onSelect: select, onDeselect: leave, onClear: clear }) : undefined;
   const withChip: StyleCardProps = {
     ...card,
     inline: chip,
@@ -317,16 +317,11 @@ export function useInlineCard(
   if (!active) {
     return withChip;
   }
+  if (lockedReason !== undefined) {
+    return readOnlyCard(withChip, shownCode(style), lockedReason);
+  }
   if (style.kind === 'code') {
-    // Read-only, with why: the controls stay, disabled (StyleCard.tsx).
-    return {
-      ...withChip,
-      inlineCode: { kind: 'readonly', code: style.code, reason: translateDescribed({ message: style.message, messageRef: style.messageRef }) },
-      setProp: ignoreWrite,
-      onAdd: ignoreAdd,
-      liveSetProp: ignoreLive,
-      clearProp: () => Promise.resolve(),
-    };
+    return readOnlyCard(withChip, style.code, translateDescribed({ message: style.message, messageRef: style.messageRef }));
   }
   const setProp: SetProp = (prop, typed, important) => {
     const value = writtenValue(prop, typed);
@@ -386,6 +381,101 @@ export function useInlineCard(
     writesTo: style.source.kind === 'component' ? translate('styleModel.embed.inline.writesTo', { file: style.source.fileName }) : undefined,
   };
   return { ...withChip, ...writes, inlineCode: { kind: 'branches', view } };
+}
+
+const LOCK_MESSAGES = {
+  drops: 'styleModel.inline.reason.componentDrops',
+  overrides: 'styleModel.inline.reason.componentWrites',
+} as const satisfies Record<InstanceStyleBlock, string>;
+
+/**
+ * In Design mode, why an edit of this instance's attribute would be lost or reach other instances; undefined
+ * everywhere that is not shown. Design mode starts each selection on this chip, so there it stays selected, locked
+ * with why, where the component drops the style or its own value stands in its place now (`style={columns} {...rest}`
+ * with columns set), and where the edit would be written into the component's file, which every instance shares.
+ * Everywhere else the instance is edited as it always was. In the editor the chip is the person's own pick.
+ */
+function designInstanceLock(
+  style: InlineStyle,
+  inline: Pick<InlineState, 'instance' | 'ownStyle'>,
+  snapshot: ElementSnapshot | undefined,
+): { readonly block: InstanceStyleBlock; readonly file: string } | undefined {
+  if (inlineDefault() !== 'inline' || !inline.instance) {
+    return undefined;
+  }
+  const path = getHost().selectedComponentPath;
+  if (path === undefined) {
+    return undefined;
+  }
+  const file = path.split(/[\\/]/).pop() ?? path;
+  const block = instanceStyleBlock({
+    file: path,
+    source: componentSource(path),
+    own: ownStyleOf(inline.ownStyle),
+    rendered: snapshot?.attributes['style'],
+  });
+  if (block !== undefined) {
+    return { block, file };
+  }
+  const writesComponent = style.kind === 'branched' && style.source.kind === 'component';
+  return writesComponent ? { block: 'overrides', file } : undefined;
+}
+
+function ownStyleOf(own: InlineStyle): StyledInstance['own'] {
+  switch (own.kind) {
+    case 'none':
+      return { kind: 'none' };
+    case 'declarations':
+      return { kind: 'string', text: own.text };
+    case 'branched':
+    case 'code':
+      return { kind: 'code' };
+    default: {
+      const exhaustive: never = own;
+      return exhaustive;
+    }
+  }
+}
+
+function inlineChipOf(
+  style: InlineStyle,
+  chip: Pick<InlineChip, 'lockedReason' | 'active' | 'onSelect' | 'onDeselect'> & { readonly onClear: () => void },
+): InlineChip {
+  const locked = chip.lockedReason !== undefined;
+  // No attribute yet (startsInline) is a style to write, not code.
+  const editable = !locked && (style.kind === 'declarations' || style.kind === 'none');
+  const clearable = !locked && style.kind === 'declarations' && style.declarations.length > 0;
+  return { ...chip, state: editable ? 'editable' : 'code', onClear: clearable ? chip.onClear : undefined };
+}
+
+// What a locked target's code section shows.
+function shownCode(style: InlineStyle): string {
+  switch (style.kind) {
+    case 'code':
+      return style.code;
+    case 'branched':
+      return readableStyleCode(style.expression);
+    case 'declarations':
+      return readableStyleText(style.text);
+    case 'none':
+      return readableStyleText('');
+    default: {
+      const exhaustive: never = style;
+      return exhaustive;
+    }
+  }
+}
+
+// Read-only, with why: the controls stay, disabled, and say it on hover (StyleCard.tsx).
+function readOnlyCard(card: StyleCardProps, code: string, reason: string): StyleCardProps {
+  return {
+    ...card,
+    inlineCode: { kind: 'readonly', code, reason },
+    setProp: ignoreWrite,
+    onAdd: ignoreAdd,
+    liveSetProp: ignoreLive,
+    clearProp: () => Promise.resolve(),
+  };
 }
 
 // The read-only target writes nothing.

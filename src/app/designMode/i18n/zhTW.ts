@@ -24,6 +24,7 @@ export const designModeZhTW: DesignCatalog = {
   'toast.pageTooLarge': '此頁面過大，無法在設計模式中顯示為畫框。',
   'toast.frameUnread': '編輯器尚未讀取此畫框的頁面。請重新選取。',
   'toast.styleIsCode': '此元素的樣式是以程式碼撰寫，因此無法在此移動或調整大小。',
+  'toast.styleNotKept': '設定在此 {file} 實例上的樣式目前會遺失，因此無法在此移動或調整大小。',
   'bar.close': '離開設計模式',
   'reset.title': '要重新開始嗎？',
   'reset.body': '所有畫框都會被捨棄，畫布將從你的專案重新開始。此動作無法復原。',

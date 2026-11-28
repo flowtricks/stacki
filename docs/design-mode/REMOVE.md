@@ -57,6 +57,14 @@ project.
   deletes the copy (see "Stopping what a crash left running").
 - **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
   together.
+- **Inline styles is the default target** in the Style panel. A plain element takes the edit on its own `style`, and so
+  does an instance whose component is proven to keep it (`src/features/style/model/componentStyleForwarding.ts`):
+  it combines the instance's style with its own, last (`style={[columns, style].filter(Boolean).join("; ") ||
+  undefined}`). The chip stays selected with the controls locked, with why on hover, only where the edit is shown to
+  be lost now (the component drops the style, or its own value renders in the instance's place) or would be written
+  into the component's file; a canvas drag or resize is refused, with a toast, in the first two cases. Everything
+  else, a component Stacki cannot follow included, is edited as any element. The person picks a class for a global
+  change, or unlinks the instance.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
   its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
   inline style through the editor's own write (so ⌘Z takes them back), in rem.
@@ -195,7 +203,10 @@ byte-identical afterwards.
      forgets another node's pick (`if (pick !== undefined && … inlineDefault() === 'inline')`), `|| startsInline(style, inline)`
      in `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, and the last
      line of `attributePicked`, which becomes `return false;`; in `select`, the `if (inlineDefault() !== 'inline')` around
-     `showBase();`, which stays.
+     `showBase();`, which stays; `LOCK_MESSAGES`, the `designInstanceLock` and `ownStyleOf` functions, the `lock` and `lockedReason`
+     lines in `useInlineCard`, the `lockedReason` read-only branch and `shownCode`. The
+     `styleModel.inline.reason.componentWrites` and `componentDrops` messages then have no
+     reader: remove them from every catalog. `componentStyleForwarding.ts` stays: the editor uses it too.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
      `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in
      `ContextAction`, `'canChange'` in `ComponentMenuHeader`'s props, its `useUnlinkMenu()` call and the row it shows.

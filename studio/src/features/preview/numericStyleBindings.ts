@@ -4,7 +4,12 @@ import { frontmatterRange } from '../source/frontmatter';
 import { flatten, parsePage } from '../source/source';
 import { pathFor } from '../project/previewSelection';
 
-const STYLE = /^([A-Za-z_$][\w$]*)\s*\?\s*`(--[\w-]+):\s*\$\{\1\}(ch|px|rem|em|%|vw|vh);\s*`\s*:\s*undefined$/;
+// The prop's declaration alone, or combined with the instance's own style, which comes last. The preview sets the
+// one variable on the element, so the instance's other declarations stay.
+const STYLES = [
+  /^([A-Za-z_$][\w$]*)\s*\?\s*`(--[\w-]+):\s*\$\{\1\}(ch|px|rem|em|%|vw|vh);\s*`\s*:\s*undefined$/,
+  /^\[\s*([A-Za-z_$][\w$]*)\s*&&\s*`(--[\w-]+):\s*\$\{\1\}(ch|px|rem|em|%|vw|vh);?\s*`\s*,\s*style\s*,?\s*\]\s*\.filter\(\s*Boolean\s*\)\s*\.join\(\s*["']\s*;\s*["']\s*\)\s*(?:\|\|\s*undefined)?$/,
+] as const;
 
 // Recognize only a direct numeric prop -> CSS variable binding. Props used for
 // HTML, computed expressions, aliases or default values stay server-rendered.
@@ -27,7 +32,8 @@ export function numericStyleBindings(source: string): readonly NumericStyleBindi
   return flatten(parsed.model.nodes)
     .flatMap((node) => {
       const style = node.props?.['style'];
-      const match = style?.type === 'expr' ? STYLE.exec(style.value.trim()) : null;
+      const value = style?.type === 'expr' ? style.value.trim() : undefined;
+      const match = value === undefined ? undefined : STYLES.map((pattern) => pattern.exec(value)).find((found) => found !== null);
       const [, prop, variable, unit] = match ?? [];
       if (!prop || !variable || !unit || !node.id || !directProp(syntax, prop) || template.match(new RegExp(`\\b${prop}\\b`, 'g'))?.length !== 2) {
         return [];

@@ -304,6 +304,8 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'عندما يكون {name} مضبوطًا',
   'styleModel.inline.label': 'الأنماط المضمّنة',
   'styleModel.inline.reason.componentUnreadable': 'تعذّرت قراءة المكوّن الذي يكتب هذا النمط.',
+  'styleModel.inline.reason.componentDrops': 'لا يمرّر {file} النمط إلى عنصره، لذا سيتم تجاهل أي نمط مضمّن هنا.',
+  'styleModel.inline.reason.componentWrites': 'يكتب {file} نمط هذا العنصر بنفسه، لذا فإن أي نمط لهذا المثيل وحده سيضيع أو سيحل محل نمط المكوّن.',
   'styleModel.inline.reason.fromProp': 'يعطي أحد الفروع قيمة من خاصية بدلًا من نص، لذا يُعدَّل في الإعدادات.',
   'styleModel.inline.reason.onlyChain': 'يمكن هنا تعديل سلسلة شروط فقط، يعطي كل منها نصًا أو قالبًا.',
   'styleModel.inline.reason.rendersNothing': 'سمة style هذه لا تعرض شيئًا.',

@@ -24,6 +24,7 @@ export const designModeTr: DesignCatalog = {
   'toast.pageTooLarge': 'Bu sayfa, Tasarım modunda çerçeve olarak gösterilemeyecek kadar büyük.',
   'toast.frameUnread': 'düzenleyici bu çerçevenin sayfasını henüz okumadı. Yeniden seçin.',
   'toast.styleIsCode': 'Bu öğenin stili kod olarak yazılmış, bu yüzden burada taşınamaz veya boyutlandırılamaz.',
+  'toast.styleNotKept': 'Bu {file} örneğine verilen stil şu anda kaybolur, bu nedenle burada taşınamaz veya yeniden boyutlandırılamaz.',
   'bar.close': 'Tasarım modundan çık',
   'reset.title': 'Baştan başlansın mı?',
   'reset.body': 'Tüm çerçeveler silinir ve tuval projenizden yeniden başlar. Bu geri alınamaz.',

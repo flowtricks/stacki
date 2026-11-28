@@ -303,6 +303,9 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'gdy {name} jest ustawione',
   'styleModel.inline.label': 'Style inline',
   'styleModel.inline.reason.componentUnreadable': 'Nie udało się odczytać komponentu, który zapisuje ten styl.',
+  'styleModel.inline.reason.componentDrops': '{file} nie przekazuje stylu do swojego elementu, więc styl w linii zostałby tu zignorowany.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} sam zapisuje styl tego elementu, więc styl tylko dla tej instancji zostałby utracony albo zastąpiłby styl komponentu.',
   'styleModel.inline.reason.fromProp': 'Gałąź podaje wartość z właściwości zamiast tekstu, więc jest edytowana w Ustawieniach.',
   'styleModel.inline.reason.onlyChain': 'Tutaj można edytować tylko łańcuch warunków, z których każdy podaje tekst lub szablon.',
   'styleModel.inline.reason.rendersNothing': 'Ten atrybut style niczego nie renderuje.',

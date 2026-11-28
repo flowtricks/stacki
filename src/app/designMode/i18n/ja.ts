@@ -24,6 +24,7 @@ export const designModeJa: DesignCatalog = {
   'toast.pageTooLarge': 'このページは大きすぎるため、デザインモードでフレームとして表示できません。',
   'toast.frameUnread': 'エディターはまだこのフレームのページを読み込んでいません。もう一度選択してください。',
   'toast.styleIsCode': 'この要素のスタイルはコードで書かれているため、ここでは移動やサイズ変更ができません。',
+  'toast.styleNotKept': 'この {file} のインスタンスに設定したスタイルは現在失われるため、ここでは移動やサイズ変更ができません。',
   'bar.close': 'デザインモードを終了',
   'reset.title': '最初からやり直しますか？',
   'reset.body': 'すべてのフレームが破棄され、キャンバスはプロジェクトから始め直されます。この操作は取り消せません。',

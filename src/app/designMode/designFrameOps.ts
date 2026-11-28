@@ -19,6 +19,9 @@ import {
 } from '../../../shared/ipc/designSession';
 import { cleanError } from '../../lib/cleanError';
 import { inlineStyleWrite } from '../../features/style/model/inlineTarget';
+import { componentSourceSettled } from '../../features/style/model/componentSourceCache';
+import { instanceStyleBlock, type InstanceStyleBlock } from '../../features/style/model/componentStyleForwarding';
+import { queryCanvas } from '../../editor/canvasQuery';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import type { StyleChange } from './designElementDrag';
 import { designSession } from './designBridge';
@@ -202,6 +205,20 @@ export function writeElementStyle(context: DesignOpsContext, frame: DesignFrameI
       app.showToast(context.words()('toast.styleIsCode'), 'warning');
       return;
     }
+    // An instance's drag is refused only where it would be lost now (the Style panel's rule).
+    if (target.kind === 'component') {
+      const block = await dragBlock(app.selectedComponentFile, target.props?.['style'], node.path);
+      if (block !== undefined) {
+        refused();
+        app.showToast(context.words()('toast.styleNotKept', { file: app.selectedComponentFile?.split(/[\\/]/).pop() ?? '' }), 'warning');
+        return;
+      }
+      // The selection may have moved while the page and the file were read: the write is for the node held.
+      if (context.app().pathFor(context.app().selectedId) !== node.path) {
+        refused();
+        return;
+      }
+    }
     const next = styleAfter(target.props?.['style'], change);
     if (next === undefined) {
       refused();
@@ -209,6 +226,24 @@ export function writeElementStyle(context: DesignOpsContext, frame: DesignFrameI
       return;
     }
     app.setProp(target.id, 'style', { type: 'string', value: next }, true, app.pathFor(target.id));
+  });
+}
+
+/** Why a style written on the instance at `path` would be lost now, from its component's file and what it renders. */
+async function dragBlock(
+  file: string | undefined,
+  own: { readonly type: string; readonly value?: string } | undefined,
+  path: string,
+): Promise<InstanceStyleBlock | undefined> {
+  if (file === undefined) {
+    return undefined;
+  }
+  const [source, answer] = await Promise.all([componentSourceSettled(file, READ_WAIT_MS_MAX), queryCanvas(path)]);
+  return instanceStyleBlock({
+    file,
+    source,
+    own: own === undefined ? { kind: 'none' } : own.type === 'string' ? { kind: 'string', text: own.value ?? '' } : { kind: 'code' },
+    rendered: answer?.identity?.attributes['style'],
   });
 }
 

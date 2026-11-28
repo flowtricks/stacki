@@ -297,6 +297,9 @@ export const messages = {
   'styleModel.inline.branch.whenSet': '{name}이(가) 설정되었을 때',
   'styleModel.inline.label': '인라인 스타일',
   'styleModel.inline.reason.componentUnreadable': '이 스타일을 작성하는 컴포넌트를 읽을 수 없습니다.',
+  'styleModel.inline.reason.componentDrops': '{file}에서 요소에 스타일을 전달하지 않으므로 여기의 인라인 스타일은 무시됩니다.',
+  'styleModel.inline.reason.componentWrites':
+    '{file}에서 이 요소의 스타일을 직접 작성하므로 이 인스턴스만의 스타일은 사라지거나 컴포넌트의 스타일을 대체합니다.',
   'styleModel.inline.reason.fromProp': '한 분기가 텍스트 대신 prop의 값을 사용하므로 설정에서 편집합니다.',
   'styleModel.inline.reason.onlyChain': '각각 텍스트나 템플릿을 반환하는 조건 체인만 여기서 편집할 수 있습니다.',
   'styleModel.inline.reason.rendersNothing': '이 style 속성은 아무것도 렌더링하지 않습니다.',

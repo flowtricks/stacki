@@ -24,6 +24,7 @@ export const designModePl: DesignCatalog = {
   'toast.pageTooLarge': 'Ta strona jest zbyt duża, aby pokazać ją jako ramkę w trybie projektowania.',
   'toast.frameUnread': 'edytor nie odczytał jeszcze strony tej ramki. Wybierz ją ponownie.',
   'toast.styleIsCode': 'Styl tego elementu jest zapisany jako kod, więc nie można go tu przesunąć ani zmienić jego rozmiaru.',
+  'toast.styleNotKept': 'Styl ustawiony na tej instancji {file} zostałby teraz utracony, więc nie można jej tu przesunąć ani zmienić jej rozmiaru.',
   'bar.close': 'Wyjdź z trybu projektowania',
   'reset.title': 'Zacząć od nowa?',
   'reset.body': 'Wszystkie ramki zostaną usunięte, a płótno zacznie od Twojego projektu. Tego nie można cofnąć.',

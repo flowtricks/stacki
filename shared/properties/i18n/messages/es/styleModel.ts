@@ -298,6 +298,9 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'cuando {name} está definido',
   'styleModel.inline.label': 'Estilos en línea',
   'styleModel.inline.reason.componentUnreadable': 'No se pudo leer el componente que escribe este estilo.',
+  'styleModel.inline.reason.componentDrops': '{file} no pasa el estilo a su elemento, así que aquí se ignoraría un estilo en línea.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} escribe él mismo el estilo de este elemento, así que un estilo solo para esta instancia se perdería o sustituiría al del componente.',
   'styleModel.inline.reason.fromProp': 'Una rama da un valor desde una propiedad en lugar de texto, así que se edita en Ajustes.',
   'styleModel.inline.reason.onlyChain': 'Aquí solo se puede editar una cadena de condiciones, cada una con un texto o plantilla.',
   'styleModel.inline.reason.rendersNothing': 'Este atributo de estilo no muestra nada.',
