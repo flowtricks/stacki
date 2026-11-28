@@ -102,8 +102,29 @@
   color: var(--text, #f5f5f5);
   outline: none;
 }
-.phone-preview-icon-button[data-copied] {
+.phone-preview-icon-button[data-copied],
+.phone-preview-icon-button[data-open] {
   color: var(--text, #f5f5f5);
+}
+
+/* The card's one setting, under the address while the gear has it open: a fill like the address, full width. */
+.phone-preview-settings {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+/* The label wraps rather than being cut: a longer language still reads whole beside the switch. */
+.phone-preview-settings .ui-switch-row-label {
+  overflow: visible;
+  white-space: normal;
+}
+/* While the access changes, the card keeps its place and dims; the new code replaces it once the server is back. */
+.phone-preview-card[data-restarting] .phone-preview-qr {
+  opacity: 0.35;
+  transition: opacity 0.15s;
 }
 
 /* The code sits on its own light tile in both themes: a camera reads dark modules on a light ground,

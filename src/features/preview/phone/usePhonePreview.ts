@@ -5,16 +5,30 @@
 // a restart, a branch switch) and after every change it asks for, so the toolbar always shows the running
 // server's mode, never a guess. Turning it on asks once per window session, in the app's own dialog, because
 // it exposes the site to everyone on the Wi-Fi; nothing about it is ever saved, so every launch starts off.
+// While on, the card's settings can let in only the devices that scan its code (chooseAccess): another restart,
+// with a new key from main. Turning the preview on always starts open to anyone, so nothing is remembered.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
-import type { DevNetworkFailure, DevNetworkMode, DevNetworkState } from '../../../../shared/ipc/devNetwork';
+import type { DevNetworkAccess, DevNetworkFailure, DevNetworkMode, DevNetworkRequest, DevNetworkState } from '../../../../shared/ipc/devNetwork';
 import type { MessageKey, Translator } from '../../../lib/i18n/localeContext';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import { changeDevNetwork, readDevNetwork } from './phoneBridge';
 
-/** What the menu draws: off, on (with the server's port and addresses), or a restart in progress toward one of them. */
+type PhonePreviewOn = Extract<DevNetworkState, { readonly kind: 'on' }>;
+
+/**
+ * What the menu draws: off, on (with the server's port and addresses), or a restart in progress toward one of them.
+ * A restart that only changes who may open it keeps the card it had (`keep`, with the access asked for), so the
+ * popover does not swap to skeletons and back; a restart that turns it on or off has nothing to keep.
+ */
 export type PhonePreviewState =
-  { readonly kind: 'off' } | { readonly kind: 'changing'; readonly toward: DevNetworkMode } | Extract<DevNetworkState, { readonly kind: 'on' }>;
+  | { readonly kind: 'off' }
+  | {
+      readonly kind: 'changing';
+      readonly toward: DevNetworkMode;
+      readonly keep: { readonly on: PhonePreviewOn; readonly access: DevNetworkAccess } | undefined;
+    }
+  | PhonePreviewOn;
 
 export interface PhonePreviewInput {
   readonly projectPath: string;
@@ -27,6 +41,8 @@ export interface PhonePreviewInput {
 export interface PhonePreview {
   readonly state: PhonePreviewState;
   readonly toggle: () => void;
+  /** While on: open to anyone on the network, or only to the devices that scan the code. */
+  readonly chooseAccess: (access: DevNetworkAccess) => void;
 }
 
 const FAILURE_MESSAGES: Readonly<Record<DevNetworkFailure, MessageKey>> = {
@@ -67,18 +83,14 @@ export function usePhonePreview({ projectPath, devUrl, showToast, translate }: P
     );
   }, [projectPath, devUrl]);
 
-  const toggle = useCallback(() => {
-    const current = stateRef.current;
-    if (current.kind === 'changing') {
-      return; // One restart at a time; main refuses a second one too.
-    }
-    const toward: DevNetworkMode = current.kind === 'on' ? 'local' : 'network';
+  const change = useCallback((request: DevNetworkRequest) => {
     void phonePreviewChange({
-      projectPath,
-      toward,
+      request,
       begin: () => {
         generation.current += 1;
-        setState({ kind: 'changing', toward });
+        const current = stateRef.current;
+        const keep = request.mode === 'network' && current.kind === 'on' ? { on: current, access: request.access } : undefined;
+        setState({ kind: 'changing', toward: request.mode, keep });
         return generation.current;
       },
       finish: (started, next) => {
@@ -89,23 +101,45 @@ export function usePhonePreview({ projectPath, devUrl, showToast, translate }: P
       fail: (message) => toastRef.current.showToast(message, 'error'),
       translate: toastRef.current.translate,
     });
-  }, [projectPath]);
+  }, []);
 
-  return { state, toggle };
+  const toggle = useCallback(() => {
+    const current = stateRef.current;
+    if (current.kind === 'changing') {
+      return; // One restart at a time; main refuses a second one too.
+    }
+    // Turned on, it is open to anyone on the network: the key is an option chosen each time, never remembered.
+    change(current.kind === 'on' ? { projectPath, mode: 'local' } : { projectPath, mode: 'network', access: 'open' });
+  }, [projectPath, change]);
+
+  const chooseAccess = useCallback(
+    (access: DevNetworkAccess) => {
+      const current = stateRef.current;
+      if (current.kind !== 'on') {
+        return; // Only an open preview has an access to choose; the card offers it only then.
+      }
+      if (current.access.kind === access) {
+        return;
+      }
+      change({ projectPath, mode: 'network', access });
+    },
+    [projectPath, change],
+  );
+
+  return { state, toggle, chooseAccess };
 }
 
 // The change itself: the session's one confirmation before the first "on", the restart, and the state it
 // leaves. Every failure ends in a toast and the state main reports, so the row never stays half-changed.
 async function phonePreviewChange(change: {
-  readonly projectPath: string;
-  readonly toward: DevNetworkMode;
+  readonly request: DevNetworkRequest;
   readonly begin: () => number;
   readonly finish: (started: number, next: PhonePreviewState) => void;
   readonly fail: (message: string) => void;
   readonly translate: Translator;
 }): Promise<void> {
-  const { translate } = change;
-  if (change.toward === 'network' && !confirmedThisSession) {
+  const { translate, request } = change;
+  if (request.mode === 'network' && !confirmedThisSession) {
     const answer = await confirmDialog({
       title: translate('preview.phone.confirm.title'),
       body: translate('preview.phone.confirm.body'),
@@ -118,7 +152,7 @@ async function phonePreviewChange(change: {
   }
   const started = change.begin();
   try {
-    const reply = await changeDevNetwork(change.projectPath, change.toward);
+    const reply = await changeDevNetwork(request);
     if (reply.ok) {
       change.finish(started, reply.value);
       return;
@@ -128,7 +162,7 @@ async function phonePreviewChange(change: {
     change.fail(translate('preview.phone.error.failed', { message: error instanceof Error ? error.message : String(error) }));
   }
   // Whatever happened, the toolbar shows what main now runs.
-  const after = await readDevNetwork(change.projectPath).catch((): PhonePreviewState => ({ kind: 'off' }));
+  const after = await readDevNetwork(request.projectPath).catch((): PhonePreviewState => ({ kind: 'off' }));
   assert(after.kind !== 'changing', 'phonePreviewChange: main reports a settled mode');
   change.finish(started, after);
 }

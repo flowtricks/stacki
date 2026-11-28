@@ -108,6 +108,8 @@ export const messages = {
   'preview.phone.help': '연결 도움말',
   'preview.phone.label': '휴대폰 미리보기',
   'preview.phone.qr': '{url}의 QR 코드',
+  'preview.phone.scannedOnly': '이 코드로만',
+  'preview.phone.settings': '휴대폰 미리보기 설정',
   'preview.phone.toggle': '로컬 네트워크에서 열기',
   'preview.phone.url': '휴대폰용 주소',
   'preview.reload': '미리보기 새로고침',

@@ -111,6 +111,8 @@ export const messages = {
   'preview.phone.help': 'Hulp bij verbinden',
   'preview.phone.label': 'Telefoonvoorbeeld',
   'preview.phone.qr': 'QR-code voor {url}',
+  'preview.phone.scannedOnly': 'Alleen via deze code',
+  'preview.phone.settings': 'Instellingen voor het telefoonvoorbeeld',
   'preview.phone.toggle': 'Openen op lokaal netwerk',
   'preview.phone.url': 'Adres voor je telefoon',
   'preview.reload': 'Preview opnieuw laden',
