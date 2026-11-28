@@ -13,7 +13,6 @@ setToolPathHome(os.homedir());
 
 async function fixture(context, failures) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'stacki-startup-exit-'));
-  context.after(() => fs.rm(directory, { recursive: true, force: true }));
   const bin = path.join(directory, 'astro.mjs');
   await fs.writeFile(
     bin,
@@ -32,7 +31,18 @@ async function fixture(context, failures) {
   const servers = new DevServers({ send: (channel, payload) => events.push({ channel, payload }) });
   // Keep the real process/retry logic; this CLI fixture needs no dependency installation.
   servers.installedBin = async () => bin;
-  context.after(() => servers.stop());
+  // One hook, the server first: Node skips the hooks after one that throws, and Windows refuses to remove the folder a
+  // live process works in, so a separate removal that failed would leave the server running and the suite waiting.
+  context.after(async () => {
+    const child = servers.current()?.proc;
+    try {
+      await servers.pause();
+    } catch (error) {
+      child?.kill('SIGKILL');
+      throw error;
+    }
+    await fs.rm(directory, { recursive: true, force: true });
+  });
   return { directory, events, servers };
 }
 

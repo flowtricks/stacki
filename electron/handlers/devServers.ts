@@ -221,6 +221,12 @@ export class DevServers {
     if (!server) {
       return;
     }
+    await this.halt(server);
+  }
+
+  // Stops the held server and settles once it has: its process has ended, or the `astro dev stop` of a detached one.
+  private async halt(server: DevServer): Promise<void> {
+    assert(this.server === server, 'halt: only the held server is stopped');
     if (server.daemon && server.bin) {
       if (!lockNamesAnotherServer(server)) {
         const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
@@ -592,10 +598,13 @@ export class DevServers {
       return current.external === true ? { url: current.url, external: true } : { url: current.url };
     }
     this.pushLog('\n[stacki] the preview server stopped answering; starting it again.\n');
-    const exited = waitForPreviewExit(current.proc);
-    this.stop(false);
+    // Waited for: an `astro dev stop` still running would read the lock the new server writes, and end that one.
     // A server that will not end is left behind: the new one takes the next free port.
-    await exited.catch(() => undefined);
+    await this.halt(current).catch(() => undefined);
+    // A detached one whose stop failed is still held.
+    if (this.server === current) {
+      this.server = undefined;
+    }
     return undefined;
   }
 
