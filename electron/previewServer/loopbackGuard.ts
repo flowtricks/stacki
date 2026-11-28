@@ -157,13 +157,21 @@ export function judgeSiteRequest(request: GuardedRequest): LoopbackVerdict {
   if (isLoopbackAddress(request.remoteAddress)) {
     return { kind: 'pass' }; // This computer: the canvas, thumbnails and main never need the key.
   }
-  const url = new URL(request.url ?? '/', 'http://preview.invalid');
+  // Any device on the network chooses this text. One that is no address is refused: a throw here would reach the
+  // `upgrade` listener, which nothing catches, and end the dev server.
+  const address = request.url ?? '/';
+  if (!URL.canParse(address, 'http://preview.invalid')) {
+    return { kind: 'refuse', reason: 'key' };
+  }
+  const url = new URL(address, 'http://preview.invalid');
   const given = url.searchParams.get(PREVIEW_KEY_PARAM) ?? undefined;
   if (given !== undefined && sameKey(given, key)) {
     if (request.method === 'GET' || request.method === 'HEAD') {
       url.searchParams.delete(PREVIEW_KEY_PARAM);
-      const location = `${url.pathname}${url.search}`;
-      assert(location.startsWith('/'), 'judgeSiteRequest: the redirect stays on this server');
+      // A path that begins with two slashes names another host in a redirect, so it keeps only one.
+      const location = `${url.pathname.replace(/^\/+/, '/')}${url.search}`;
+      assert(location.startsWith('/'), 'judgeSiteRequest: the redirect is a path');
+      assert(!location.startsWith('//'), 'judgeSiteRequest: the redirect stays on this server');
       return { kind: 'admit', location };
     }
   }

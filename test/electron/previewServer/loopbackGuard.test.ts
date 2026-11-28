@@ -131,6 +131,16 @@ test('with a key, the network reaches the site only through the code or its cook
   });
 });
 
+test('with a key, text that is no address is refused, and the redirect never names another host', () => {
+  for (const url of ['//[', 'http://[']) {
+    assert.deepEqual(judgeRequest({ ...phone, url }), { kind: 'refuse', reason: 'key' }, url);
+    assert.deepEqual(judgeRequest({ ...phone, url, cookie: `${PREVIEW_KEY_COOKIE}=${KEY}` }), { kind: 'refuse', reason: 'key' }, url);
+  }
+  for (const path of ['/.//example.org/x', '/..//example.org/x', '/.///example.org/x', '/.\\\\example.org/x']) {
+    assert.deepEqual(judgeRequest({ ...phone, url: `${path}?${PREVIEW_KEY_PARAM}=${KEY}` }), { kind: 'admit', location: '/example.org/x' }, path);
+  }
+});
+
 test('the cookie header is read within its bounds', () => {
   assert.deepEqual(cookieKeys(undefined), []);
   assert.deepEqual(cookieKeys(`${PREVIEW_KEY_COOKIE}=a; ${PREVIEW_KEY_COOKIE}=b`), ['a', 'b']);
