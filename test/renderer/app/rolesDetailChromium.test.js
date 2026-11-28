@@ -248,7 +248,7 @@ function check(output) {
     if (cards === undefined) {
       continue;
     }
-    expect(`${where}: the card lists four summary rows`, cards.rows === 4, cards.rows);
+    expect(`${where}: the card lists five summary rows`, cards.rows === 5, cards.rows);
     expect(
       `${where}: the rows' chevrons, counts and labels each share one edge`,
       cards.chevronsShareAnEdge && cards.summariesShareAnEdge && cards.labelsShareAnEdge,

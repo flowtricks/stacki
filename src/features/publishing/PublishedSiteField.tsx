@@ -1,10 +1,27 @@
 import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import { savedPublishedSite } from '../../../shared/properties/publishSite';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { withDetail } from './customHosting';
 
 export function PublishedSiteField({ config, change }: { readonly config: PublishConfig; readonly change: (config: PublishConfig) => void }) {
   const translate = useTranslate();
   const hosting = config.hosting;
+  const custom = config.customHosting;
+  if (custom !== undefined) {
+    // A custom host keeps its address with its own settings: `publishedSite` belongs to a provider destination.
+    return (
+      <label className="publish-field">
+        <span className="publish-label">{translate('publish.site.label')}</span>
+        <input
+          type="url"
+          value={custom.siteUrl ?? ''}
+          placeholder="https://example.com"
+          maxLength={2048}
+          onChange={(event) => change({ ...config, customHosting: withDetail(custom, 'siteUrl', event.currentTarget.value.trim()) })}
+        />
+      </label>
+    );
+  }
   if (hosting.provider === 'none') {
     return undefined;
   }

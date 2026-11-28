@@ -22,6 +22,8 @@ import { RoleAppPermissions } from './RoleAppPermissions';
 import { useInstalledApps } from './RoleAppPicker';
 import { RoleComponents } from './RoleComponents';
 import { RolePinnedApps } from './RolePinnedApps';
+import { RoleEditing } from './RoleEditing';
+import { editingSummary } from './roleEditingModel';
 import { permissionCounts, permissionGroups, matchesQuery, type PermissionGroupView, type RoleSection } from './roleDetailModel';
 import type { RoleCardActions } from './RoleCard';
 
@@ -71,6 +73,7 @@ export function RoleDetail(props: {
         <h3>{title}</h3>
         {/* What the Components list means is a tip beside the title, not a paragraph above the list. */}
         {section === 'components' && <InfoHint text={translate('settings.roles.components.info')} />}
+        {section === 'editing' && <InfoHint text={translate('roles.editing.info')} />}
         <span className="app-role-detail-role">{role.name}</span>
         <span className="app-role-detail-count">{sectionCount(role, section, tree, translate)}</span>
         {section === 'components' && editable && (
@@ -99,6 +102,7 @@ export function RoleDetail(props: {
           actions={{ setVisibility: actions.setComponentVisibility, copyFrom: actions.copyComponentRules, removeRule: actions.removeComponentRule }}
         />
       )}
+      {section === 'editing' && <RoleEditing role={role} editable={editable} actions={actions} query={query} />}
       {section === 'permissions' && <PermissionsView role={role} editable={editable} actions={actions} projectPath={props.projectPath} query={query} />}
     </section>
   );
@@ -112,6 +116,8 @@ function sectionTitle(section: RoleSection, translate: ReturnType<typeof useTran
       return translate('settings.roles.pins.title');
     case 'components':
       return translate('settings.roles.components.title');
+    case 'editing':
+      return translate('roles.editing.title');
     case 'permissions':
       return translate('settings.roles.permissions.title');
     default: {
@@ -131,6 +137,12 @@ function sectionCount(role: ProjectRole, section: RoleSection, tree: ComponentTr
       return String(role.pinnedApps.length);
     case 'components':
       return translate('settings.roles.components.count', { visible: tree.visible, total: tree.total });
+    case 'editing': {
+      const summary = editingSummary(role);
+      return summary.kind === 'readOnly'
+        ? translate('roles.editing.readOnly')
+        : translate('settings.roles.summary.ofTotal', { count: summary.on, total: summary.total });
+    }
     case 'permissions': {
       const { granted, total } = permissionCounts(role);
       return translate('settings.roles.permissions.count', { granted, total });
@@ -151,7 +163,9 @@ function DetailSearch(props: { readonly section: RoleSection; readonly query: st
         ? translate('settings.roles.detail.search.pins')
         : props.section === 'components'
           ? translate('settings.roles.components.search')
-          : translate('settings.roles.detail.search.permissions');
+          : props.section === 'editing'
+            ? translate('roles.editing.search')
+            : translate('settings.roles.detail.search.permissions');
   return (
     <label className="app-role-search">
       <SearchIcon size={12} />
@@ -284,7 +298,7 @@ function PermissionGroup(props: {
         />
       </div>
       {group.rows.map((row) => (
-        <div key={row.feature} className="app-role-toggle">
+        <div key={row.feature} className="app-role-toggle" title={row.withheld ? translate('roles.editing.withheld') : undefined}>
           <span className="app-role-toggle-icon" aria-hidden="true">
             <FeatureIcon feature={row.feature} size={14} />
           </span>
@@ -292,7 +306,7 @@ function PermissionGroup(props: {
           <Switch
             label={row.label}
             checked={row.checked}
-            disabled={!props.editable}
+            disabled={!props.editable || row.withheld}
             onToggle={() => actions.toggle(row.feature, row.checked ? 'withdraw' : 'grant')}
           />
         </div>

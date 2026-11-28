@@ -82,6 +82,68 @@ export async function fetchGitWorkspaceHeads(run: GitWorkspaceRun) {
   }
   return references;
 }
+export const HYDRATE_LIMITS = {
+  // A draft, an incoming head and their merge bases.
+  revisionsMax: 8,
+  // The listing of missing objects has to fit Git's bounded output (42 bytes each, 1 MiB).
+  objectsMax: 20_000,
+  // Each batch is one request to GitHub: at most ten for the largest workspace.
+  batchObjects: 2_000,
+} as const;
+
+/**
+ * Download, in a few requests, every file content these trees name and the workspace lacks.
+ *
+ * Why: the workspace is a blobless partial clone. `ls-tree -l` (it reports sizes) and `checkout-index`
+ * make Git fetch each missing blob when they reach it, one request and one process per file: ten to
+ * twenty minutes for an ordinary site (issue #104). Call this before either reads a tree's contents.
+ *
+ * How: `rev-list --missing=print` lists absent objects without fetching them. The fetch is the one Git
+ * itself runs for a lazy fetch, with many object names on standard input instead of one. It runs as
+ * every other workspace command does (publishGit.ts), so credentials stay out of arguments and errors,
+ * and no repository hook or inherited configuration applies. A failure stops the action before it
+ * changes any file; falling back to one fetch per file would be the hang again.
+ */
+export async function hydrateGitTrees(git: PublishGit, revisions: readonly string[]): Promise<void> {
+  assert(revisions.length > 0, 'Hydration needs a tree');
+  assert(revisions.length <= HYDRATE_LIMITS.revisionsMax, 'Hydrated trees are bounded');
+  const run = gitWorkspaceRun(git);
+  const missing = await missingGitObjects(run, revisions);
+  for (let start = 0; start < missing.length; start += HYDRATE_LIMITS.batchObjects) {
+    const batch = missing.slice(start, start + HYDRATE_LIMITS.batchObjects);
+    await run(
+      [
+        // Nothing to negotiate: these are named objects, not history.
+        '-c',
+        'fetch.negotiationAlgorithm=noop',
+        'fetch',
+        '--quiet',
+        '--no-tags',
+        '--no-write-fetch-head',
+        '--recurse-submodules=no',
+        '--filter=blob:none',
+        '--stdin',
+        'origin',
+      ],
+      batch.map((object) => object + '\n').join(''),
+    );
+  }
+}
+
+async function missingGitObjects(run: GitWorkspaceRun, revisions: readonly string[]): Promise<readonly string[]> {
+  // `^{tree}` limits the listing to these snapshots: a commit alone would walk its history.
+  const trees = revisions.map((revision) => gitRevision(revision) + '^{tree}');
+  const output = await run(['rev-list', '--objects', '--quiet', '--missing=print', ...trees]);
+  const lines = output.split('\n').filter(Boolean);
+  if (lines.length > HYDRATE_LIMITS.objectsMax) {
+    throw new Error('Git workspace tree exceeds its file limit.');
+  }
+  return lines.map((line) => {
+    assert(line.startsWith('?'), 'A quiet listing prints only missing objects');
+    return gitRevision(line.slice(1));
+  });
+}
+
 /** Only editor-managed files enter the snapshot; installed Studio and runtime state stay out. */
 export async function snapshotGitWorkspace(git: PublishGit, head: string): Promise<string> {
   const run = gitWorkspaceRun(git);

@@ -92,6 +92,9 @@ function sameView(left: RoleView, right: RoleView): boolean {
   // Hidden components are too: hiding one must leave the palette at once.
   return (
     sameAppPermissions(left.appPermissions, right.appPermissions) &&
+    // Editing options switch panels and canvas gestures, so a change must reach them at once.
+    left.editorOff.size === right.editorOff.size &&
+    [...left.editorOff].every((part) => right.editorOff.has(part)) &&
     samePins(left.pinnedApps, right.pinnedApps) &&
     sameComponentRules(left.componentRules, right.componentRules)
   );

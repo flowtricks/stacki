@@ -138,6 +138,7 @@ test('permissionGroups counts and states the whole group, and a search keeps mat
     appPermissions: {},
     pinnedApps: [],
     componentRules: [],
+    editorOff: [],
   };
   const all = roles.permissionGroups(role, '', 'Every app', translateDescribed);
   const pages = all.find((group) => group.key === 'Pages');
@@ -173,7 +174,7 @@ test('permissionGroups counts and states the whole group, and a search keeps mat
 });
 
 test('permissionCounts counts every listed switch and Every app', () => {
-  const none = { id: 'x', name: 'X', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] };
+  const none = { id: 'x', name: 'X', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] };
   const counts = roles.permissionCounts(none);
   assert.equal(counts.granted, 0);
   assert.equal(roles.permissionCounts({ ...none, access: ['app:*', 'panel:cms'] }).granted, 2);
@@ -200,9 +201,14 @@ test('a card is a header and flat summary rows with counts; no switches and no a
   assert.match(rows[0], /^Members0$/);
   assert.match(rows[1], /^Sidebar apps0$/);
   assert.match(rows[2], /^Components3 of 3$/);
-  assert.match(rows[3], /^Permissions1 of \d+$/);
+  assert.match(rows[3], /^Editing4 of 7$/);
+  assert.match(rows[4], /^Permissions1 of \d+$/);
   assert.equal(client.querySelectorAll('[role="switch"], input').length, 0, 'the card holds no controls but its rows and menu');
-  assert.equal(document.querySelector('section[aria-label="Admin role"]').querySelectorAll('.app-role-row').length, 3, 'admin has no Permissions row');
+  assert.equal(
+    document.querySelector('section[aria-label="Admin role"]').querySelectorAll('.app-role-row').length,
+    3,
+    'admin has no Editing or Permissions row',
+  );
   await unmount();
 });
 
@@ -384,4 +390,62 @@ test('a project without Studio keeps the GitHub field', async () => {
     assert.ok(detail().querySelector('input[aria-label="Add a GitHub username to Client"]'));
     await unmount();
   });
+});
+
+// The Editing view.
+
+const editingSwitch = (part) => detail().querySelector(`.app-role-editing-toggle[data-part="${part}"] [role="switch"]`);
+const savedClient = () => JSON.parse(writes.at(-1).source).roles.find((role) => role.id === 'client');
+
+test('Editing starts as what the permissions give, switches only take away, and read only carries add and delete', async () => {
+  fresh({ access: ['panel:navigator', 'panel:style', 'panel:settings', 'publish'] });
+  await mount();
+  await click(row('Client', 'Editing'));
+  assert.equal(detail().querySelector('h3').textContent, 'Editing');
+  for (const part of ['sidePanel', 'navigator', 'canvasBar', 'drag', 'text', 'images', 'elements']) {
+    assert.equal(editingSwitch(part).getAttribute('aria-checked'), 'true', part);
+    assert.equal(editingSwitch(part).disabled, false, part);
+  }
+  await click(editingSwitch('sidePanel'));
+  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
+  assert.deepEqual(savedClient().access, ['panel:navigator', 'panel:style', 'panel:settings', 'publish'], 'the permissions are untouched');
+  assert.equal(editingSwitch('sidePanel').disabled, false, 'what was switched off can always be switched back on');
+  for (const part of ['drag', 'text', 'images']) {
+    await click(editingSwitch(part));
+  }
+  assert.equal(editingSwitch('elements').getAttribute('aria-checked'), 'false');
+  assert.equal(editingSwitch('elements').disabled, true, 'adding and deleting go with read only');
+  assert.equal(detail().querySelector('.app-role-detail-count').textContent, 'Read only');
+  // The whole page group back on gives everything back.
+  await click(detail().querySelector('[role="switch"][aria-label="All On the page"]'));
+  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
+  await click(editingSwitch('sidePanel'));
+  assert.equal(savedClient().editorOff, undefined, 'with nothing off the file is written as before');
+  await unmount();
+});
+
+test('an option the permissions already settle cannot be switched, and says which permission', async () => {
+  fresh({ access: ['panel:cms'] });
+  await mount();
+  await click(row('Client', 'Editing'));
+  for (const part of ['sidePanel', 'navigator', 'images']) {
+    assert.equal(editingSwitch(part).getAttribute('aria-checked'), 'false', part);
+    assert.equal(editingSwitch(part).disabled, true, part);
+    assert.match(editingSwitch(part).closest('.app-role-editing-toggle').querySelector('.app-role-toggle-label').getAttribute('title'), /Permissions/, part);
+  }
+  await unmount();
+});
+
+test('a permission the editing options take away shows off and fixed in Permissions', async () => {
+  fresh({ access: ['panel:cms', 'panel:style', 'code:edit'], editorOff: ['sidePanel'] });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  for (const label of ['Style panel', 'Edit code']) {
+    const toggle = detail().querySelector(`.app-role-toggle [role="switch"][aria-label="${label}"]`);
+    assert.equal(toggle.getAttribute('aria-checked'), 'false', label);
+    assert.equal(toggle.disabled, true, label);
+    assert.match(toggle.closest('.app-role-toggle').getAttribute('title'), /Editing options/);
+  }
+  assert.equal(detail().querySelector('.app-role-toggle [role="switch"][aria-label="CMS"]').getAttribute('aria-checked'), 'true');
+  await unmount();
 });

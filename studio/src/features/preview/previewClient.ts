@@ -37,6 +37,8 @@ import { forwardStyleModifiers } from './styleModifiers';
 import { answerPreviewQuery } from './previewQueries';
 import { createHotContext } from '/@vite/client';
 import { createOutlines, type OutlineTarget } from './previewOutlines';
+import { canvasDragging, installCanvasDrag, receiveDragMessage } from '../../../vendor/stacki/electron/preload/frameDrag';
+import { installCanvasImage } from '../../../vendor/stacki/electron/preload/frameImage';
 import { listenForCanvasMoves, parsePendingBase, revertCanvasMoves, showCanvasMove } from '../../../vendor/stacki/electron/preload/frameMove';
 import { listenForCanvasInserts, revertCanvasInserts, showCanvasInsert } from '../../../vendor/stacki/electron/preload/framePendingInsert';
 import { clearPendingDeletes, hidePendingDelete, listenForPendingDeletes } from '../../../vendor/stacki/electron/preload/framePendingDelete';
@@ -45,6 +47,8 @@ import { parseCanvasMove, renumberedCanvasPath, type CanvasMove } from '../../..
 const studioOrigin = parentOrigin(document, location.origin);
 const post = (message: unknown) => window.parent.postMessage(message, studioOrigin);
 const cursorPresence = installCursorPresence(post);
+// Dragging and the image popup, off until the editor says what this person's role takes (canvasGestures.ts).
+const gestures = { drag: false, images: false };
 const columnGuide = startGuide(post);
 // The canvas draws the page's scrollbar beside the frame from these reports (frameScrollbar.ts).
 installPageScrollReport(post);
@@ -80,6 +84,8 @@ let scope = '';
 // page also receives each click (frameInteraction.ts).
 let interactive = !location.hash.includes('avb-design');
 let canvasMode: CanvasInteraction = 'select';
+// Ahead of the text and click listeners, as on Desktop: a double click on a picture is the picture's.
+installCanvasImage(post, () => gestures.images && !interactive && window.parent !== window && canvasMode === 'select');
 installCanvasText(
   post,
   () => !interactive && window.parent !== window,
@@ -159,7 +165,8 @@ function pageId(element: Element): string | undefined {
 document.addEventListener(
   'pointermove',
   (event) => {
-    if (!(event.target instanceof Element) || event.target.closest('#studio-live-cursors')) {
+    // While something is dragged the drop's own outline names the place.
+    if (!(event.target instanceof Element) || event.target.closest('#studio-live-cursors') || canvasDragging()) {
       return;
     }
     const { id, occurrence } = locate(event.target, event.clientX, event.clientY) ?? { id: '', occurrence: 0 };
@@ -272,6 +279,14 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (receiveAppCursor(data)) {
+    return;
+  }
+  if (data.type === 'studio:gestures' && 'drag' in data && 'images' in data) {
+    gestures.drag = data.drag === true;
+    gestures.images = data.images === true;
+    return;
+  }
+  if (receiveDragMessage(data)) {
     return;
   }
   if (receivePointQuery(data, nodeAtPoint, post)) {
@@ -467,6 +482,27 @@ document.addEventListener('avb:morphed', observePageHeight);
 // before revealing this frame would deadlock the cloud canvas behind its loader.
 // With the page it is, so a URL change that does not reload the frame keeps it ready (PreviewLoading.tsx).
 post({ type: 'studio:preview-ready', path: location.pathname + location.search });
+
+// A press that may become a drag must not sweep a text selection across the page; the text being edited keeps its own.
+document.addEventListener(
+  'selectstart',
+  (event) => {
+    if (gestures.drag && !interactive && canvasMode === 'select' && window.parent !== window && !isCanvasTextEditing(event.target)) {
+      event.preventDefault();
+    }
+  },
+  true,
+);
+installCanvasDrag({
+  locate: (x, y) => {
+    if (!gestures.drag || interactive || window.parent === window) {
+      return undefined;
+    }
+    const hit = nodeAtPoint(x, y);
+    return hit === undefined ? undefined : { path: scope + hit.path, occurrence: hit.occurrence };
+  },
+  send: post,
+});
 
 // The node under the pointer, by Desktop's rule for the space between a loop's
 // items (frameTargets.ts, frameUnionTarget.ts). The browser can only name the

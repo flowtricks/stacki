@@ -3,6 +3,7 @@
 // Why a model: the card, the detail view and the tests read the same numbers, so a count on a row can
 // never disagree with the list it opens.
 import { assert } from '../../../shared/core/assert';
+import { editorWithholds } from '../../../shared/properties/projectRoles';
 import {
   ACCESS_GROUPS,
   ADMIN_ROLE_ID,
@@ -17,7 +18,7 @@ import type { AppSummary } from '../../../shared/properties/apps';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
 
 /** The detail views a role card opens, in the order the card lists them. */
-export const ROLE_SECTIONS = ['members', 'pins', 'components', 'permissions'] as const;
+export const ROLE_SECTIONS = ['members', 'pins', 'components', 'editing', 'permissions'] as const;
 export type RoleSection = (typeof ROLE_SECTIONS)[number];
 
 /** Where Settings → Roles is: the cards, or one section of one role. */
@@ -31,6 +32,8 @@ export interface PermissionRowView {
   readonly feature: StaticAccessFeature | typeof APP_ACCESS_ALL;
   readonly label: string;
   readonly checked: boolean;
+  /** The role's Editing options take it away whatever the switch says, so it shows off and cannot be switched here. */
+  readonly withheld: boolean;
 }
 
 export interface PermissionGroupView {
@@ -46,11 +49,19 @@ export interface PermissionGroupView {
   readonly features: readonly StaticAccessFeature[];
 }
 
+/** Whether the role's editing options take `feature` away. */
+function withheld(role: ProjectRole, feature: StaticAccessFeature | typeof APP_ACCESS_ALL): boolean {
+  return role.id !== ADMIN_ROLE_ID && editorWithholds(roleView(role).editorOff, feature);
+}
+
 /**
  * Whether a switch reads as on. `panel:elements` reads its effective state, because a role that holds a design panel has it
  * by default without naming it (`can`); every other switch is exactly what the role stores.
  */
 function switchOn(role: ProjectRole, feature: StaticAccessFeature): boolean {
+  if (withheld(role, feature)) {
+    return false;
+  }
   if (feature === 'panel:elements' && role.id !== ADMIN_ROLE_ID) {
     return can(roleView(role), feature);
   }
@@ -110,11 +121,12 @@ export function permissionGroups(
     const all: PermissionRowView[] = group.features.map((item): PermissionRowView => ({
       feature: item.feature,
       label: translateDescribed({ message: item.label, messageRef: item.labelRef }),
-      checked: item.feature === 'panel:elements' ? switchOn(role, item.feature) : granted.has(item.feature),
+      checked: item.feature === 'panel:elements' ? switchOn(role, item.feature) : granted.has(item.feature) && !withheld(role, item.feature),
+      withheld: withheld(role, item.feature),
     }));
     const counted = all.length;
     if (group.label === APPS_ACCESS_GROUP) {
-      all.push({ feature: APP_ACCESS_ALL, label: everyAppLabel, checked: granted.has(APP_ACCESS_ALL) });
+      all.push({ feature: APP_ACCESS_ALL, label: everyAppLabel, checked: granted.has(APP_ACCESS_ALL), withheld: false });
     }
     const groupMatches = matchesQuery(label, query);
     const rows = groupMatches ? all : all.filter((row) => matchesQuery(row.label, query));

@@ -1,3 +1,4 @@
+import { editingOffFor } from '../../lib/editorGate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { isComponentCanvasPage } from '../../features/preview/componentCanvas/componentCanvasSession';
 import { canvasContentEdits } from '../model/canvasTextContent';
@@ -18,7 +19,7 @@ export function desktopCanvasText(app: ShellView, translate: Translator): Canvas
   if (!file || !state?.editable || state.parsedFrom !== state.source) {
     return undefined;
   }
-  if (!file.endsWith('.astro')) {
+  if (!file.endsWith('.astro') || editingOffFor('text') !== undefined) {
     return undefined;
   }
   // The component canvas's page is generated and never edited: a double click there opens a frame's instance, so its

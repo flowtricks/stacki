@@ -60,6 +60,7 @@ export const messages = {
   'studio.collab.sessionChanged': '会话已更改。请重新选择该元素。',
   'studio.collab.sessionExpired': '你的会话已过期或仓库访问权限已更改。你的本地编辑已保留。请重新登录。',
   'studio.collab.sourceProtected': '在客户模式下，组件源码受保护。',
+  'studio.collab.roleCannot': '你的角色（{role}）无法执行此操作。请向管理员申请权限。',
   'studio.collab.takeOver': '接管',
   'studio.component.packageReadOnly': '包组件为只读。请在页面上编辑实例属性。',
   'studio.components.createInSource': '请在项目源码中创建组件模板。',

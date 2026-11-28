@@ -414,6 +414,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   },
   'publish:workerSetup': { projectPath: '/site', worker: { accountId: 'account', project: 'my-site' } },
   'publish:netlifySite': { projectPath: '/site', site: { team: 'acme', name: 'my-site' } },
+  'publish:custom': { projectPath: '/site', request: { action: 'saveLink', destination: 'staging', link: 'https://example.com/hook' } },
   'publish:repository': {
     projectPath: '/site',
     request: { action: 'list', account: 'owner' },

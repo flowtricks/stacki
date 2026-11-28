@@ -160,7 +160,7 @@ export function useCanvasDrag(app: CanvasDragHost): CanvasDragHandler {
 function startPointerDrag(context: { readonly app: CanvasDragHost; readonly role: ReturnType<typeof useCurrentRole> }, path: string): Active | undefined {
   const { app } = context;
   const state = app.pageState;
-  if (state === undefined || !state.editable) {
+  if (state === undefined || !state.editable || context.role.editorOff.has('drag')) {
     return undefined;
   }
   const id = nodeIdOfPath(app, path);
@@ -181,6 +181,10 @@ function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role:
   const state = app.pageState;
   const native = getDrag();
   if (state === undefined || !state.editable || native === undefined) {
+    return undefined;
+  }
+  // A row dragged from the Navigator moves an element; a component or an Add elements tile adds one.
+  if (context.role.editorOff.has(native.kind === 'node' ? 'drag' : 'elements')) {
     return undefined;
   }
   switch (native.kind) {

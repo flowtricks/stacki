@@ -1,4 +1,4 @@
-import type { PublishTarget } from '../../../vendor/stacki/shared/properties/publishConfig';
+import type { PublishRequestTarget } from '../../../vendor/stacki/shared/properties/publishDestinations';
 import type { PublishState } from './publish';
 import { request } from '../project/projectClient';
 import { StudioRequestError } from '../project/responseError';
@@ -44,9 +44,14 @@ export function parsePublishState(value: unknown): PublishState {
     if (data['github'] !== undefined && data['github'] !== 'skipped') {
       throw new Error('Invalid GitHub publish status');
     }
+    const custom = data['custom'];
+    if (custom !== undefined && custom !== 'github' && custom !== 'script') {
+      throw new Error('Invalid custom publish status');
+    }
     return {
       kind,
       id,
+      ...(custom === undefined ? {} : { custom }),
       sha: string(data['sha'], 64),
       url: string(data['url'], 1000),
       ...(deployment ? { deployment } : {}),
@@ -59,7 +64,11 @@ export function parsePublishState(value: unknown): PublishState {
   }
   throw new Error('Invalid publish status');
 }
-export async function publishProject(signal: AbortSignal, target: PublishTarget = 'all', progress?: (state: PublishState) => void): Promise<PublishState> {
+export async function publishProject(
+  signal: AbortSignal,
+  target: PublishRequestTarget = 'all',
+  progress?: (state: PublishState) => void,
+): Promise<PublishState> {
   const finish = beginOperation();
   try {
     // Never automatically retry a POST: it may already have started a commit.
