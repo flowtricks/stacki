@@ -57,6 +57,11 @@ project.
   deletes the copy (see "Stopping what a crash left running").
 - **Bounds:** 8 frames; 20,000 elements and 6,000,000 characters a snapshot; 32,000,000 characters of snapshots
   together.
+- **Inline styles is the default target** in the Style panel. A plain element, and an instance that renders no style of
+  its own, take the edit on their own `style`. Where an instance's component writes the style it renders
+  (`style={columns} {...rest}` in Lumos's Grid) the chip stays selected and the controls are locked, with why on
+  hover: a `style` on the instance would be a second attribute the browser ignores, and the component's file is
+  every instance's. The person picks a class for a global change, or unlinks the instance.
 - **Moving and resizing:** a drag in a frame moves the element there with the CSS `translate` property, snapping to
   its holder and siblings; the picked element's handles set `width` and `height`. Both are written as the element's
   inline style through the editor's own write (so ⌘Z takes them back), in rem.
@@ -195,7 +200,9 @@ byte-identical afterwards.
      forgets another node's pick (`if (pick !== undefined && … inlineDefault() === 'inline')`), `|| startsInline(style, inline)`
      in `inlineTargetOf`, the `startsInline` function, the `style.kind === 'none'` branch in `useInlineCard`, and the last
      line of `attributePicked`, which becomes `return false;`; in `select`, the `if (inlineDefault() !== 'inline')` around
-     `showBase();`, which stays.
+     `showBase();`, which stays; the `designComponentWriter` function, the `writer` and `writerReason` lines in
+     `useInlineCard`, the `lockedReason` spread on the chip and the `writerReason` read-only branch. The
+     `styleModel.inline.reason.componentWrites` message then has no reader: remove it from every catalog.
    - `src/features/structure/StructureContextMenu.tsx`: the `useDefaultsMenu` import and call, and
      `&& defaultsMenu === 'offered'` on the "Set component defaults" rows; the `useUnlinkMenu` import, `'unlink'` in
      `ContextAction`, `'canChange'` in `ComponentMenuHeader`'s props, its `useUnlinkMenu()` call and the row it shows.

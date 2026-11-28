@@ -76,8 +76,13 @@ export function StyleCard(card: StyleCardProps) {
       />
 
       {/* A style attribute the panel can only show (inlineCode `readonly`) keeps its
-        controls in view, disabled: a fieldset disables every control inside it. */}
-      <fieldset className="embed-editor_controls" disabled={card.inlineCode?.kind === 'readonly'}>
+        controls in view, disabled: a fieldset disables every control inside it, and
+        hovering them says why, since the CSS code section may be closed. */}
+      <fieldset
+        className="embed-editor_controls"
+        disabled={card.inlineCode?.kind === 'readonly'}
+        title={card.inlineCode?.kind === 'readonly' ? card.inlineCode.reason : undefined}
+      >
         {/* Every field's picker previews through this, on the canvas alone: a hover is never a write. */}
         <PreviewPropContext.Provider value={card.previewProp}>
           <StyleSections card={card} openProvenance={provenance.openProvenance} />

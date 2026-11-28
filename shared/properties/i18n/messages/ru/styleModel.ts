@@ -303,6 +303,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'когда {name} задано',
   'styleModel.inline.label': 'Встроенные стили',
   'styleModel.inline.reason.componentUnreadable': 'Не удалось прочитать компонент, который записывает этот стиль.',
+  'styleModel.inline.reason.componentWrites': '{file} задаёт стиль этого элемента, поэтому у этого экземпляра не может быть собственного встроенного стиля.',
   'styleModel.inline.reason.fromProp': 'Ветка берёт значение из свойства, а не из текста, поэтому её нужно изменять в настройках.',
   'styleModel.inline.reason.onlyChain': 'Здесь можно изменять только цепочку условий, каждое из которых даёт текст или шаблон.',
   'styleModel.inline.reason.rendersNothing': 'Этот атрибут style ничего не выводит.',

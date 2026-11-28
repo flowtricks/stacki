@@ -296,6 +296,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': '當已設定 {name} 時',
   'styleModel.inline.label': '行內樣式',
   'styleModel.inline.reason.componentUnreadable': '無法讀取寫入此樣式的元件。',
+  'styleModel.inline.reason.componentWrites': '此元素的樣式由 {file} 寫入，因此這個實例無法設定自己的行內樣式。',
   'styleModel.inline.reason.fromProp': '有分支的值來自 prop 而非文字，因此需在設定中編輯。',
   'styleModel.inline.reason.onlyChain': '只有每個條件皆產生文字或範本的條件鏈才能在此編輯。',
   'styleModel.inline.reason.rendersNothing': '此 style 屬性不會渲染任何內容。',

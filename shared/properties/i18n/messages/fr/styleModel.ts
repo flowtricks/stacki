@@ -299,6 +299,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'quand {name} est défini',
   'styleModel.inline.label': 'Styles en ligne',
   'styleModel.inline.reason.componentUnreadable': 'Le composant qui écrit ce style n’a pas pu être lu.',
+  'styleModel.inline.reason.componentWrites': '{file} écrit le style de cet élément ; cette instance ne peut donc pas avoir son propre style en ligne.',
   'styleModel.inline.reason.fromProp': 'Une branche donne une valeur issue d’une propriété plutôt qu’un texte : elle se modifie dans les Réglages.',
   'styleModel.inline.reason.onlyChain': 'Seule une chaîne de conditions, chacune donnant un texte ou un modèle, peut être modifiée ici.',
   'styleModel.inline.reason.rendersNothing': 'Cet attribut style n’affiche rien.',

@@ -300,6 +300,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'wanneer {name} is ingesteld',
   'styleModel.inline.label': 'Inlinestijlen',
   'styleModel.inline.reason.componentUnreadable': 'De component die deze stijl schrijft, kon niet worden gelezen.',
+  'styleModel.inline.reason.componentWrites': '{file} schrijft de stijl van dit element, dus deze instantie kan geen eigen inline stijl krijgen.',
   'styleModel.inline.reason.fromProp': 'Een vertakking geeft een waarde uit een prop in plaats van tekst, dus ze wordt bewerkt in Instellingen.',
   'styleModel.inline.reason.onlyChain': 'Alleen een keten van voorwaarden die elk een tekst of sjabloon geven, kan hier worden bewerkt.',
   'styleModel.inline.reason.rendersNothing': 'Dit style-attribuut rendert niets.',

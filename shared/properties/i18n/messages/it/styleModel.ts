@@ -299,6 +299,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'quando {name} è impostato',
   'styleModel.inline.label': 'Stili inline',
   'styleModel.inline.reason.componentUnreadable': 'Impossibile leggere il componente che scrive questo stile.',
+  'styleModel.inline.reason.componentWrites': '{file} scrive lo stile di questo elemento, quindi questa istanza non può avere un proprio stile in linea.',
   'styleModel.inline.reason.fromProp': 'Un ramo prende un valore da una prop invece che da un testo, quindi si modifica nelle Impostazioni.',
   'styleModel.inline.reason.onlyChain': 'Qui si può modificare solo una catena di condizioni, ciascuna con un testo o un template.',
   'styleModel.inline.reason.rendersNothing': 'Questo attributo style non produce nulla.',

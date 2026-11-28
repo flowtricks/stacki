@@ -297,6 +297,7 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'כאשר {name} הוגדר',
   'styleModel.inline.label': 'סגנונות inline',
   'styleModel.inline.reason.componentUnreadable': 'לא ניתן לקרוא את הרכיב שכותב את הסגנון הזה.',
+  'styleModel.inline.reason.componentWrites': '{file} כותב את הסגנון של האלמנט הזה, ולכן למופע הזה לא יכול להיות סגנון מוטבע משלו.',
   'styleModel.inline.reason.fromProp': 'ענף נותן ערך מתוך prop ולא טקסט, ולכן הוא נערך בהגדרות.',
   'styleModel.inline.reason.onlyChain': 'רק שרשרת תנאים, שכל אחד מהם נותן טקסט או תבנית, ניתנת לעריכה כאן.',
   'styleModel.inline.reason.rendersNothing': 'מאפיין ה-style הזה לא מציג דבר.',

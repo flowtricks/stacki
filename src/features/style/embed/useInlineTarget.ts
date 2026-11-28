@@ -46,6 +46,7 @@ import { usePseudoTarget } from './editorModel';
 import type { LiveSetProp, SetProp } from './EditorBasics';
 import type { InlineBranchView } from './InlineBranchEditor';
 import type { StyleCardProps } from './QueryForms';
+import { readableStyleCode } from '../model/inlineCode';
 import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 /** The chip as the well draws it. */
@@ -57,6 +58,8 @@ export interface InlineChip {
   readonly onDeselect: () => void;
   /** Remove the attribute; undefined when the panel cannot. */
   readonly onClear: (() => void) | undefined;
+  /** Why the target takes no edit here, said in its tooltip; undefined while the chip's own words hold. */
+  readonly lockedReason?: string | undefined;
 }
 
 /** What the CSS code section shows for the picked chip, in place of the rules. */
@@ -112,20 +115,17 @@ export function chipStyleOf(inline: Pick<InlineState, 'ownStyle' | 'instance'>, 
 /** Whether the chip is in the well, and whether it is the edit target. */
 export function inlineTargetOf(inline: InlineState, style: InlineStyle): { readonly shown: boolean; readonly active: boolean } {
   const shown = inlineChipShown(style, { writable: inline.writable, pseudo: inline.pseudo }) || startsInline(style, inline);
-  const active = shown && inline.nodeId !== undefined && attributePicked(inline, inline.nodeId, style);
+  const active = shown && inline.nodeId !== undefined && attributePicked(inline, inline.nodeId);
   return { shown, active };
 }
 
 // Decided from what is known while rendering, never in an effect: picked after the commit, the default left the
 // rules' own default (useTokenDefault), which runs when the element's classes arrive, to select a class beside it.
-function attributePicked(inline: Pick<InlineState, 'pick'>, nodeId: string, style: InlineStyle): boolean {
+function attributePicked(inline: Pick<InlineState, 'pick'>, nodeId: string): boolean {
   if (inline.pick?.nodeId === nodeId) {
     return inline.pick.target === 'attribute';
   }
-  // Never the default where it takes no edit: an attribute shown as read-only code (a Grid whose component writes
-  // `style={columns}`) disables every control, so starting on it left the whole panel greyed out with nothing
-  // saying why. Only the person's own pick of the chip goes there.
-  return inlineDefault() === 'inline' && style.kind !== 'code';
+  return inlineDefault() === 'inline';
 }
 
 // With inline as the default (model/inlineDefault.ts), the chip stands in the well even before the element has
@@ -274,9 +274,12 @@ export function useInlineCard(
     leave();
     host.setInlineStyle(nodeId, undefined);
   };
+  const writer = designComponentWriter(style, inline);
+  const writerReason = writer === undefined ? undefined : translate('styleModel.inline.reason.componentWrites', { file: writer });
   const chip: InlineChip | undefined = shown
     ? {
         state: style.kind === 'declarations' ? 'editable' : 'code',
+        ...(writerReason === undefined ? {} : { lockedReason: writerReason }),
         active,
         onSelect: select,
         onDeselect: leave,
@@ -320,16 +323,11 @@ export function useInlineCard(
   if (!active) {
     return withChip;
   }
+  if (writerReason !== undefined && (style.kind === 'code' || style.kind === 'branched')) {
+    return readOnlyCard(withChip, style.kind === 'code' ? style.code : readableStyleCode(style.expression), writerReason);
+  }
   if (style.kind === 'code') {
-    // Read-only, with why: the controls stay, disabled (StyleCard.tsx).
-    return {
-      ...withChip,
-      inlineCode: { kind: 'readonly', code: style.code, reason: translateDescribed({ message: style.message, messageRef: style.messageRef }) },
-      setProp: ignoreWrite,
-      onAdd: ignoreAdd,
-      liveSetProp: ignoreLive,
-      clearProp: () => Promise.resolve(),
-    };
+    return readOnlyCard(withChip, style.code, translateDescribed({ message: style.message, messageRef: style.messageRef }));
   }
   const setProp: SetProp = (prop, typed, important) => {
     const value = writtenValue(prop, typed);
@@ -389,6 +387,40 @@ export function useInlineCard(
     writesTo: style.source.kind === 'component' ? translate('styleModel.embed.inline.writesTo', { file: style.source.fileName }) : undefined,
   };
   return { ...withChip, ...writes, inlineCode: { kind: 'branches', view } };
+}
+
+/**
+ * In Design mode, the file name of the component that writes the style an instance renders, else undefined. Such a
+ * style has no place for this instance alone: editing the component's expression changes every instance, and a
+ * `style` on the instance's tag is a second attribute after the component's own (`style={columns} {...rest}`),
+ * which the browser ignores. Design mode starts each selection on this chip, so there the target is locked with
+ * why, never swapped for a class and never a silent write to the component. In the editor the chip is the person's
+ * own pick, and the code state says where its edits go.
+ */
+function designComponentWriter(style: InlineStyle, inline: Pick<InlineState, 'instance' | 'ownStyle'>): string | undefined {
+  if (inlineDefault() !== 'inline' || !inline.instance || inline.ownStyle.kind !== 'none') {
+    return undefined;
+  }
+  // Without the component's file (`componentUnreadable`), the code state's own reason stands.
+  if (style.kind === 'branched' && style.source.kind === 'component') {
+    return style.source.fileName;
+  }
+  if (style.kind !== 'code' || style.reason !== 'expression') {
+    return undefined;
+  }
+  return getHost().selectedComponentPath?.split(/[\\/]/).pop();
+}
+
+// Read-only, with why: the controls stay, disabled, and say it on hover (StyleCard.tsx).
+function readOnlyCard(card: StyleCardProps, code: string, reason: string): StyleCardProps {
+  return {
+    ...card,
+    inlineCode: { kind: 'readonly', code, reason },
+    setProp: ignoreWrite,
+    onAdd: ignoreAdd,
+    liveSetProp: ignoreLive,
+    clearProp: () => Promise.resolve(),
+  };
 }
 
 // The read-only target writes nothing.
