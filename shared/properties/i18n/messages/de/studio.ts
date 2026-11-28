@@ -66,6 +66,7 @@ export const messages = {
   'studio.collab.sessionExpired':
     'Deine Sitzung ist abgelaufen oder der Repository-Zugriff hat sich geändert. Deine lokalen Änderungen bleiben erhalten. Melde dich erneut an.',
   'studio.collab.sourceProtected': 'Der Komponenten-Quelltext ist im Client-Modus geschützt.',
+  'studio.collab.roleCannot': 'Deine Rolle ({role}) darf das nicht. Bitte einen Admin um Zugriff.',
   'studio.collab.takeOver': 'Übernehmen',
   'studio.component.packageReadOnly': 'Paket-Komponenten sind schreibgeschützt. Bearbeite die Instanz-Eigenschaften auf der Seite.',
   'studio.components.createInSource': 'Erstelle Komponentenvorlagen im Quellcode des Projekts.',

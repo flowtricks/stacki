@@ -2,6 +2,7 @@ import { parsePageOrder } from './pageOrder';
 import { COMPONENT_SOURCE_FILE, parseComponentSources } from './componentSources';
 import { validateGuidePreferences } from './guidePreferences';
 import { parsePublishSource } from '../properties/publishConfig';
+import { parseDestinationsSource } from './publishDestinations';
 // Only these reviewed project files are exposed through the metadata transport.
 import { object, optional, record, text, boolean } from '../core/boundary';
 import { parseComponentDefaults, DEFAULT_LIMITS } from './componentDefaults';
@@ -28,6 +29,7 @@ export const METADATA_FILES = {
   instructions: INSTRUCTIONS_FILE,
   pages: '.stacki/pages.json',
   publish: '.stacki/publish.json',
+  publishDestinations: '.stacki/publish-destinations.json',
   roles: ROLES_FILE,
   styles: '.stacki/styles.json',
   variables: VARIABLE_VISIBILITY_FILE,
@@ -44,6 +46,7 @@ export function metadataKind(input: unknown): MetadataKind {
     input === 'components' ||
     input === 'guide' ||
     input === 'publish' ||
+    input === 'publishDestinations' ||
     input === 'pages' ||
     input === 'styles' ||
     input === 'folders' ||
@@ -83,6 +86,10 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
   metadataSource(source);
   if (kind === 'publish') {
     parsePublishSource(source);
+    return;
+  }
+  if (kind === 'publishDestinations') {
+    parseDestinationsSource(source);
     return;
   }
   if (kind === 'roles') {

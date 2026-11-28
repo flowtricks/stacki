@@ -41,6 +41,7 @@ export const INCOMING_METADATA = {
   pages: { file: '.stacki/pages.json', sync: 'live' },
   // Publish settings, read on every publish and availability check (publish.ts).
   publish: { file: '.stacki/publish.json', sync: 'live' },
+  publishDestinations: { file: '.stacki/publish-destinations.json', sync: 'live' },
   // Project roles, read on every access check (roles/serverAccess.ts requestRole).
   // Until it syncs, a workspace created before the file existed runs everyone as admin.
   roles: { file: '.stacki/roles.json', sync: 'live' },

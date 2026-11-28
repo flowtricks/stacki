@@ -19,10 +19,12 @@ import {
 } from '../../../shared/properties/projectRoles';
 import { FeatureIcon } from '../featureIcons';
 import MoreMenu from '../../ui/MoreMenu';
-import { ChevronRightIcon, CopyIcon, ElementComponentIcon, GearIcon, PinIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CopyIcon, ElementComponentIcon, GearIcon, PencilIcon, PinIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { buildComponentTree } from './componentTree';
 import { permissionCounts, type RoleSection } from './roleDetailModel';
+import { editingSummary } from './roleEditingModel';
+import type { EditorPart } from '../../../shared/properties/projectRoles';
 import type { ComponentRule, ComponentState, ComponentTarget } from '../../../shared/properties/componentAccess';
 
 export interface RoleCardActions {
@@ -39,6 +41,8 @@ export interface RoleCardActions {
   readonly setAppAccess: (appId: string, change: 'grant' | 'withdraw') => void;
   /** Turns one app permission, or all of an app's, on or off. */
   readonly setAppPermissions: (appId: string, permissionIds: readonly string[], change: 'grant' | 'withdraw') => void;
+  /** Switches editing options on (`grant`) or off (`withdraw`). */
+  readonly setEditing: (parts: readonly EditorPart[], change: 'grant' | 'withdraw') => void;
   /** Pins an app to the left rail for the role, or unpins it. */
   readonly setPinnedApp: (appId: string, change: 'pin' | 'unpin') => void;
   /** Puts the role's pins in this order, top to bottom. */
@@ -87,9 +91,16 @@ export function RoleCard(props: {
       label: translate('settings.roles.components.title'),
       summary: translate('settings.roles.summary.ofTotal', { count: tree.visible, total: tree.total }),
     },
+    // Admin's access and editing are fixed, so it has neither row.
     ...(role.id === ADMIN_ROLE_ID
       ? []
       : [
+          {
+            section: 'editing' as const,
+            icon: <PencilIcon size={14} />,
+            label: translate('roles.editing.title'),
+            summary: editingText(editingSummary(role), translate),
+          },
           {
             section: 'permissions' as const,
             icon: <GearIcon size={14} />,
@@ -135,6 +146,12 @@ export function RoleCard(props: {
       </ul>
     </section>
   );
+}
+
+function editingText(summary: ReturnType<typeof editingSummary>, translate: ReturnType<typeof useTranslate>): string {
+  return summary.kind === 'readOnly'
+    ? translate('roles.editing.readOnly')
+    : translate('settings.roles.summary.ofTotal', { count: summary.on, total: summary.total });
 }
 
 interface SummaryRow {

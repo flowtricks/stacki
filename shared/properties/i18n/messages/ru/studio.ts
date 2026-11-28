@@ -64,6 +64,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'Сеанс изменился. Выберите элемент снова.',
   'studio.collab.sessionExpired': 'Сеанс истёк или изменился доступ к репозиторию. Локальные правки сохранены. Войдите снова.',
   'studio.collab.sourceProtected': 'В режиме клиента исходный код компонентов защищён.',
+  'studio.collab.roleCannot': 'Вашей роли ({role}) это недоступно. Попросите доступ у администратора.',
   'studio.collab.takeOver': 'Взять на себя',
   'studio.component.packageReadOnly': 'Компоненты из пакетов доступны только для чтения. Меняйте свойства экземпляра на странице.',
   'studio.components.createInSource': 'Создавайте шаблоны компонентов в исходном коде проекта.',

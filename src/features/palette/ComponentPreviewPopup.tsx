@@ -6,6 +6,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { TrailingSlash } from '../../editor/pageState';
 import { componentPreviewURL, prettyComponentName, type ComponentPreviewGesture, type ComponentPreviewMessage } from './paletteModel';
 import { useResolvedPreviewURL, usePreviewGestures, usePreviewMessages } from './previewSource';
+import { STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 
 interface PreviewTarget {
   readonly url: string;
@@ -191,6 +192,7 @@ export function ComponentPreviewFrame({
       tabIndex={surface === 'card' ? -1 : undefined}
       // Scripts run and the dev server's modules load (same origin); forms, popups and top navigation do not.
       sandbox={surface === 'card' ? 'allow-scripts allow-same-origin' : undefined}
+      {...STILL_PAGE_FRAME}
       style={{ opacity: visible ? 1 : 0 }}
       aria-hidden={surface === 'card' ? true : !visible}
       onLoad={() => setPageLoaded(true)}

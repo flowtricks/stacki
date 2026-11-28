@@ -31,6 +31,11 @@
 // and folder paths, so every component is enabled for every role until a rule says
 // otherwise. These rules narrow what a role may ADD from the palette and never what
 // it may open, so admin keeps its access to Settings however its components are hidden.
+//
+// Each role but admin may switch editing options off (`editorOff`, at the end of
+// this file): the right panel, the navigator, the canvas bar, and what can be done
+// on the page. `can()` withholds every permission that would reach a switched-off
+// option another way.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
@@ -189,6 +194,8 @@ export interface RoleView {
   readonly pinnedApps: readonly string[];
   /** Components hidden from, or re-shown to, this role's insert surfaces; admin's too. Empty shows every component. */
   readonly componentRules: readonly ComponentRule[];
+  /** The editing options switched off, as they apply (projectRoles.ts `effectiveEditorOff`); empty for admin. */
+  readonly editorOff: ReadonlySet<EditorPart>;
 }
 
 /** Whether `role` may use `feature`. Admin is always allowed everything. */
@@ -199,6 +206,9 @@ export function can(role: RoleView, feature: AccessFeature): boolean {
     return true;
   }
   if (feature === 'settings:roles' || feature === 'cli:roles') {
+    return false;
+  }
+  if (editorWithholds(role.editorOff, feature)) {
     return false;
   }
   if (isAppFeature(feature)) {
@@ -293,6 +303,7 @@ export const ADMIN_VIEW: RoleView = {
   appPermissions: {},
   pinnedApps: [],
   componentRules: [],
+  editorOff: new Set(),
 };
 
 export interface ProjectRole {
@@ -308,6 +319,8 @@ export interface ProjectRole {
   readonly pinnedApps: readonly string[];
   /** Hidden and re-shown components, as the file stores them; admin may have rules too. */
   readonly componentRules: readonly ComponentRule[];
+  /** Editing options switched off, as the file stores them. Always empty for admin, which has every one. */
+  readonly editorOff: readonly EditorPart[];
 }
 
 export interface ProjectRoles {
@@ -323,8 +336,17 @@ export const DEFAULT_PROJECT_ROLES: ProjectRoles = {
   version: 1,
   defaultRole: ADMIN_ROLE_ID,
   roles: [
-    { id: ADMIN_ROLE_ID, name: 'Admin', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [] },
-    { id: CLIENT_ROLE_ID, name: 'Client', members: [], access: CLIENT_DEFAULT_ACCESS, appPermissions: {}, pinnedApps: [], componentRules: [] },
+    { id: ADMIN_ROLE_ID, name: 'Admin', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] },
+    {
+      id: CLIENT_ROLE_ID,
+      name: 'Client',
+      members: [],
+      access: CLIENT_DEFAULT_ACCESS,
+      appPermissions: {},
+      pinnedApps: [],
+      componentRules: [],
+      editorOff: [],
+    },
   ],
 };
 
@@ -485,7 +507,7 @@ export function parseProjectRolesSource(source: string): ProjectRoles {
 
 /**
  * Parses the roles file. Shape: `{ version: 1, defaultRole?, roles: [{ id, name?,
- * members?, access?, appPermissions?, pinnedApps?, componentRules? }] }`. Admin and client are always present in the result,
+ * members?, access?, appPermissions?, pinnedApps?, componentRules?, editorOff? }] }`. Admin and client are always present in the result,
  * whether or not the file lists them. Admin must name a member as soon as any
  * other role does; a file that names nobody at all is unclaimed (`rolesClaimed`).
  */
@@ -566,7 +588,8 @@ export function serializeProjectRoles(roles: ProjectRoles): string {
         return { id: role.id, name: role.name, members: role.members, ...pinned, ...components };
       }
       const stored = Object.keys(role.appPermissions).length > 0 ? { appPermissions: role.appPermissions } : {};
-      return { id: role.id, name: role.name, members: role.members, access: role.access, ...stored, ...pinned, ...components };
+      const editor = role.editorOff.length > 0 ? { editorOff: role.editorOff } : {};
+      return { id: role.id, name: role.name, members: role.members, access: role.access, ...stored, ...pinned, ...components, ...editor };
     }),
   };
   const source = `${JSON.stringify(body, undefined, 2)}\n`;
@@ -603,11 +626,23 @@ export function roleView(role: ProjectRole): RoleView {
     appPermissions: role.appPermissions,
     pinnedApps: role.pinnedApps,
     componentRules: role.componentRules,
+    editorOff: effectiveEditorOff(editorOffOf(role)),
   };
   assert(!view.features.has('settings:roles'), 'No role but admin edits roles');
   assert(!view.features.has('cli:roles'), 'No role but admin edits roles from the command line');
   assert(!view.isAdmin, 'Only the admin role is admin');
   return view;
+}
+
+/**
+ * The options a role stores, plus one its permissions settle: a role with neither
+ * right panel permission never changed pictures, so once dragging and text are off
+ * too it is read only. Nothing is added to a role that switched neither off.
+ */
+function editorOffOf(role: ProjectRole): readonly EditorPart[] {
+  const rightPanel = role.access.includes('panel:style') || role.access.includes('panel:settings');
+  const settled = !rightPanel && role.editorOff.includes('drag') && role.editorOff.includes('text');
+  return settled ? [...role.editorOff, 'images'] : role.editorOff;
 }
 
 /**
@@ -765,14 +800,15 @@ function parseRole(input: unknown): ProjectRole {
   if (id === ADMIN_ROLE_ID) {
     // Admin has everything: an access list or app permissions on it are ignored, never a restriction.
     // Hidden components are not access: they only narrow the insert palette, so admin keeps them.
-    return { id, name: 'Admin', members, access: [], appPermissions: {}, pinnedApps, componentRules };
+    return { id, name: 'Admin', members, access: [], appPermissions: {}, pinnedApps, componentRules, editorOff: [] };
   }
   const access = value['access'] === undefined && id === CLIENT_ROLE_ID ? CLIENT_DEFAULT_ACCESS : parseAccess(value['access']);
   assert(!access.includes('settings:roles'), 'parseAccess refuses the roles tab');
   assert(!access.includes('cli:roles'), 'parseAccess refuses the command line roles edit');
   // Client's name is the project's to choose, like a custom role's; only its
   // id (`client`) carries meaning to grants, the default role and the servers.
-  return { id, name, members, access, appPermissions: parseAppPermissionGrants(value['appPermissions']), pinnedApps, componentRules };
+  const appPermissions = parseAppPermissionGrants(value['appPermissions']);
+  return { id, name, members, access, appPermissions, pinnedApps, componentRules, editorOff: parseEditorOff(value['editorOff']) };
 }
 
 /** `pinnedApps: ["<appId>", …]`: app ids, at most `pinnedAppsMax`, read once each. Absent is none. */
@@ -947,6 +983,7 @@ function withBuiltInRoles(parsed: readonly ProjectRole[]): readonly ProjectRole[
     appPermissions: {},
     pinnedApps: [],
     componentRules: [],
+    editorOff: [],
   };
   const client = parsed.find((role) => role.id === CLIENT_ROLE_ID) ?? {
     id: CLIENT_ROLE_ID,
@@ -956,6 +993,7 @@ function withBuiltInRoles(parsed: readonly ProjectRole[]): readonly ProjectRole[
     appPermissions: {},
     pinnedApps: [],
     componentRules: [],
+    editorOff: [],
   };
   const custom = parsed.filter((role) => role.id !== ADMIN_ROLE_ID && role.id !== CLIENT_ROLE_ID);
   for (const id of [ADMIN_ROLE_ID, CLIENT_ROLE_ID]) {
@@ -991,4 +1029,168 @@ function assertUnique(roles: readonly ProjectRole[]): void {
     }
   }
   assert(ids.size === roles.length, 'Every role id is unique');
+}
+
+// ---- Editing options --------------------------------------------------------
+//
+// Which parts of the editor around the page, and which gestures on the page, a
+// role has switched off. Stored as a deny list, `editorOff`, so a role without it
+// keeps exactly what its permissions already give: an option can only take
+// something away. The list fails closed: a value this version cannot read switches
+// everything off for that role, because a restriction that cannot be understood
+// must not be dropped.
+//
+// Switching something off also withholds every permission that would reach the
+// same thing another way (`editorWithholds`): a role without the Style and
+// Settings panel must not reach styles through Code, Selectors, Variables, Git or
+// the AI chat. `can()` applies this, so every gate that already asks about a
+// permission, the Studio server's included, follows it.
+
+export const EDITOR_PARTS = [
+  // Around the page.
+  /** The right panel: Style and Settings. */
+  'sidePanel',
+  /** The element tree, with its rail button and shortcut. */
+  'navigator',
+  /** The bar over the page: breakpoint buttons, breadcrumbs, size, column guide and interact mode. */
+  'canvasBar',
+  // On the page.
+  /** Drag to reorder. */
+  'drag',
+  /** Change the page's text. */
+  'text',
+  /** Change the page's images and their alt text. */
+  'images',
+  /** Add, paste, duplicate and delete elements. */
+  'elements',
+] as const;
+export type EditorPart = (typeof EDITOR_PARTS)[number];
+
+/** The parts drawn around the page; the rest are things done on the page. */
+export const CHROME_PARTS = ['sidePanel', 'navigator', 'canvasBar'] as const satisfies readonly EditorPart[];
+export const PAGE_PARTS = ['drag', 'text', 'images', 'elements'] as const satisfies readonly EditorPart[];
+
+// With all three off the role is read only, and adding or deleting elements goes with them.
+const CORE_PAGE_PARTS = ['drag', 'text', 'images'] as const satisfies readonly EditorPart[];
+
+/**
+ * A role's stored `editorOff`: absent is none. Anything but a list of known parts,
+ * a part from a newer version included, reads as every part off (fail closed).
+ */
+export function parseEditorOff(input: unknown): readonly EditorPart[] {
+  if (input === undefined) {
+    return [];
+  }
+  const items = toArray(input);
+  if (items === undefined) {
+    return EDITOR_PARTS;
+  }
+  if (items.length > EDITOR_PARTS.length) {
+    return EDITOR_PARTS;
+  }
+  if (!items.every((item) => EDITOR_PARTS.some((part) => part === item))) {
+    return EDITOR_PARTS;
+  }
+  const parsed = EDITOR_PARTS.filter((part) => items.includes(part));
+  assert(parsed.length <= items.length, 'Reading editing options never adds one');
+  return parsed;
+}
+
+/** What is really off: the stored parts, plus adding elements when dragging, text and images are all off. */
+export function effectiveEditorOff(stored: readonly EditorPart[]): ReadonlySet<EditorPart> {
+  assert(stored.length <= EDITOR_PARTS.length, 'Editing options are bounded');
+  const off = new Set(stored);
+  if (CORE_PAGE_PARTS.every((part) => off.has(part))) {
+    off.add('elements');
+  }
+  assert(off.size >= new Set(stored).size, 'Nothing stored is switched back on');
+  return off;
+}
+
+/** Nothing on the page can be changed. */
+export function readOnlyEditor(off: ReadonlySet<EditorPart>): boolean {
+  return CORE_PAGE_PARTS.every((part) => off.has(part));
+}
+
+/**
+ * Whether the options limit what may be written, rather than only what is drawn.
+ * The navigator and the canvas bar are views: hiding them alone limits no write.
+ */
+export function limitsEditing(off: ReadonlySet<EditorPart>): boolean {
+  return off.has('sidePanel') || PAGE_PARTS.some((part) => off.has(part));
+}
+
+// Routes that rewrite files with content nothing can check against the options:
+// raw code, Git (restore, switch, merge), the AI chat, new pages and component
+// source. A role with any limit on editing has none of them.
+const WITHHELD_WHEN_LIMITED: readonly string[] = [
+  'code:edit',
+  'panel:code',
+  'panel:ai',
+  'panel:history',
+  'panel:properties',
+  'panel:audits',
+  'component:create',
+  'component:edit',
+  'page:create',
+];
+
+// Everything else that styles the site.
+const WITHHELD_WITHOUT_SIDE_PANEL: readonly string[] = [
+  'panel:style',
+  'panel:settings',
+  'panel:selectors',
+  'panel:variables',
+  'settings:breakpoints',
+  'cli:breakpoints',
+];
+
+// A read only role changes nothing in the project, and publishes nothing.
+const WITHHELD_WHEN_READ_ONLY: readonly string[] = [
+  'page:delete',
+  'page:rename',
+  'publish',
+  'instructions:edit',
+  'settings:folders',
+  'settings:cms',
+  'settings:studio',
+  'settings:instructions',
+  'settings:audits',
+  'marketplace:install',
+  'marketplace:publish',
+  'apps:share',
+  'cli:config',
+  'cli:guides',
+  'cli:breakpoints',
+  'cli:folders',
+  'cli:components',
+  'cli:apps',
+];
+
+/** Whether the editing options take `feature` away, whatever the role's permissions say. */
+export function editorWithholds(off: ReadonlySet<EditorPart>, feature: string): boolean {
+  assert(feature.length > 0, 'A feature id is never empty');
+  assert(off.size <= EDITOR_PARTS.length, 'Editing options are bounded');
+  if (off.has('navigator') && feature === 'panel:navigator') {
+    return true;
+  }
+  if (off.has('sidePanel') && WITHHELD_WITHOUT_SIDE_PANEL.includes(feature)) {
+    return true;
+  }
+  if (limitsEditing(off) && WITHHELD_WHEN_LIMITED.includes(feature)) {
+    return true;
+  }
+  if (readOnlyEditor(off) && WITHHELD_WHEN_READ_ONLY.includes(feature)) {
+    return true;
+  }
+  // CMS entries hold both words and pictures, and the page shows them: changing either needs both.
+  if (feature === 'panel:cms' && (off.has('text') || off.has('images'))) {
+    return true;
+  }
+  // Replacing or deleting a file in Assets changes the pictures on the page.
+  if (feature === 'panel:assets' && off.has('images')) {
+    return true;
+  }
+  // The Add elements and Components panels are ways to add an element.
+  return off.has('elements') && (feature === 'panel:elements' || feature === 'panel:components');
 }

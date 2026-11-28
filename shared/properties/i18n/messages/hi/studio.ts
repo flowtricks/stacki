@@ -64,6 +64,7 @@ export const messages = {
   'studio.collab.sessionChanged': 'सत्र बदल गया। एलिमेंट फिर से चुनें।',
   'studio.collab.sessionExpired': 'आपका सत्र समाप्त हो गया या रिपॉज़िटरी की पहुँच बदल गई। आपके लोकल संपादन सुरक्षित हैं। फिर से साइन इन करें।',
   'studio.collab.sourceProtected': 'क्लाइंट मोड में कंपोनेंट सोर्स सुरक्षित है।',
+  'studio.collab.roleCannot': 'आपकी भूमिका ({role}) यह नहीं कर सकती। एडमिन से अनुमति माँगें।',
   'studio.collab.takeOver': 'नियंत्रण लें',
   'studio.component.packageReadOnly': 'पैकेज कंपोनेंट केवल-पढ़ने योग्य हैं। इंस्टेंस की प्रॉपर्टी पेज पर संपादित करें।',
   'studio.components.createInSource': 'कंपोनेंट टेम्पलेट प्रोजेक्ट सोर्स में बनाएँ।',

@@ -13,28 +13,22 @@
 // item and an item whose words another item repeats gets none: the frame could
 // not tell which of the two a double click is on, and an edit is never guessed.
 
-import type { CanvasBoundText, CanvasSourceNode, CanvasTextEdit } from '../../features/preview/canvasTextSource';
+import type { CanvasBoundText, CanvasTextEdit } from '../../features/preview/canvasTextSource';
 import { canvasTextTarget } from '../../features/preview/canvasTextSource';
 import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
 import { requestCanvasTextRefresh } from '../../features/preview/canvasTextRefresh';
 import { CANVAS_TEXT_LIMIT } from '../../../shared/properties/canvasText';
 import { assert } from '../../../shared/core/assert';
-import { LIMITS } from '../../../shared/core/limits';
 import {
-  BOUND_TEXT_LIMITS,
-  boundLoopOf,
-  expressionInLoops,
-  parseBoundPath,
-  resolveBoundList,
   resolveBoundText,
   rewriteBoundText,
   type BoundTextBlock,
   type BoundTextEnvironment,
-  type BoundTextLoop,
   type BoundTextModule,
   type BoundTextSite,
 } from '../../editor/boundText';
 import { canvasTypedText } from '../../ui/canvasTextDraft';
+import { TARGETS_MAX, refused, resolvePageTexts, type Resolved } from './canvasBoundSites';
 import { reportActionToast } from '../../ui/errorNotices';
 
 /** What the host gives the canvas to follow and write data modules: Desktop over IPC, Studio from its dev server. */
@@ -59,25 +53,7 @@ export interface BoundTextWords {
   readonly sourceChanged: string;
 }
 
-/** Candidate expressions read per page, and the targets all of them yield. */
-const CANDIDATES_MAX = 200;
-const TARGETS_MAX = 400;
-
-interface Candidate {
-  readonly node: CanvasSourceNode;
-  readonly parent: CanvasSourceNode;
-  readonly expression: string;
-  readonly loops: readonly { readonly item: string; readonly list: string }[];
-}
-
-interface Resolved {
-  readonly candidate: Candidate;
-  /** The loop item's key suffix: `~2` or `~1~0`; empty outside a loop. */
-  readonly suffix: string;
-  /** What the source holds for this text, as a path: `cards[2].title`. */
-  readonly path: string;
-  readonly outcome: { readonly ok: true; readonly site: BoundTextSite } | { readonly ok: false; readonly block: BoundTextBlock };
-}
+const siteKey = (site: BoundTextSite): string => `${site.file}\u0000${site.start}`;
 
 export async function canvasBoundEdits(document: CanvasTextDocument, host: BoundTextHost, words: BoundTextWords): Promise<CanvasTextEdit[]> {
   // Every text of the page is traced against the same files: each is read once, not once per text.
@@ -91,13 +67,7 @@ export async function canvasBoundEdits(document: CanvasTextDocument, host: Bound
       return known;
     },
   };
-  const resolved: Resolved[] = [];
-  for (const candidate of candidatesOf(document.source, document.nodes).slice(0, CANDIDATES_MAX)) {
-    resolved.push(...(await resolveCandidate(environment, candidate, TARGETS_MAX - resolved.length)));
-    if (resolved.length >= TARGETS_MAX) {
-      break;
-    }
-  }
+  const resolved = await resolvePageTexts(environment, document.nodes);
   const uses = new Map<string, number>();
   for (const entry of resolved) {
     if (entry.outcome.ok) {
@@ -114,88 +84,6 @@ export async function canvasBoundEdits(document: CanvasTextDocument, host: Bound
   }
   assert(edits.length <= TARGETS_MAX, 'Bound text stays within its target bound');
   return edits;
-}
-
-const NO_LOOPS: Candidate['loops'] = [];
-const siteKey = (site: BoundTextSite): string => `${site.file}\u0000${site.start}`;
-
-// Expression nodes that print one path, each with the loops around it. A text
-// inside a loop whose head is code the walk cannot read is left alone.
-function candidatesOf(source: string, nodes: readonly CanvasSourceNode[]): Candidate[] {
-  const found: Candidate[] = [];
-  const stack: { readonly node: CanvasSourceNode; readonly parent: CanvasSourceNode | undefined; readonly loops: Candidate['loops'] | undefined }[] = nodes
-    .map((node) => ({ node, parent: undefined, loops: NO_LOOPS }))
-    .reverse();
-  for (let visited = 0; stack.length > 0 && visited < 20_000; visited++) {
-    const entry = stack.pop();
-    assert(entry !== undefined, 'The candidate walk has an entry');
-    const { node, parent, loops } = entry;
-    const own = node.kind === 'map' ? boundLoopOf(node.head ?? '') : undefined;
-    const inside = loops === undefined || (node.kind === 'map' && own === undefined) ? undefined : own === undefined ? loops : [...loops, own];
-    if (node.kind === 'expr' && loops !== undefined && parent !== undefined && (parent.kind === 'element' || parent.kind === 'component')) {
-      const expression = node.start === undefined || node.end === undefined ? '' : source.slice(node.start + 1, node.end - 1).trim();
-      if (parseBoundPath(expression) !== undefined) {
-        found.push({ node, parent, expression, loops });
-      }
-    }
-    for (const child of [...(node.children ?? [])].reverse()) {
-      stack.push({ node: child, parent: node, loops: inside });
-    }
-  }
-  return found;
-}
-
-async function resolveCandidate(environment: BoundTextEnvironment, candidate: Candidate, budget: number): Promise<Resolved[]> {
-  const parsed = parseBoundPath(candidate.expression);
-  const usesLoop = parsed !== undefined && candidate.loops.some((loop) => loop.item === parsed.root);
-  if (candidate.loops.length > 0 && !usesLoop) {
-    // The same words in every pass: the canvas could not say which copy was meant.
-    return [refused(candidate, { reason: 'duplicate', file: '', detail: 'Every pass of the loop prints the same words.' })];
-  }
-  const combinations: BoundTextLoop[][] = [];
-  const failures: { readonly block: BoundTextBlock | undefined }[] = [];
-  await enumerate(environment, candidate.loops, [], combinations, Math.min(budget, BOUND_TEXT_LIMITS.itemsMax), failures);
-  const results: Resolved[] = [];
-  for (const combination of combinations) {
-    const path = expressionInLoops(candidate.expression, combination);
-    const suffix = combination.map((loop) => `~${loop.index}`).join('');
-    results.push({ candidate, suffix, path, outcome: await resolveBoundText(environment, path) });
-  }
-  const editable = results.filter((entry) => entry.outcome.ok);
-  const first = results.find((entry) => !entry.outcome.ok)?.outcome;
-  // Every text that is not editable says why when it is double-clicked, one refusal per text however many items fail.
-  const block = first !== undefined && !first.ok ? first.block : failures[0]?.block;
-  return [...editable, ...(block === undefined || (editable.length > 0 && results.length === editable.length) ? [] : [refused(candidate, block)])];
-}
-
-function refused(candidate: Candidate, block: BoundTextBlock): Resolved {
-  return { candidate, suffix: '', path: candidate.expression, outcome: { ok: false, block } };
-}
-
-// The index combinations of the loops around a text, outermost first, in the order the page renders them. A list that cannot be counted says why in `failure`.
-async function enumerate(
-  environment: BoundTextEnvironment,
-  loops: Candidate['loops'],
-  chosen: readonly BoundTextLoop[],
-  into: BoundTextLoop[][],
-  budget: number,
-  failure: { readonly block: BoundTextBlock | undefined }[],
-): Promise<void> {
-  const depth = chosen.length;
-  assert(depth <= LIMITS.treeDepthMax, 'Loops nest within the tree depth bound');
-  const loop = loops[depth];
-  if (loop === undefined) {
-    into.push([...chosen]);
-    return;
-  }
-  const counted = await resolveBoundList(environment, expressionInLoops(loop.list, chosen));
-  if (!counted.ok) {
-    failure.push({ block: counted.block });
-    return;
-  }
-  for (let index = 0; index < counted.count && into.length < budget; index++) {
-    await enumerate(environment, loops, [...chosen, { item: loop.item, list: loop.list, index }], into, budget, failure);
-  }
 }
 
 // Items that spell the same words as another of the same text, within one candidate, are dropped: the canvas finds a text by its words. A text with some dropped is refused once, by name.

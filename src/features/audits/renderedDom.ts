@@ -19,6 +19,7 @@ import {
   type RenderedSource,
   type RenderedStyle,
 } from '../../../shared/page/auditRendered';
+import { hidePageRootScrollbar, STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 
 const FRAME_LOAD_MS_MAX = 6_000;
 const STYLED_ELEMENTS_MAX = 6_000;
@@ -174,6 +175,7 @@ export async function styledTree(html: string, pageFile: string, baseURL: string
   // allow-same-origin without allow-scripts: the page's styles load, its code never runs.
   frame.setAttribute('sandbox', 'allow-same-origin');
   frame.setAttribute('aria-hidden', 'true');
+  frame.setAttribute('scrolling', STILL_PAGE_FRAME.scrolling);
   frame.tabIndex = -1;
   Object.assign(frame.style, { position: 'fixed', left: '-20000px', top: '0', width: '1280px', height: '900px', opacity: '0', pointerEvents: 'none' });
   const base = `<base href="${baseURL.replace(/"/g, '&quot;')}">`;
@@ -192,6 +194,7 @@ export async function styledTree(html: string, pageFile: string, baseURL: string
     if (inner === null || view === null) {
       return parsedTree(html, pageFile);
     }
+    hidePageRootScrollbar(inner);
     let styled = 0;
     return renderedTree(inner, pageFile, (element) => {
       styled += 1;

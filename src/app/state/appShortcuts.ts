@@ -4,6 +4,7 @@
 
 import { stepRichHistory } from '../../editor/canvasTextFocus';
 import { PREVIEW_SHORTCUT } from '../railShortcuts';
+import { editingOffFor } from '../../lib/editorGate';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -117,6 +118,11 @@ export function useInsertItem(
     (item: InsertChoice, aimed: InsertTarget) => {
       editTrace.begin(`insert ${item.type}`);
       setInsertOpen(false);
+      const refusedFor = editingOffFor('elements');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;

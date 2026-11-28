@@ -11,17 +11,18 @@
 // Method: a real Electron window (jsdom has no layout and draws no scrollbars) serves a host page over localhost with
 // three iframes, the built preload running in each as in the app: a 320px phone frame and a 1440px desktop frame at
 // `#avb-design`, as the canvas loads them, later told to hide the bar (the desktop one with an older app's
-// `chromiumFromPx: 1023`, now ignored), and a 1440px control frame without the mark that is told nothing. The pages are taller than their frames, so each scrolls. A computer that
-// draws overlay scrollbars (macOS with a trackpad) gives the control frame no bar at all; the checks compare a frame's
-// layout width against its own viewport, so they hold on either kind of computer and still catch a frame that loses
-// width to a bar. Every wait is a bounded poll for what the frames report (test/helpers/waitFor.js), never a fixed
-// pause.
+// `chromiumFromPx: 1023`, now ignored), and a 1440px control frame without the mark that is told nothing. The pages are
+// taller than their frames, so each scrolls. The probe draws classic scrollbars whatever the computer is set to
+// (test/helpers/classicScrollbars.js), and the control frame must lose width: on overlay scrollbars (macOS with a
+// trackpad) the checks would pass with no rule at all. Every wait is a bounded poll for what the frames report
+// (test/helpers/waitFor.js), never a fixed pause.
 
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
 const { repoPath } = require('../../helpers/sources.js');
+const { classicScrollbarArguments } = require('../../helpers/classicScrollbars.js');
 
 const failures = [];
 let checked = 0;
@@ -90,6 +91,7 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
     probe,
     `const { app, BrowserWindow, ipcMain } = require('electron');
      app.disableHardwareAcceleration();
+     app.setPath('userData', ${JSON.stringify(path.join(probeDirectory, 'user-data'))});
      // The preload's top frame asks main for the boot seed synchronously (electron/boot/bootChannels.ts).
      ipcMain.on('boot:read', (event) => {
        event.returnValue = undefined;
@@ -124,7 +126,7 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
   delete environment.ELECTRON_RUN_AS_NODE;
   // Asynchronous, so this process keeps serving the pages the probe loads.
   const run = await new Promise((resolve) => {
-    const child = spawn(electronPath, [probe], { env: environment });
+    const child = spawn(electronPath, [probe, '--use-mock-keychain', ...classicScrollbarArguments()], { env: environment });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
@@ -151,6 +153,7 @@ const tell = (id, message) => `document.getElementById(${JSON.stringify(id)}).co
     );
     check('and the 320px phone frame lays its page out at 320px from the start', before.phone.clientWidth === 320, detail(before.phone));
     check('a frame that is not the canvas’s says Chromium draws its bar', before.control.report.chromium === true, detail(before.control));
+    check('classic scrollbars are on: the untold frame loses width to its bar', told.control.clientWidth < told.control.innerWidth, detail(told.control));
     check('a 320px phone frame lays its page out at 320px', told.phone.innerWidth === 320 && told.phone.clientWidth === 320, detail(told.phone));
     check('and says the canvas draws its bar', told.phone.report.chromium === false, detail(told.phone));
     check(

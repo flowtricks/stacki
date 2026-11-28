@@ -10,6 +10,7 @@ import { isCanvasPage } from '../../vendor/stacki/shared/properties/defaultsCanv
 import { DefaultsCanvasBar } from '../../vendor/stacki/src/features/componentDefaults/DefaultsCanvasBar';
 import { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsWorkspace } from '../features/cms/CmsWorkspace';
+import { StudioCanvasImage } from '../features/preview/StudioCanvasImage';
 import { QuickInsert } from '../features/components/QuickInsert';
 import type { Peer } from '../features/collaboration/presence';
 import type { FollowTarget } from '../features/collaboration/useCollaborators';
@@ -72,8 +73,8 @@ export function Editor(props: EditorProps) {
     props.file,
     props.report,
     () => {
-      // Phone panels cover the canvas. Selection must not open an overlay.
-      if (!isMobileEditor()) {
+      // Phone panels cover the canvas. Selection must not open an overlay. Without the Navigator there is nothing to show.
+      if (!isMobileEditor() && !props.view.studioRole.editorOff.has('navigator')) {
         // Code and Apps keep their panel: a running app reads the selection while visible.
         setPanel((current) => (current === 'code' || current === 'apps' ? current : 'navigator'));
       }
@@ -90,7 +91,7 @@ export function Editor(props: EditorProps) {
   const defaultsCanvas = useStudioDefaultsCanvas(props, model);
   const scopedModel = defaultsSelection(model, defaultsCanvas);
   const titledProps = editorTitleProps(props, model);
-  const layout = useStudioLayout(panel, !model.collection, setMobileSettings);
+  const layout = useStudioLayout(panel, !model.collection && hasInspector(props.view.studioRole), setMobileSettings);
   if (session.paused) {
     return <PausedEditor resume={session.resume} />;
   }
@@ -128,6 +129,10 @@ export function Editor(props: EditorProps) {
       </div>
     </CodeAccess.Provider>
   );
+}
+// The right panel exists while the role has either of its tabs: Style or Settings.
+function hasInspector(role: ReturnType<typeof useEditorView>['studioRole']): boolean {
+  return can(role, 'panel:style') || can(role, 'panel:settings');
 }
 function editorTitleProps(props: EditorProps, model: ReturnType<typeof useEditor>): EditorProps {
   return { ...props, project: livePageTitles(props.project, props.file, model) };
@@ -257,7 +262,7 @@ function EditorContent({
           base: canvasRouteBase(model.preview.url, canvasRouteFor(props.previewFile) ?? routeFor(props.previewFile)),
           routes: props.project.pages.map(routeFor),
         }}
-        inspector={mobile ? { open: mobileSettings && !props.view.pick, toggle: toggleInspector } : undefined}
+        inspector={mobile && hasInspector(props.view.studioRole) ? { open: mobileSettings && !props.view.pick, toggle: toggleInspector } : undefined}
       />
       <Inspector
         props={props}
@@ -267,6 +272,7 @@ function EditorContent({
         visible={mobileSettings && !props.view.pick}
         close={() => setMobileSettings(false)}
       />
+      <StudioCanvasImage props={props} model={model} role={props.view.studioRole} />
       <CmsWorkspace props={props} document={model.document} />
       {can(props.view.studioRole, 'panel:variables') && <VariablesWorkspace props={props} document={model.document} />}
       {can(props.view.studioRole, 'code:edit') && <CodePopup editor={model.codeWindow} />}
@@ -274,7 +280,13 @@ function EditorContent({
         key={props.file}
         model={model}
         project={props.project}
-        enabled={!model.collection && !(props.view.panel === 'collections' && props.view.cms) && props.view.panel !== 'variables' && !props.view.pick}
+        enabled={
+          !props.view.studioRole.editorOff.has('elements') &&
+          !model.collection &&
+          !(props.view.panel === 'collections' && props.view.cms) &&
+          props.view.panel !== 'variables' &&
+          !props.view.pick
+        }
         browseApps={browseApps}
         report={props.report}
       />

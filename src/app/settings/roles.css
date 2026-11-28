@@ -875,3 +875,8 @@ button.app-role-back:hover:not(:disabled) {
 .app-role-row.app-role-skeleton-row {
   cursor: default;
 }
+
+/* An editing option: the row's tip sits before its switch (RoleEditing.tsx). */
+.app-role-toggle.app-role-editing-toggle {
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+}

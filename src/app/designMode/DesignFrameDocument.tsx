@@ -4,13 +4,11 @@
 // processes. A new snapshot loads beside the shown one, hidden, and takes its place once loaded, so a frame never
 // flashes white while it is edited. The frame is as tall as its page.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { assert } from '../../../shared/core/assert';
 import { DESIGN_FRAME_WINDOW_NAME } from '../../../shared/ipc/designSnapshot';
-import { CANVAS_SCROLLBAR_CSS } from '../../../shared/properties/canvasScrollbar';
+import { hidePageRootScrollbar, STILL_PAGE_FRAME } from '../../../shared/properties/canvasScrollbar';
 
 /** The tallest a frame is drawn: past this a page is cut off on the canvas. */
 export const FRAME_HEIGHT_PX_MAX = 30_000;
-const PAGE_SCROLLBAR_STYLE_ID = 'dm-page-scrollbar';
 /** A page's height settles as its pictures arrive: measured at load, then at these delays after it. */
 const MEASURE_AGAIN_MS = [250, 1_000, 3_000] as const;
 
@@ -86,8 +84,11 @@ export function DesignFrameDocument({
     timers.current.forEach((timer) => window.clearTimeout(timer));
     shownFrame.current = frame;
     measuredWidth.current = widthPx;
+    // Before the measure, so the height read is the page's at the frame's whole width, and before the swap is painted.
+    // A page taller than FRAME_HEIGHT_PX_MAX (or one that always overflows, `height: 100%` and a margin) scrolls inside
+    // its frame; the canvas takes every pointer, so nobody scrolls it from inside.
     if (frame.contentDocument !== null) {
-      hideFramePageScrollbar(frame.contentDocument);
+      hidePageRootScrollbar(frame.contentDocument);
     }
     measure(frame);
     timers.current = MEASURE_AGAIN_MS.map((delay) => window.setTimeout(() => latestMeasure.current(frame), delay));
@@ -103,6 +104,7 @@ export function DesignFrameDocument({
             className="dm-document"
             // Scripts stay off; same origin so the canvas can read which element is under the pointer.
             sandbox="allow-same-origin"
+            {...STILL_PAGE_FRAME}
             srcDoc={layer.html}
             tabIndex={-1}
             style={{ width: widthPx, height: heightPx, visibility: layer === layers.next ? 'hidden' : 'visible' }}
@@ -112,23 +114,4 @@ export function DesignFrameDocument({
       )}
     </>
   );
-}
-
-/**
- * The page's own scrollbar never takes width from a frame, as on the editor's canvas (shared/properties/canvasScrollbar.ts).
- * A page taller than FRAME_HEIGHT_PX_MAX scrolls inside its frame, and on a computer that draws classic scrollbars
- * (macOS "Show scroll bars: Always", or "Automatic" with a mouse) Chromium's bar would lay it out 15px narrower than
- * the width on its label. The frame runs no script, so the canvas's message cannot reach it: the rule is written into
- * its document here instead. Nothing is lost: the canvas takes every pointer, so a frame is never scrolled from inside.
- */
-export function hideFramePageScrollbar(document: Document): void {
-  assert(document.head !== null, 'hideFramePageScrollbar: a loaded document has a <head>');
-  const existing = document.getElementById(PAGE_SCROLLBAR_STYLE_ID);
-  if (existing === null) {
-    const style = document.createElement('style');
-    style.id = PAGE_SCROLLBAR_STYLE_ID;
-    style.textContent = CANVAS_SCROLLBAR_CSS;
-    document.head.appendChild(style);
-  }
-  assert(document.getElementById(PAGE_SCROLLBAR_STYLE_ID)?.textContent === CANVAS_SCROLLBAR_CSS, 'hideFramePageScrollbar: the frame draws no bar of its own');
 }

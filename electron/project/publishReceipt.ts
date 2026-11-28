@@ -1,20 +1,36 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { record, text } from '../../shared/core/boundary';
+import { count, record, text } from '../../shared/core/boundary';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
 import { git } from '../lib/nodeTools';
+import type { Destination, DestinationId } from '../../shared/properties/publishDestinations';
+import { parseDeploymentURL } from '../../shared/properties/publishState';
+
+type ReceiptDestination = 'production' | DestinationId;
+const RECEIPT_BYTES_MAX = 1024;
 
 export interface DeploymentReceipt {
   readonly version: 1;
   readonly tree: string;
   readonly configuration: string;
+  /** When it was published. Absent from receipts older Stacki wrote, which ignores both of these. */
+  readonly publishedAtMs?: number;
+  /** The address the host's tool printed for this deploy, when it printed one. */
+  readonly url?: string;
 }
 
 export function deploymentConfiguration(config: PublishConfig): string {
   // Account selection affects GitHub authentication, not the deployed website.
-  const { hosting, buildScript, beforePublish, afterPublish } = config;
-  return createHash('sha256').update(JSON.stringify({ hosting, buildScript, beforePublish, afterPublish })).digest('hex');
+  const { hosting, customHosting, buildScript, beforePublish, afterPublish } = config;
+  // A custom host's name and address change nothing deployed. Without one, the digest is what 1.4.21 wrote.
+  const custom =
+    customHosting === undefined
+      ? {}
+      : { custom: { deploy: customHosting.deploy, ...(customHosting.deploy === 'script' ? { script: customHosting.script } : {}) } };
+  return createHash('sha256')
+    .update(JSON.stringify({ hosting, buildScript, beforePublish, afterPublish, ...custom }))
+    .digest('hex');
 }
 
 export function parseDeploymentReceipt(input: unknown): DeploymentReceipt {
@@ -30,11 +46,27 @@ export function parseDeploymentReceipt(input: unknown): DeploymentReceipt {
   if (!/^[a-f0-9]{64}$/.test(configuration)) {
     throw new Error('Invalid deployment configuration.');
   }
-  return { version: 1, tree, configuration };
+  const publishedAtMs = value['publishedAtMs'] === undefined ? undefined : count(value['publishedAtMs']);
+  const url = value['url'] === undefined ? undefined : parseDeploymentURL(value['url']);
+  return {
+    version: 1,
+    tree,
+    configuration,
+    ...(publishedAtMs === undefined ? {} : { publishedAtMs }),
+    ...(url === undefined ? {} : { url }),
+  };
 }
 
-export async function readDeploymentReceipt(root: string): Promise<DeploymentReceipt | undefined> {
-  const file = await deploymentReceiptPath(root);
+/** Staging keeps a receipt of its own, so publishing one destination can never mark the other as up to date. */
+export function stagingConfiguration(config: PublishConfig, staging: Destination): string {
+  const { target, buildScript, beforePublish, afterPublish } = staging;
+  return createHash('sha256')
+    .update(JSON.stringify({ hosting: config.hosting, target, buildScript, beforePublish, afterPublish }))
+    .digest('hex');
+}
+
+export async function readDeploymentReceipt(root: string, destination: ReceiptDestination = 'production'): Promise<DeploymentReceipt | undefined> {
+  const file = await deploymentReceiptPath(root, destination);
   const stats = await stat(file).catch((error: unknown) => {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return undefined;
@@ -44,20 +76,20 @@ export async function readDeploymentReceipt(root: string): Promise<DeploymentRec
   if (stats === undefined) {
     return undefined;
   }
-  if (stats.size > 1024) {
+  if (stats.size > RECEIPT_BYTES_MAX) {
     throw new Error('Deployment receipt exceeds 1 KiB.');
   }
   const source = await readFile(file, 'utf8');
-  if (source.length > 1024) {
+  if (source.length > RECEIPT_BYTES_MAX) {
     throw new Error('Deployment receipt exceeds 1 KiB.');
   }
   const input: unknown = JSON.parse(source);
   return parseDeploymentReceipt(input);
 }
 
-export async function recordDeployment(root: string, receipt: DeploymentReceipt): Promise<void> {
+export async function recordDeployment(root: string, receipt: DeploymentReceipt, destination: ReceiptDestination = 'production'): Promise<void> {
   const validated = parseDeploymentReceipt(receipt);
-  const file = await deploymentReceiptPath(root);
+  const file = await deploymentReceiptPath(root, destination);
   const temporary = `${file}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, JSON.stringify(validated), { flag: 'wx', mode: 0o600 });
@@ -67,11 +99,11 @@ export async function recordDeployment(root: string, receipt: DeploymentReceipt)
   }
 }
 
-async function deploymentReceiptPath(root: string): Promise<string> {
+async function deploymentReceiptPath(root: string, destination: ReceiptDestination): Promise<string> {
   // Git's private directory survives app restarts without dirtying the published project.
   const directory = (await git(root, ['rev-parse', '--absolute-git-dir'])).stdout.trim();
   if (!path.isAbsolute(directory)) {
     throw new Error('Git directory must be absolute.');
   }
-  return path.join(directory, 'stacki-deployment.json');
+  return path.join(directory, destination === 'production' ? 'stacki-deployment.json' : 'stacki-deployment-staging.json');
 }

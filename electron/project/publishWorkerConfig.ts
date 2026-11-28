@@ -79,6 +79,18 @@ export async function readWorkerConfig(root: string): Promise<Result<WorkerConfi
   return err(described(WORKER_SETUP_NEEDED_KEY));
 }
 
+/** The config the site's author wrote, never a build's generated one. Absent when the site has none. */
+export async function readAuthoredWorkerConfig(root: string): Promise<WorkerConfig | undefined> {
+  for (const name of WORKER_CONFIG_NAMES) {
+    const filename = path.join(root, name);
+    const source = await workerConfigSource(root, filename);
+    if (source !== undefined) {
+      return { filename, value: workerConfigParse(filename, source) };
+    }
+  }
+  return undefined;
+}
+
 /** A Worker config deploys something only when it names a script or a static assets folder. */
 export function workerDeployTarget(value: Readonly<Record<string, unknown>>): boolean {
   const main = value['main'];
@@ -106,15 +118,23 @@ export async function withWorkerAccount(root: string, accountId: string, deploy:
     throw new DescribedError(config.error);
   }
   const { filename, value } = config.value;
+  await withTemporaryWorkerConfig(filename, { ...value, account_id: accountId }, deploy);
+}
+
+/** Never rewrites the authored or generated config: the deploy reads a sibling copy, which is always removed. */
+export async function withTemporaryWorkerConfig<T>(
+  filename: string,
+  value: Readonly<Record<string, unknown>>,
+  deploy: (configuration: string) => Promise<T>,
+): Promise<T> {
   const temporary = path.join(path.dirname(filename), `.stacki-worker-${randomUUID()}.json`);
-  // Never rewrite the authored or generated config; deploy's temporary sibling is always removed.
-  await writeFile(temporary, JSON.stringify({ ...value, account_id: accountId }), {
+  await writeFile(temporary, JSON.stringify(value), {
     encoding: 'utf8',
     flag: 'wx',
     mode: 0o600,
   });
   try {
-    await deploy(temporary);
+    return await deploy(temporary);
   } finally {
     await rm(temporary, { force: true });
   }

@@ -1,17 +1,19 @@
 import { gitWorkspaceTree } from './gitWorkspaceTree';
 import { isStudioLocalPath } from '../../../vendor/stacki/shared/properties/studioLocal';
-import { mkdir, mkdtemp, rm, rename, copyFile, lstat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, rename, copyFile, lstat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { published } from '../publishing/publishFailure';
 import { publishTreeFiles } from '../publishing/publishSource';
 import { publishInventory } from '../publishing/publishInventory';
 import { sourceRoots } from '../publishing/publishSource';
 import type { PublishGit } from '../publishing/publishGit';
-import { gitWorkspaceRun } from './gitWorkspaceObjects';
+import { gitWorkspaceRun, hydrateGitTrees } from './gitWorkspaceObjects';
 
 /** Validate and stage every file before changing the visible shared checkout. */
 export async function prepareGitWorkspaceCheckout(git: PublishGit, before: string, target: string) {
   const previous = await gitWorkspaceTree(gitWorkspaceRun(git), before);
+  // Before the listing below, whose sizes would otherwise fetch every missing file one request at a time.
+  await hydrateGitTrees(git, [target]);
   const files = published(await publishTreeFiles(git, target, { symbolicLinks: 'skip' }));
   const inventory = published(await publishInventory(git.root, await sourceRoots(git.root), 8 * 1024 ** 3));
   const destinations = files.filter((file) => checkoutFile(file.path));
@@ -38,6 +40,11 @@ export async function prepareGitWorkspaceCheckout(git: PublishGit, before: strin
       }
       for (const file of destinations) {
         const destination = await checkoutPath(git.root, file.path);
+        // Rewriting an identical `package.json` or `tsconfig.json` restarts the dev server in the middle
+        // of the action, which drops its reply. A file left alone ends exactly as a copy would leave it.
+        if (await sameCheckoutFile(path.join(temporary, file.path), destination)) {
+          continue;
+        }
         await checkoutPath(git.root, file.path + '.studio-tmp');
         await mkdir(path.dirname(destination), { recursive: true });
         await copyFile(path.join(temporary, file.path), destination + '.studio-tmp');
@@ -45,6 +52,25 @@ export async function prepareGitWorkspaceCheckout(git: PublishGit, before: strin
       }
     },
   };
+}
+// Only a regular file with the same permissions and the same bytes counts. The contents are compared
+// themselves, never a size or time that an edit could leave unchanged.
+async function sameCheckoutFile(staged: string, destination: string): Promise<boolean> {
+  const current = await lstat(destination).catch((error: unknown) => {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return undefined;
+    }
+    throw error;
+  });
+  if (!current?.isFile()) {
+    return false;
+  }
+  const next = await lstat(staged);
+  if (current.size !== next.size || current.mode !== next.mode) {
+    return false;
+  }
+  const [before, after] = await Promise.all([readFile(destination), readFile(staged)]);
+  return before.equals(after);
 }
 function checkoutFile(file: string): boolean {
   return (

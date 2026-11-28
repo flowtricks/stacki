@@ -45,7 +45,10 @@ async function orchestrate() {
   fs.rmSync(path.join(outDirectory, 'report.json'), { force: true });
   // While Design mode is on the app may write only to its copy, its own data and the temporary folder.
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-design-unlink-'));
-  const { code, directory, leftovers } = await runSoak({ scenarioModule: __filename, options: { outDirectory: staging }, keepDirectory: false });
+  // Classic scrollbars on every Mac: the soak page is taller than a frame may grow, so its frame scrolls inside itself,
+  // and the width check (steadyFrame) holds there only if the frame draws no bar. On overlay bars it proves nothing.
+  const run = { scenarioModule: __filename, options: { outDirectory: staging }, keepDirectory: false, scrollbars: 'classic' };
+  const { code, directory, leftovers } = await runSoak(run);
   for (const name of fs.readdirSync(staging)) {
     fs.copyFileSync(path.join(staging, name), path.join(outDirectory, name));
   }

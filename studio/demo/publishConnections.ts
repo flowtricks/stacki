@@ -59,6 +59,16 @@ export function publishRepositories(body: unknown): unknown {
   };
 }
 
+/** `/studio/api/publish/custom`: a Custom host's choices. Nothing runs here and no deploy link is kept. */
+export function publishCustomHost(): unknown {
+  return {
+    kind: 'ready',
+    scripts: ['build', 'deploy'],
+    environments: [],
+    links: { production: { kind: 'unsupported' }, staging: { kind: 'unsupported' } },
+  };
+}
+
 /** `/studio/api/publish/netlify-site`: no site is ever created. */
 export function publishNetlifySite(body: unknown): unknown {
   parseNetlifySiteRequest(body);

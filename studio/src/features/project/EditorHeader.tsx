@@ -13,6 +13,7 @@ import PageSwitcher from '../../../vendor/stacki/src/features/pages/PageSwitcher
 import { useComponentBack } from './useComponentBack';
 import { TemplateEntryPicker } from '../pages/TemplateEntryPicker';
 import { useStudioRole } from '../roles/useEditorRole';
+import { readOnlyEditor } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { projectPages } from './pageLabels';
 import { SaveStatus } from './SaveStatus';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
@@ -73,7 +74,8 @@ export function EditorHeader({
       <div className="studio-titlebar-end">
         <Collaborators document={document} session={session} follow={follow} />
         <PreviewButton preview={interactivePreview} />
-        {!direct && <PublishButton report={report} />}
+        {/* A read only role publishes nothing, and the server refuses it (editorRoutes.ts). */}
+        {!direct && !readOnlyEditor(studioRole.editorOff) && <PublishButton report={report} />}
       </div>
     </header>
   );

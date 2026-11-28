@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { canConvertText, canWrapNode, textWrapGesture, wrapNodeGesture, type TextTag, type WrapperTag } from '../../editor/wrapNode';
 import { showWrapOnCanvas } from '../../editor/canvasInsertShow';
 import { newId } from '../model/nodeFactory';
+import { editingOffFor } from '../../lib/editorGate';
 import type { useCoreState } from './appLifecycle';
 import type { useHistory } from './appNodeEdits';
 
@@ -11,7 +12,7 @@ export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history:
   const wrapNode = useCallback(
     (nodeId: string, name: WrapperTag): void => {
       const state = pageStateRef.current.pageState;
-      if (!state?.editable) {
+      if (!state?.editable || editingOffFor('elements') !== undefined) {
         return;
       }
       if (!canWrapNode(state.model.nodes, nodeId, name)) {
@@ -29,7 +30,7 @@ export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history:
   const convertText = useCallback(
     (nodeId: string, name: TextTag): void => {
       const state = pageStateRef.current.pageState;
-      if (!state?.editable) {
+      if (!state?.editable || editingOffFor('elements') !== undefined) {
         return;
       }
       if (!canConvertText(state.model.nodes, nodeId, name)) {
