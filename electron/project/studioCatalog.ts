@@ -1,4 +1,5 @@
 import { record, string } from '../../shared/ipc/studioValidation';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { parseRelease, releaseVersion, RELEASE_BYTES_MAX } from '../../shared/ipc/studioRelease';
 
 export const RELEASE_REPOSITORY = 'flowtricks/stacki-releases';
@@ -56,9 +57,42 @@ export async function downloadRelease(input: unknown) {
   const base = `https://github.com/${RELEASE_REPOSITORY}/releases/download/v${version}`;
   const url = `${base}/stacki-studio-${version}.json`;
   const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
-  const release = parseRelease(JSON.parse(await boundedText(response, RELEASE_BYTES_MAX)));
+  const text = await boundedText(response, RELEASE_BYTES_MAX);
+  await assertPublishedDigest(version, text);
+  const release = parseRelease(JSON.parse(text));
   if (release.version !== version) {
     throw new Error('Downloaded a different Studio release');
   }
   return release;
+}
+
+// GitHub records a SHA-256 digest for each release asset and reports it apart from the download itself, so a download
+// damaged or swapped on its way here does not install. It cannot answer for a release changed by whoever can publish
+// one: that digest changes with the file. Only a digest that differs refuses. A release GitHub reports none for (older
+// uploads), or a release record that cannot be read (offline, rate limited), installs as it did before this check.
+async function assertPublishedDigest(version: string, text: string): Promise<void> {
+  const expected = await publishedDigest(version).catch(() => undefined);
+  if (expected === undefined) {
+    return;
+  }
+  const hashed = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  const actual = Array.from(hashed, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  if (actual !== expected) {
+    throw new ReferencedError('apps.error.downloadDigestMismatch');
+  }
+}
+
+async function publishedDigest(version: string): Promise<string | undefined> {
+  const response = await fetch(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/tags/v${version}`, {
+    // i18n-ignore: a package name written into the project, not interface text.
+    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Stacki-Studio' },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const assets = record(JSON.parse(await boundedText(response, 1_000_000)))['assets'];
+  if (!Array.isArray(assets) || assets.length > 100) {
+    return undefined;
+  }
+  const asset = assets.map((entry: unknown) => record(entry)).find((entry) => entry['name'] === `stacki-studio-${version}.json`);
+  const digest = asset?.['digest'];
+  return typeof digest === 'string' ? /^sha256:([a-f0-9]{64})$/.exec(digest)?.[1] : undefined;
 }

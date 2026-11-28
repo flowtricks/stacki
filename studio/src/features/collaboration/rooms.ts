@@ -32,6 +32,7 @@ import { readSource, preparePath } from '../project/projectServer';
 import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { assertComponentInsertAllowed, assertDocumentActionAllowed, assertDocumentChangeAllowed, assertEditorContentAllowed } from '../roles/documentAccess';
 import { EditorUndo } from '../roles/editorUndo';
+import { CodeGuard, writesCode } from '../roles/codeGuard';
 import { limitsEditing } from '../../../vendor/stacki/shared/properties/projectRoles';
 
 /** A person signed in by another authentication provider: presence by name and a provider-qualified key, no GitHub avatar. */
@@ -59,6 +60,14 @@ interface SourceSnapshot {
   readonly scheduling: 'classify' | 'immediate';
 }
 
+interface Incoming {
+  readonly socket: WebSocket;
+  readonly message: Record<string, unknown>;
+}
+
+/** Waiting edits taken together at most; the queue itself stays bounded by its own limit. */
+const BATCH_MAX = 100;
+
 export class Room {
   readonly document = new Y.Doc();
   readonly text = this.document.getText('source');
@@ -71,6 +80,10 @@ export class Room {
   readonly cursors: CursorRelay;
   private readonly colors: PresenceColors;
   private queue = Promise.resolve();
+  // Messages waiting their turn, in order. Each has one turn in `queue`; a turn may take the edits right behind it.
+  private readonly inbox: Incoming[] = [];
+  // Turns still to be taken one at a time, after a batch that could not be taken together.
+  private alone = 0;
   private saved = '';
   private closed = false;
   private revision = 0;
@@ -83,6 +96,8 @@ export class Room {
     readonly coordinator = new SerialQueue(),
     private readonly publishPresence?: () => void,
     private readonly live?: LivePresence,
+    // One per workspace, so code one document held can be pasted into another (codeGuard.ts).
+    private readonly guard = new CodeGuard(root),
   ) {
     this.colors = live?.colors ?? new PresenceColors();
     this.cursors = new CursorRelay(this.clients, (packet) => {
@@ -150,6 +165,10 @@ export class Room {
     this.roles.set(socket, role);
     this.people.set(socket, key);
     maintainConnection(socket, identity ? (authorize ?? (async () => false)) : undefined);
+    // Only a head start: a page it cannot read is read again, and refused or not, by the first edit's own check.
+    void role()
+      .then((view) => this.guard.warm(view, this.file, this.text.toString()))
+      .catch(() => undefined);
     this.synchronize(socket);
     this.presence();
     socket.on('message', (bytes, binary) => this.receiveMessage(socket, bytes, binary));
@@ -172,18 +191,79 @@ export class Room {
         return;
       }
       this.queued++;
-      this.queue = this.queue
-        .then(async () => {
-          await this.coordinator.run(() => this.handle(socket, message));
-        })
-        .catch((error) => {
-          this.send(socket, { type: 'error', ...errorWire(error, 'studio.collab.editFailed') });
-        })
-        .finally(() => {
-          this.queued--;
-        });
+      this.inbox.push({ socket, message });
+      this.queue = this.queue.then(() => this.takeTurn());
     } catch {
       this.send(socket, { type: 'error', ...errorWire(undefined, 'studio.collab.invalidMessage') });
+    }
+  }
+  private async takeTurn() {
+    const next = this.inbox.shift();
+    if (next === undefined) {
+      return;
+    }
+    const batch = this.alone > 0 ? [next] : [next, ...this.following(next)];
+    this.alone = Math.max(0, this.alone - 1);
+    if (batch.length > 1 && (await this.coordinator.run(() => this.handleTogether(batch)))) {
+      this.inbox.splice(0, batch.length - 1);
+      this.queued -= batch.length;
+      return;
+    }
+    if (batch.length > 1) {
+      this.alone = batch.length - 1;
+    }
+    // One at a time, as each arrived: those behind keep their own turns.
+    try {
+      await this.coordinator.run(() => this.handle(next.socket, next.message));
+    } catch (error) {
+      this.send(next.socket, { type: 'error', ...errorWire(error, 'studio.collab.editFailed') });
+    } finally {
+      this.queued--;
+    }
+  }
+  // The edits waiting right behind `first` from the same connection, with nothing else between them.
+  private following(first: Incoming): readonly Incoming[] {
+    const found: Incoming[] = [];
+    for (const entry of this.inbox) {
+      const same = entry.socket === first.socket && entry.message['epoch'] === first.message['epoch'];
+      if (!same || entry.message['type'] !== 'update' || first.message['type'] !== 'update' || found.length >= BATCH_MAX - 1) {
+        break;
+      }
+      found.push(entry);
+    }
+    return found;
+  }
+  /**
+   * Edits that piled up while earlier ones were checked, judged as the one change they add up to: the check then reads
+   * the page once, so a backlog cannot grow however large the page is. Only the document they end at is ever applied,
+   * shared or saved, and it is checked like any single edit. False, with nothing changed, when they cannot be taken
+   * together: each is then handled alone, with its own verdict. Only for a role the code check judges, and not for one
+   * with editing options, whose undo steps through its edits one by one.
+   */
+  private async handleTogether(batch: readonly Incoming[]): Promise<boolean> {
+    const [first] = batch;
+    if (first === undefined || this.closed || first.message['epoch'] !== this.document.getMap('metadata').get('epoch')) {
+      return false;
+    }
+    try {
+      const role = await this.roleOf(first.socket);
+      if (writesCode(role) || limitsEditing(role.editorOff)) {
+        return false;
+      }
+      const saves = batch.map((entry) => parseSaveSequence(entry.message['save']));
+      const updates = batch.map((entry) => Buffer.from(string(entry.message['update'], 2_000_000), 'base64'));
+      const update = Buffer.from(Y.mergeUpdates(updates)).toString('base64');
+      const before = Y.encodeStateVector(this.document);
+      if (!(await this.applyUpdate({ ...first.message, update }, first.socket, role))) {
+        return false;
+      }
+      this.publish(first.socket, first.message, before);
+      for (const save of saves) {
+        this.acknowledgeSave(first.socket, save, 'classify');
+      }
+      return true;
+    } catch {
+      return false;
     }
   }
   private detach(socket: WebSocket, key: string) {
@@ -246,6 +326,13 @@ export class Room {
       throw new Error('Unknown collaboration message');
     }
     this.rememberChange(socket, role, previous);
+    this.publish(socket, message, before);
+    // Peers consume the accepted CRDT delta immediately. File projection and
+    // durable storage must not sit between a keystroke and another editor.
+    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
+  }
+  // What everyone gets once the document has changed.
+  private publish(socket: WebSocket, message: Record<string, unknown>, before: Uint8Array) {
     this.revision++;
     const update = Buffer.from(Y.encodeStateAsUpdate(this.document, before)).toString('base64');
     for (const client of this.clients.keys()) {
@@ -262,9 +349,6 @@ export class Room {
       });
     }
     this.presence();
-    // Peers consume the accepted CRDT delta immediately. File projection and
-    // durable storage must not sit between a keystroke and another editor.
-    this.acknowledgeSave(socket, save, message['type'] === 'update' ? 'classify' : 'immediate');
   }
   private rememberChange(socket: WebSocket, role: RoleView, previous: string) {
     const person = this.people.get(socket);
@@ -312,7 +396,12 @@ export class Room {
     assertComponentInsertAllowed(role, this.file, action, settings?.imports ?? []);
     const edits =
       action.kind === 'paste' ? pasteEdits(this.text.toString(), this.file, action) : structuralEdits(this.text.toString(), action, this.file, settings);
+    // A paste carries markup and frontmatter from the browser; every other action only arranges what the server holds.
+    if (action.kind === 'paste') {
+      await this.assertCode(role, applyEdits(this.text.toString(), [...edits]));
+    }
     const source = this.text.toString();
+    this.guard.note(role, this.file, source);
     const result = applyEdits(source, edits);
     // The action was allowed by its shape; its result is checked too, so an
     // operation that reaches past what the action named is still refused.
@@ -455,17 +544,25 @@ export class Room {
       })
       .catch((error: unknown) => this.broadcast({ type: 'error', message: String(error) }));
   }
-  // A limited role's edit is also judged by what it changes. The room handles one message at a time, so the
-  // document it was probed against must still be the document it applies to.
+  // An edit that arrives as text is also judged by what it changes: no new code without a code permission, and a
+  // limited role's editing options. The room handles one message at a time, so the document it was probed against
+  // must still be the document it applies to.
   private async assertContent(socket: WebSocket, role: RoleView, after: string) {
     const before = this.text.toString();
-    if (!limitsEditing(role.editorOff) || after === before) {
+    if (after === before) {
       return;
     }
-    if (this.editorUndo.steps(this.people.get(socket) ?? '', role, { current: before, next: after })) {
-      return;
+    await this.assertCode(role, after);
+    if (limitsEditing(role.editorOff) && !this.editorUndo.steps(this.people.get(socket) ?? '', role, { current: before, next: after })) {
+      await assertEditorContentAllowed(role, this.file, { before, after }, (file) => readSource(this.root, file).catch(() => undefined));
     }
-    await assertEditorContentAllowed(role, this.file, { before, after }, (file) => readSource(this.root, file).catch(() => undefined));
+    if (this.text.toString() !== before) {
+      throw new Error('Another edit arrived. Please repeat the edit.');
+    }
+  }
+  private async assertCode(role: RoleView, after: string) {
+    const before = this.text.toString();
+    await this.guard.assertAllowed(role, { file: this.file, before, after });
     if (this.text.toString() !== before) {
       throw new Error('Another edit arrived. Please repeat the edit.');
     }
@@ -486,6 +583,11 @@ export class Room {
       }
       if (probe.getText('source').length > MAX_SOURCE || Y.encodeStateAsUpdate(probe).length > 8_000_000) {
         throw new Error('Document exceeds collaboration limits');
+      }
+      // An update that waits for a change the room does not hold would apply later, judged under whoever sends that
+      // change. A role without code permission may only send what can be judged now.
+      if (!writesCode(role) && waiting(probe) !== waiting(this.document)) {
+        throw new Error('Another edit arrived. Please repeat the edit.');
       }
       const after = probe.getText('source').toString();
       if (after !== this.text.toString()) {
@@ -614,6 +716,11 @@ export class Room {
     }
   }
 }
+// The changes a document holds back until others arrive, as one comparable value.
+function waiting(document: Y.Doc): string {
+  const { pendingStructs, pendingDs } = document.store;
+  return JSON.stringify([pendingStructs === null ? '' : Buffer.from(pendingStructs.update).toString('base64'), pendingDs?.length ?? 0]);
+}
 export function checksum(source: string) {
   return createHash('sha256').update(source).digest('hex');
 }
@@ -628,6 +735,8 @@ export function createRooms(root: string) {
   const sourceListeners = new Set<(file: string, mode: SourceRenderMode) => void>();
   const releaseListeners = new Set<() => void>();
   const live = { ...livePresence(readyRooms, sourceListeners), publishing: () => publishing };
+  // Reads a room's own text, so code typed a moment ago counts as the project's before it reaches the disk.
+  const guard = new CodeGuard(root, async (file) => (await rooms.get(file))?.text.toString() ?? readSource(root, file));
   const broadcast = (message: unknown) => {
     for (const room of readyRooms) {
       room.broadcast(message);
@@ -647,7 +756,7 @@ export function createRooms(root: string) {
       if (rooms.size >= 100) {
         throw new Error('Too many open documents');
       }
-      const room = new Room(root, file, coordinator, presence, live);
+      const room = new Room(root, file, coordinator, presence, live, guard);
       pending = room.initialize().then(() => {
         readyRooms.add(room);
         return room;
@@ -670,6 +779,7 @@ export function createRooms(root: string) {
     projectChanged: () => broadcast({ type: 'project-changed' }),
     resetWorkspace: () => resetWorkspaceRooms(rooms, readyRooms),
     coordinator,
+    guard,
     // Call under the coordinator before filesystem snapshots or multi-file writes.
     // Await actual saves, because flushing a failed batch alone does not retry it.
     persist: async () => {

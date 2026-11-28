@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { createRooms } from '../collaboration/rooms';
 import { record, string } from '../../shared/validation';
 import { cmsHandlers } from './cmsHost';
+import { requestRole } from '../roles/serverAccess';
 import { cmsSources, withCmsSnapshot, CmsReadWorkspace } from './cmsSnapshot';
 import { cmsVersions, commitCms } from './cmsCommit';
 
@@ -35,6 +36,7 @@ export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
     if (request.method !== 'POST') {
       throw new Error('Use POST for CMS operations');
     }
+    const role = await requestRole(root, request);
     const input = record(JSON.parse(await readBody()));
     const operation = string(input['operation'], 50);
     if (typeof input['payload'] !== 'string') {
@@ -65,7 +67,7 @@ export function cmsRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
         }
         const after = await cmsSources(stage);
         const next = withCmsDeletions(snapshot.sources, after.sources);
-        await commitCms(root, rooms, snapshot.sources, next, record(input['versions']));
+        await commitCms(root, rooms, snapshot.sources, next, record(input['versions']), role);
         return { value, versions: cmsVersions(next) };
       };
       return mutations.has(operation) ? withCmsSnapshot(root, snapshot, execute) : reads.read(snapshot, execute);

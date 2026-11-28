@@ -79,7 +79,8 @@ const CODE_FEATURES: readonly AccessFeature[] = ['code:edit'];
  */
 export function documentFeatures(file: string): readonly AccessFeature[] | undefined {
   assert(file.length > 0, 'A document names a file');
-  if (file.startsWith('src/pages/')) {
+  // Only page documents are open to every role: a `.ts` or `.js` file under pages is an endpoint, which is code.
+  if (file.startsWith('src/pages/') && /\.(?:astro|md|mdx|mdoc|markdown)$/.test(file)) {
     return undefined;
   }
   if (isDefaultsCanvas(file)) {
@@ -186,7 +187,8 @@ export async function assertEditorContentAllowed(
   }
 }
 
-function assertDocumentWritable(role: RoleView, file: string): void {
+/** Throws when `role` may not write `file` at all. */
+export function assertDocumentWritable(role: RoleView, file: string): void {
   // A read only role writes nothing at all, the column guide included.
   if (readOnlyEditor(role.editorOff)) {
     throw roleRefusal(role);
