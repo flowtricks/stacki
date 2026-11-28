@@ -303,7 +303,10 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'когда {name} задано',
   'styleModel.inline.label': 'Встроенные стили',
   'styleModel.inline.reason.componentUnreadable': 'Не удалось прочитать компонент, который записывает этот стиль.',
-  'styleModel.inline.reason.componentWrites': '{file} задаёт стиль этого элемента, поэтому у этого экземпляра не может быть собственного встроенного стиля.',
+  'styleModel.inline.reason.componentDrops': '{file} не передаёт стиль своему элементу, поэтому встроенный стиль здесь будет проигнорирован.',
+  'styleModel.inline.reason.componentUnproven': 'Stacki не может подтвердить, что {file} сохраняет стиль, заданный этому экземпляру.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} записывает на этот элемент свой стиль и не объединяет его со стилем экземпляра, поэтому один из них будет потерян.',
   'styleModel.inline.reason.fromProp': 'Ветка берёт значение из свойства, а не из текста, поэтому её нужно изменять в настройках.',
   'styleModel.inline.reason.onlyChain': 'Здесь можно изменять только цепочку условий, каждое из которых даёт текст или шаблон.',
   'styleModel.inline.reason.rendersNothing': 'Этот атрибут style ничего не выводит.',

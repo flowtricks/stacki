@@ -19,6 +19,8 @@ import {
 } from '../../../shared/ipc/designSession';
 import { cleanError } from '../../lib/cleanError';
 import { inlineStyleWrite } from '../../features/style/model/inlineTarget';
+import { componentSourceSettled } from '../../features/style/model/componentSourceCache';
+import { instanceStyleRefusal } from '../../features/style/model/componentStyleForwarding';
 import type { DesignNodeAt } from '../../../shared/ipc/designSnapshot';
 import type { StyleChange } from './designElementDrag';
 import { designSession } from './designBridge';
@@ -201,6 +203,21 @@ export function writeElementStyle(context: DesignOpsContext, frame: DesignFrameI
       refused();
       app.showToast(context.words()('toast.styleIsCode'), 'warning');
       return;
+    }
+    // An instance takes a style of its own only where its component keeps it (the Style panel's rule).
+    if (target.kind === 'component') {
+      const file = app.selectedComponentFile;
+      const source = file === undefined ? undefined : await componentSourceSettled(file, READ_WAIT_MS_MAX);
+      if (instanceStyleRefusal(source) !== undefined) {
+        refused();
+        app.showToast(context.words()('toast.styleNotKept', { file: file?.split(/[\\/]/).pop() ?? target.name ?? '' }), 'warning');
+        return;
+      }
+      // The selection may have moved while the file was read: the write is for the node held.
+      if (context.app().pathFor(context.app().selectedId) !== node.path) {
+        refused();
+        return;
+      }
     }
     const next = styleAfter(target.props?.['style'], change);
     if (next === undefined) {

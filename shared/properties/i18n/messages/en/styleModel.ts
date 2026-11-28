@@ -297,7 +297,10 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'when {name} is set',
   'styleModel.inline.label': 'Inline styles',
   'styleModel.inline.reason.componentUnreadable': 'The component that writes this style could not be read.',
-  'styleModel.inline.reason.componentWrites': '{file} writes this element’s style, so this instance can’t take an inline style of its own.',
+  'styleModel.inline.reason.componentDrops': '{file} doesn’t pass a style on to its element, so an inline style here would be ignored.',
+  'styleModel.inline.reason.componentUnproven': 'Stacki can’t confirm that {file} keeps a style set on this instance.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} writes its own style on this element without combining it with the instance’s, so one of the two would be lost.',
   'styleModel.inline.reason.fromProp': 'A branch gives a value from a prop rather than text, so it is edited in Settings.',
   'styleModel.inline.reason.onlyChain': 'Only a chain of conditions, each giving a text or template, can be edited here.',
   'styleModel.inline.reason.rendersNothing': 'This style attribute renders nothing.',

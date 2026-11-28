@@ -298,7 +298,10 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'quando {name} está definido',
   'styleModel.inline.label': 'Estilos inline',
   'styleModel.inline.reason.componentUnreadable': 'Não foi possível ler o componente que escreve este estilo.',
-  'styleModel.inline.reason.componentWrites': '{file} grava o estilo deste elemento, então esta instância não pode ter um estilo inline próprio.',
+  'styleModel.inline.reason.componentDrops': '{file} não repassa o estilo ao seu elemento, então um estilo inline aqui seria ignorado.',
+  'styleModel.inline.reason.componentUnproven': 'O Stacki não pode confirmar que {file} mantém um estilo definido nesta instância.',
+  'styleModel.inline.reason.componentWrites':
+    '{file} grava o próprio estilo neste elemento sem combiná-lo com o da instância, então um dos dois seria perdido.',
   'styleModel.inline.reason.fromProp': 'Um ramo usa o valor de uma propriedade em vez de texto, então é editado em Configurações.',
   'styleModel.inline.reason.onlyChain': 'Aqui só dá para editar uma cadeia de condições, cada uma com um texto ou modelo.',
   'styleModel.inline.reason.rendersNothing': 'Este atributo de estilo não renderiza nada.',

@@ -2108,6 +2108,7 @@
     "src/features/style/model/commitStyleInPlace.ts",
     "src/features/style/model/componentMarkup.ts",
     "src/features/style/model/componentSourceCache.ts",
+    "src/features/style/model/componentStyleForwarding.ts",
     "src/features/style/model/componentStyleWrite.ts",
     "src/features/style/model/computedColor.ts",
     "src/features/style/model/computedStyle.ts",

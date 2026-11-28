@@ -13,6 +13,7 @@ import { LIMITS } from '../../../../shared/core/limits';
 import { editInlineStyle, readInlineStyle, type InlineDeclaration } from '../../../../shared/engine/inlineStyle';
 import type { StyleDeclaration } from '../../../../shared/engine/intent';
 import type { HostNode } from './host';
+import { styleForwardingOf } from './componentStyleForwarding';
 import { readableStyleCode, readableStyleText, styleExpressionSpanInSource } from './inlineCode';
 import { alwaysBranchLabel, readStyleBranches, type StyleBranch } from './inlineBranches';
 
@@ -161,6 +162,11 @@ export function chipInlineStyle(
     return own;
   }
   const component = rendered.component;
+  // A component that writes the instance's style after its own: the instance has a style of its own to write,
+  // empty so far. What renders is the component's, which is not the instance's to edit.
+  if (component !== undefined && styleForwardingOf(component.text) === 'combines') {
+    return { kind: 'declarations', text: '', declarations: [] };
+  }
   const span = component === undefined ? undefined : styleExpressionSpanInSource(component.text);
   if (component === undefined || span === undefined) {
     // Without the component's file, what the canvas rendered, read-only.

@@ -298,7 +298,10 @@ export const messages = {
   'styleModel.inline.branch.whenSet': 'जब {name} सेट है',
   'styleModel.inline.label': 'इनलाइन स्टाइल',
   'styleModel.inline.reason.componentUnreadable': 'इस स्टाइल को लिखने वाला कंपोनेंट पढ़ा नहीं जा सका।',
-  'styleModel.inline.reason.componentWrites': '{file} इस एलिमेंट की स्टाइल लिखता है, इसलिए इस इंस्टेंस की अपनी इनलाइन स्टाइल नहीं हो सकती।',
+  'styleModel.inline.reason.componentDrops': '{file} अपने एलिमेंट तक स्टाइल नहीं पहुँचाता, इसलिए यहाँ इनलाइन स्टाइल अनदेखी हो जाएगी।',
+  'styleModel.inline.reason.componentUnproven': 'Stacki पुष्टि नहीं कर सकता कि {file} इस इंस्टेंस पर लगाई गई स्टाइल को रखता है।',
+  'styleModel.inline.reason.componentWrites':
+    '{file} इस एलिमेंट पर अपनी स्टाइल लिखता है और उसे इंस्टेंस की स्टाइल के साथ नहीं जोड़ता, इसलिए दोनों में से एक खो जाएगी।',
   'styleModel.inline.reason.fromProp': 'एक शाखा टेक्स्ट की जगह प्रॉप से मान देती है, इसलिए उसे सेटिंग में संपादित किया जाता है।',
   'styleModel.inline.reason.onlyChain': 'यहाँ केवल शर्तों की वह श्रृंखला संपादित की जा सकती है जिसकी हर शर्त टेक्स्ट या टेम्पलेट देती हो।',
   'styleModel.inline.reason.rendersNothing': 'यह style एट्रिब्यूट कुछ भी रेंडर नहीं करता।',

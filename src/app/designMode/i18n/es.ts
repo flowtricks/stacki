@@ -24,6 +24,7 @@ export const designModeEs: DesignCatalog = {
   'toast.pageTooLarge': 'Esta página es demasiado grande para mostrarse como marco en el modo de diseño.',
   'toast.frameUnread': 'el editor aún no ha leído la página de este marco. Selecciónalo de nuevo.',
   'toast.styleIsCode': 'El estilo de este elemento está escrito como código, así que no se puede mover ni redimensionar aquí.',
+  'toast.styleNotKept': 'Stacki no puede confirmar que {file} conserve un estilo puesto en esta instancia, así que no se puede mover ni redimensionar aquí.',
   'bar.close': 'Salir del modo de diseño',
   'reset.title': '¿Empezar de nuevo?',
   'reset.body': 'Se descartan todos los marcos y el lienzo vuelve a empezar desde tu proyecto. No se puede deshacer.',

@@ -24,6 +24,7 @@ export const designModeNl: DesignCatalog = {
   'toast.pageTooLarge': 'Deze pagina is te groot om als frame in de ontwerpmodus te tonen.',
   'toast.frameUnread': 'de editor heeft de pagina van dit frame nog niet gelezen. Kies het opnieuw.',
   'toast.styleIsCode': 'De stijl van dit element is als code geschreven, dus het kan hier niet worden verplaatst of vergroot.',
+  'toast.styleNotKept': 'Stacki kan niet bevestigen dat {file} een stijl op deze instantie behoudt, dus die kan hier niet verplaatst of vergroot worden.',
   'bar.close': 'Ontwerpmodus verlaten',
   'reset.title': 'Opnieuw beginnen?',
   'reset.body': 'Alle frames worden weggegooid en het canvas begint opnieuw vanuit je project. Dit kan niet ongedaan worden gemaakt.',

@@ -12,8 +12,10 @@
 // expression edited branch by branch (model/inlineBranches.ts): the CSS code section
 // picks the branch and edits its text, and the panel's controls edit the same
 // branch's declarations. An instance's style lives in its component file, and its
-// edits are written there (model/componentStyleWrite.ts). An expression the
-// conditional model cannot read is shown read-only, with the controls disabled.
+// edits are written there (model/componentStyleWrite.ts), unless the component
+// combines the instance's own style with its own (model/componentStyleForwarding.ts):
+// then the instance's tag is written. An expression the conditional model cannot
+// read is shown read-only, with the controls disabled.
 
 import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -46,7 +48,8 @@ import { usePseudoTarget } from './editorModel';
 import type { LiveSetProp, SetProp } from './EditorBasics';
 import type { InlineBranchView } from './InlineBranchEditor';
 import type { StyleCardProps } from './QueryForms';
-import { readableStyleCode } from '../model/inlineCode';
+import { readableStyleCode, readableStyleText } from '../model/inlineCode';
+import { instanceStyleRefusal, type InstanceStyleRefusal } from '../model/componentStyleForwarding';
 import { inlineDefault } from '../model/inlineDefault'; // Design mode (experimental): docs/design-mode/REMOVE.md
 
 /** The chip as the well draws it. */
@@ -274,18 +277,9 @@ export function useInlineCard(
     leave();
     host.setInlineStyle(nodeId, undefined);
   };
-  const writer = designComponentWriter(style, inline);
-  const writerReason = writer === undefined ? undefined : translate('styleModel.inline.reason.componentWrites', { file: writer });
-  const chip: InlineChip | undefined = shown
-    ? {
-        state: style.kind === 'declarations' ? 'editable' : 'code',
-        ...(writerReason === undefined ? {} : { lockedReason: writerReason }),
-        active,
-        onSelect: select,
-        onDeselect: leave,
-        onClear: style.kind === 'declarations' ? clear : undefined,
-      }
-    : undefined;
+  const lock = designInstanceLock(style, inline);
+  const lockedReason = lock === undefined ? undefined : translate(LOCK_MESSAGES[lock.refusal], { file: lock.file });
+  const chip: InlineChip | undefined = shown ? inlineChipOf(style, { lockedReason, active, onSelect: select, onDeselect: leave, onClear: clear }) : undefined;
   const withChip: StyleCardProps = {
     ...card,
     inline: chip,
@@ -323,8 +317,8 @@ export function useInlineCard(
   if (!active) {
     return withChip;
   }
-  if (writerReason !== undefined && (style.kind === 'code' || style.kind === 'branched')) {
-    return readOnlyCard(withChip, style.kind === 'code' ? style.code : readableStyleCode(style.expression), writerReason);
+  if (lockedReason !== undefined) {
+    return readOnlyCard(withChip, shownCode(style), lockedReason);
   }
   if (style.kind === 'code') {
     return readOnlyCard(withChip, style.code, translateDescribed({ message: style.message, messageRef: style.messageRef }));
@@ -389,26 +383,65 @@ export function useInlineCard(
   return { ...withChip, ...writes, inlineCode: { kind: 'branches', view } };
 }
 
+const LOCK_MESSAGES = {
+  unreadable: 'styleModel.inline.reason.componentUnreadable',
+  overrides: 'styleModel.inline.reason.componentWrites',
+  drops: 'styleModel.inline.reason.componentDrops',
+  unproven: 'styleModel.inline.reason.componentUnproven',
+} as const satisfies Record<InstanceStyleRefusal, string>;
+
 /**
- * In Design mode, the file name of the component that writes the style an instance renders, else undefined. Such a
- * style has no place for this instance alone: editing the component's expression changes every instance, and a
- * `style` on the instance's tag is a second attribute after the component's own (`style={columns} {...rest}`),
- * which the browser ignores. Design mode starts each selection on this chip, so there the target is locked with
- * why, never swapped for a class and never a silent write to the component. In the editor the chip is the person's
- * own pick, and the code state says where its edits go.
+ * In Design mode, why this instance's attribute cannot be written, and by which component; undefined when it can.
+ * Design mode starts each selection on this chip, so an edit there must reach this instance and no other: a write
+ * that would be ignored or would replace the component's style (componentStyleForwarding.ts), or one into the
+ * component's file, which every instance shares, is never made. The target stays selected, locked
+ * with why. In the editor the chip is the person's own pick, and behaves as it always has.
  */
-function designComponentWriter(style: InlineStyle, inline: Pick<InlineState, 'instance' | 'ownStyle'>): string | undefined {
-  if (inlineDefault() !== 'inline' || !inline.instance || inline.ownStyle.kind !== 'none') {
+function designInstanceLock(
+  style: InlineStyle,
+  inline: Pick<InlineState, 'instance' | 'ownStyle'>,
+): { readonly refusal: InstanceStyleRefusal; readonly file: string } | undefined {
+  if (inlineDefault() !== 'inline' || !inline.instance) {
     return undefined;
   }
-  // Without the component's file (`componentUnreadable`), the code state's own reason stands.
-  if (style.kind === 'branched' && style.source.kind === 'component') {
-    return style.source.fileName;
+  const path = getHost().selectedComponentPath;
+  const file = path?.split(/[\\/]/).pop() ?? '';
+  const refusal = instanceStyleRefusal(path === undefined ? undefined : componentSource(path));
+  if (refusal !== undefined) {
+    return { refusal, file };
   }
-  if (style.kind !== 'code' || style.reason !== 'expression') {
-    return undefined;
+  // The element shows a style the component wrote some other way: editing it would be editing the component.
+  const componentsOwn = inline.ownStyle.kind === 'none' && (style.kind === 'branched' || style.kind === 'code');
+  return componentsOwn ? { refusal: 'overrides', file } : undefined;
+}
+
+function inlineChipOf(
+  style: InlineStyle,
+  chip: Pick<InlineChip, 'lockedReason' | 'active' | 'onSelect' | 'onDeselect'> & { readonly onClear: () => void },
+): InlineChip {
+  const locked = chip.lockedReason !== undefined;
+  // No attribute yet (startsInline) is a style to write, not code.
+  const editable = !locked && (style.kind === 'declarations' || style.kind === 'none');
+  const clearable = !locked && style.kind === 'declarations' && style.declarations.length > 0;
+  return { ...chip, state: editable ? 'editable' : 'code', onClear: clearable ? chip.onClear : undefined };
+}
+
+// What a locked target's code section shows.
+function shownCode(style: InlineStyle): string {
+  switch (style.kind) {
+    case 'code':
+      return style.code;
+    case 'branched':
+      return readableStyleCode(style.expression);
+    case 'declarations':
+      return readableStyleText(style.text);
+    case 'none':
+      return readableStyleText('');
+    default: {
+      const exhaustive: never = style;
+      return exhaustive;
+    }
   }
-  return getHost().selectedComponentPath?.split(/[\\/]/).pop();
 }
 
 // Read-only, with why: the controls stay, disabled, and say it on hover (StyleCard.tsx).

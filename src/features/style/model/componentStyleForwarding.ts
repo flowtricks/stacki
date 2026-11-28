@@ -1,7 +1,8 @@
 // What a component does with a `style` set on one of its instances, read from the component file.
 //
-// Astro writes `style={columns} {...rest}` as two `style` attributes, and the browser reads the first, so a style on
-// the instance of such a component is ignored. A component keeps it by naming `style` in its props and writing its
+// A component that writes `style={columns} {...rest}` does not keep both: on an element Astro writes two `style`
+// attributes and the browser reads the first, so the instance's is ignored; on a tag chosen at run time (`<Tag>`)
+// the spread replaces the component's (both seen with Astro 7.3.8). A component keeps both by naming `style` in its props and writing its
 // own value and that one into one attribute, the instance's last, so the instance wins a property both declare:
 //
 //   const { class: className, style, ...rest } = Astro.props;
@@ -23,7 +24,7 @@ export type StyleForwarding =
   | 'combines'
   // The instance's style reaches an element that writes none of its own.
   | 'passes'
-  // The element the rest of the props go to writes its own `style`: the browser reads one of the two attributes.
+  // The element the rest of the props go to writes its own `style`: one of the two is lost.
   | 'overrides'
   // The style reaches no element.
   | 'drops'

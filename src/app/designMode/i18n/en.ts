@@ -24,6 +24,7 @@ export const designModeEnglish = {
   'toast.pageTooLarge': 'This page is too large to show as a frame in Design mode.',
   'toast.frameUnread': 'the editor has not read this frame’s page yet. Pick it again.',
   'toast.styleIsCode': 'This element’s style is written as code, so it can’t be moved or resized here.',
+  'toast.styleNotKept': 'Stacki can’t confirm that {file} keeps a style set on this instance, so it can’t be moved or resized here.',
   'bar.close': 'Exit Design mode',
   'reset.title': 'Start over?',
   'reset.body': 'Every frame is thrown away and the canvas starts again from your project. This can’t be undone.',

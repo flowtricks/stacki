@@ -24,6 +24,8 @@ export const designModeDe: DesignCatalog = {
   'toast.pageTooLarge': 'Diese Seite ist zu groß, um sie im Designmodus als Frame anzuzeigen.',
   'toast.frameUnread': 'Der Editor hat die Seite dieses Frames noch nicht gelesen. Wähle ihn erneut aus.',
   'toast.styleIsCode': 'Der Stil dieses Elements ist als Code geschrieben, daher lässt es sich hier nicht verschieben oder skalieren.',
+  'toast.styleNotKept':
+    'Stacki kann nicht bestätigen, dass {file} einen auf dieser Instanz gesetzten Stil behält, daher lässt sie sich hier nicht verschieben oder skalieren.',
   'bar.close': 'Designmodus beenden',
   'reset.title': 'Neu beginnen?',
   'reset.body': 'Alle Frames werden verworfen und die Arbeitsfläche beginnt wieder mit deinem Projekt. Das lässt sich nicht rückgängig machen.',
