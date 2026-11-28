@@ -1,7 +1,8 @@
 // Goal: the Roles card and its four detail views (Members, Sidebar apps, Components, Permissions) lay out whole at
 // the Settings dialog's real widths: nothing is drawn past the page's right edge or scrolls sideways, the back
 // button, title, role name and count share one row and one baseline, a long list scrolls inside its view (the header
-// and the search stay put) with a stable scrollbar gutter, the card's summary rows keep their label at the left and
+// and the search stay put) with a stable scrollbar gutter and runs to the dialog's bottom edge with room after its last
+// row (no empty band under it, in a tall window and a short one), the card's summary rows keep their label at the left and
 // their count and chevron at one right edge, and a group switch reads mixed for a partly granted group.
 //
 //   node test/renderer/app/rolesDetailChromium.test.js
@@ -9,8 +10,8 @@
 // Method: run under the Electron binary, because only Chromium lays out flex, ellipsis, overflow and scrollbar
 // gutters. A harness bundles the real RolesSettings and styles.css and mounts it inside the dialog's own markup
 // (`.app-settings` > `.app-settings-scroll` > `.app-settings-content`) at the widths the dialog really takes (a wide
-// window, and a narrow one where the dialog shrinks), over a fake metadata bridge and a generated project (never a
-// real one): twelve members, seventy components, two installed apps. Each view is opened by clicking its card row, as a
+// window, a narrow one where the dialog shrinks, and a short one), over a fake metadata bridge and a generated project (never a
+// real one): twenty-four members, seventy components, two installed apps. Each view is opened by clicking its card row, as a
 // person does, measured, and captured as a screenshot in node_modules/.stacki-test/roles-detail-chromium/. Every wait
 // is for a condition, polled once per animation frame and bounded.
 const fs = require('node:fs');
@@ -19,9 +20,15 @@ const { spawnSync } = require('node:child_process');
 const { buildSync } = require('esbuild');
 const { repoPath } = require('../../helpers/sources.js');
 
-// The dialog is min(880px, 100vw - 48px) wide; these viewports give 880px and 712px dialogs.
-const VIEWPORT_WIDTHS_PX = [1000, 760];
-const VIEWPORT_HEIGHT_PX = 760;
+// The dialog is min(880px, 100vw - 48px) wide and min(640px, 100vh - 48px) tall: these viewports give 880px and 712px
+// wide dialogs at full height, and one in a short window.
+const VIEWPORTS_PX = [
+  { width: 1000, height: 760 },
+  { width: 760, height: 760 },
+  { width: 1000, height: 520 },
+];
+// The room the content ends with, inside the scrolled area: comfortable, never flush with the edge, never a band.
+const END_ROOM_PX = { min: 16, max: 40 };
 const SECTIONS = [
   ['members', 'Members'],
   ['pins', 'Sidebar apps'],
@@ -40,7 +47,7 @@ import { RolesSettings } from ${JSON.stringify(repoPath('src/app/settings/RolesS
 import { setActualRole } from ${JSON.stringify(repoPath('src/lib/currentRole.ts'))};
 import { ADMIN_VIEW } from ${JSON.stringify(repoPath('shared/properties/projectRoles.ts'))};
 
-const members = Array.from({ length: 12 }, (_, index) => 'person-with-a-long-login-' + index);
+const members = Array.from({ length: 24 }, (_, index) => 'person-with-a-long-login-' + index);
 const files = [];
 for (let folder = 0; folder < 8; folder += 1) {
   for (let item = 0; item < 5; item += 1) {
@@ -150,6 +157,27 @@ window.steps = (() => {
       const list = view.querySelector('.app-role-detail-list, .app-role-components-tree, .app-role-pin-list');
       const gutter = list === null ? undefined : getComputedStyle(list).scrollbarGutter;
       const startTop = list === null ? 0 : list.scrollTop;
+      const dialog = document.querySelector('.app-settings');
+      // From the list's bottom edge to the dialog's: the empty band a clipped list would leave.
+      const bandPx = list === null ? -1 : Math.round(box(dialog).bottom - box(list).bottom);
+      // Scrolled to the end, from the last row's bottom to the list's: the room the content ends with.
+      const frames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      let endRoomPx = -1;
+      let windowFilled = true;
+      if (list !== null) {
+        list.scrollTop = list.scrollHeight;
+        await frames();
+        list.scrollTop = list.scrollHeight;
+        await frames();
+        const rows = [...list.querySelectorAll('.app-role-chip, .app-role-toggle, .app-role-components-row, .app-role-pin')].map(box);
+        endRoomPx = Math.round(box(list).bottom - Math.max(...rows.map((row) => row.bottom)));
+        // A windowed tree draws rows all the way down its visible height.
+        if (section === 'components') {
+          windowFilled = Math.min(...rows.map((row) => row.top)) <= box(list).top + 32;
+        }
+        list.scrollTop = 0;
+        await frames();
+      }
       if (list !== null) { list.scrollTop = 40; }
       const scrolled = list === null ? 0 : list.scrollTop;
       const headBefore = Math.round(box(head).top);
@@ -165,7 +193,9 @@ window.steps = (() => {
         searchWidthFills: Math.abs(box(search).right - box(page()).right) <= 8,
         listScrolls: list !== null && scrolls(list),
         listOverflows: list !== null && list.scrollHeight > list.clientHeight + 1,
-        listHeight: list === null ? 0 : Math.round(box(list).height),
+        bandPx,
+        endRoomPx,
+        windowFilled,
         gutter,
         scrolled,
         startTop,
@@ -204,24 +234,24 @@ app.whenReady().then(async () => {
     response.end(fs.readFileSync(file));
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const win = new BrowserWindow({ show: false, width: 1000, height: ${VIEWPORT_HEIGHT_PX}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
+  const win = new BrowserWindow({ show: false, width: ${VIEWPORTS_PX[0].width}, height: ${VIEWPORTS_PX[0].height}, useContentSize: true, webPreferences: { contextIsolation: false, backgroundThrottling: false } });
   const host = (code) => win.webContents.executeJavaScript(code);
   const shot = async (name) => fs.writeFileSync(path.join(DIRECTORY, name + '.png'), (await win.webContents.capturePage()).toPNG());
   const output = { cases: [], error: undefined };
   try {
     await win.loadURL('http://127.0.0.1:' + server.address().port + '/');
-    for (const width of ${JSON.stringify(VIEWPORT_WIDTHS_PX)}) {
-      win.setContentSize(width, ${VIEWPORT_HEIGHT_PX});
+    for (const { width, height } of ${JSON.stringify(VIEWPORTS_PX)}) {
+      win.setContentSize(width, height);
       await host('window.mount()');
       const ready = await host('window.steps.ready()');
-      const item = { width, ready, cards: undefined, details: [], backWorks: [] };
+      const item = { width, height, ready, cards: undefined, details: [], backWorks: [] };
       if (ready) {
         item.cards = await host('window.steps.cards()');
-        await shot('card-' + width);
+        await shot('card-' + width + 'x' + height);
         for (const [section, label] of ${JSON.stringify(SECTIONS)}) {
           const opened = await host('window.steps.open(' + JSON.stringify(label) + ')');
           const measured = opened ? await host('window.steps.detail(' + JSON.stringify(section) + ')') : { section, opened: false };
-          await shot(section + '-' + width);
+          await shot(section + '-' + width + 'x' + height);
           item.details.push({ opened, ...measured });
           item.backWorks.push(await host('window.steps.back()'));
         }
@@ -241,14 +271,14 @@ function check(output) {
       failures.push(detail === undefined ? name : `${name} (${JSON.stringify(detail)})`);
     }
   };
-  expect('every width was drawn', output.cases.length === VIEWPORT_WIDTHS_PX.length, output.cases.length);
-  for (const { width, ready, cards, details, backWorks } of output.cases) {
-    const where = `${width}px`;
+  expect('every window size was drawn', output.cases.length === VIEWPORTS_PX.length, output.cases.length);
+  for (const { width, height, ready, cards, details, backWorks } of output.cases) {
+    const where = `${width}x${height}`;
     expect(`${where}: the roles screen drew`, ready === true);
     if (cards === undefined) {
       continue;
     }
-    expect(`${where}: the card lists five summary rows`, cards.rows === 5, cards.rows);
+    expect(`${where}: the card lists four summary rows`, cards.rows === 4, cards.rows);
     expect(
       `${where}: the rows' chevrons, counts and labels each share one edge`,
       cards.chevronsShareAnEdge && cards.summariesShareAnEdge && cards.labelsShareAnEdge,
@@ -278,11 +308,16 @@ function check(output) {
       }
       if (detail.section === 'members' || detail.section === 'components' || detail.section === 'permissions') {
         expect(`${here}: a long list overflows its box and scrolls`, detail.listOverflows === true && detail.scrolled > detail.startTop, detail);
-        expect(`${here}: the list is at most 384px tall`, detail.listHeight <= 384, detail.listHeight);
         expect(`${here}: the scrollbar gutter is stable`, detail.gutter === 'stable', detail.gutter);
       }
       expect(`${here}: the header and search stay put while the list scrolls`, detail.headStays === true);
       expect(`${here}: the view fits the window`, detail.viewFitsWindow === true);
+      expect(`${here}: the list runs to the dialog's bottom edge`, Math.abs(detail.bandPx) <= EDGE_TOLERANCE_PX, detail.bandPx);
+      if (detail.listOverflows) {
+        const room = detail.endRoomPx >= END_ROOM_PX.min && detail.endRoomPx <= END_ROOM_PX.max;
+        expect(`${here}: the content ends with comfortable room`, room, detail.endRoomPx);
+        expect(`${here}: the windowed tree is drawn down its whole height`, detail.windowFilled === true);
+      }
       if (detail.section === 'permissions') {
         expect(`${here}: a partly granted group reads mixed`, detail.mixedGroup === true);
       }

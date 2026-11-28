@@ -59,7 +59,7 @@ export function useEditorView() {
       }
       setDevice(next);
     },
-    panel: canStudioPanel(studioRole, panel) ? panel : studioRole.editorOff.has('navigator') ? undefined : ('navigator' as const),
+    panel: canStudioPanel(studioRole, panel) ? panel : can(studioRole, 'panel:navigator') ? ('navigator' as const) : undefined,
     setPanel,
     tab: can(studioRole, 'panel:style') ? tab : ('settings' as const),
     setTab,

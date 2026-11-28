@@ -14,7 +14,7 @@
 //
 // Free of Node imports, like documentAccess.ts: the browser runs it too.
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import type { EditorPart } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { limitsStructure, type EditorPart } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { frontmatterRange } from '../source/frontmatter';
 import { parsePage, type ParserNode } from '../source/source';
 import { attributeSpans, imageAttributeChange, imageBindings, imageImportLines, isImageAttribute, literalStrings, type ImageBindings } from './editorImages';
@@ -348,7 +348,9 @@ function withoutEmptyFence(source: string): string {
 function checkProtectedContent(sides: Sides, rules: ContentRules): ContentCheck {
   const left = protectedParts(sides.before, rules);
   const right = protectedParts(sides.after, rules);
-  if (rules.off.has('drag') || rules.off.has('elements')) {
+  // A text edit does not say whether it moved, inserted, deleted or copied an element, so with any of those off the
+  // elements must stay exactly as they were: what is still on travels as named actions (editorActions.ts).
+  if (limitsStructure(rules.off)) {
     if (left.structure !== right.structure) {
       return refused('structure');
     }

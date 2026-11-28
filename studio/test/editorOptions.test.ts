@@ -20,7 +20,19 @@ import { assertRouteAllowed, connectionRole, requestRole, routeRule, RoleRefusal
 import { assertDocumentActionAllowed, assertDocumentChangeAllowed, assertEditorContentAllowed } from '../src/features/roles/documentAccess';
 import { assertEditorRequest, routeReadsBody } from '../src/features/roles/editorRoutes';
 import { safeInlineHTML } from '../src/features/roles/editorRichText';
-import { parseProjectRoles, roleViewOf, can, type RoleView } from '../vendor/stacki/shared/properties/projectRoles';
+import { setStudioRoles } from '../src/features/roles/roleStore';
+import { keyOff } from '../src/features/navigator/useEditorKeys';
+import { studioElementActions } from '../src/features/navigator/studioElementActions';
+import { copyNode, hasCopiedNode } from '../src/features/navigator/clipboard';
+import {
+  ADMIN_VIEW,
+  DEFAULT_PROJECT_ROLES,
+  EDITOR_PARTS,
+  parseProjectRoles,
+  roleViewOf,
+  can,
+  type RoleView,
+} from '../vendor/stacki/shared/properties/projectRoles';
 import type { EditorPart } from '../vendor/stacki/shared/properties/projectRoles';
 import { record } from '../src/shared/validation';
 
@@ -86,8 +98,8 @@ const DESIGN_ACCESS = [
   'publish',
 ];
 /** The owner's example: no panels, but dragging, text and pictures on the page. */
-const CANVAS_ONLY: readonly EditorPart[] = ['sidePanel', 'navigator', 'canvasBar'];
-const READ_ONLY: readonly EditorPart[] = ['sidePanel', 'navigator', 'canvasBar', 'drag', 'text', 'images'];
+const CANVAS_ONLY: readonly EditorPart[] = ['sidePanel', 'canvasBar'];
+const READ_ONLY: readonly EditorPart[] = ['sidePanel', 'canvasBar', 'drag', 'text', 'images'];
 
 async function project() {
   const root = await mkdtemp(path.join(tmpdir(), 'studio-editor-options-'));
@@ -205,7 +217,7 @@ test('with the panel on, settings change but what is switched off does not', asy
   context.after(site.remove);
   const check = (off: readonly EditorPart[], after: string) => assertEditorContentAllowed(role(off), PAGE, { before: PAGE_SOURCE, after }, site.read);
   const setting = NEVER_WITHOUT_PANEL['a changed class'] ?? '';
-  for (const off of [['text'], ['images'], ['drag'], ['elements']] as const) {
+  for (const off of [['text'], ['images'], ['drag'], ['insert'], ['delete'], ['duplicate'], ['paste'], ['copy']] as const) {
     await assert.doesNotReject(check(off, setting), `a class change with ${off[0]} off`);
   }
   for (const [label, after] of Object.entries(TEXT_EDITS)) {
@@ -214,7 +226,8 @@ test('with the panel on, settings change but what is switched off does not', asy
   for (const [label, after] of Object.entries(IMAGE_EDITS)) {
     await assert.rejects(check(['images'], after), /cannot change images/, label);
   }
-  for (const off of ['drag', 'elements'] as const) {
+  // A text edit cannot say which of these it was, so each of them alone holds the elements as they are.
+  for (const off of ['drag', 'insert', 'delete', 'duplicate', 'paste'] as const) {
     for (const label of ['a new element', 'a removed element', 'reordered elements in a raw edit']) {
       await assert.rejects(check([off], NEVER_WITHOUT_PANEL[label] ?? ''), /reorder/, `${off}: ${label}`);
     }
@@ -250,11 +263,24 @@ test('each named action needs its option, and a paste may only copy what the pag
   assert.throws(run(canvas, content as unknown as Parameters<typeof run>[1]), /new markup/);
   assert.throws(run(role([...CANVAS_ONLY, 'drag']), ACTIONS.move), /reorder/);
   assert.doesNotThrow(run(role([...CANVAS_ONLY, 'drag']), ACTIONS.delete));
-  const fixed = role([...CANVAS_ONLY, 'elements']);
-  for (const action of [ACTIONS.delete, ACTIONS.duplicate, ACTIONS.insert, ACTIONS.paste]) {
-    assert.throws(run(fixed, action), /add, duplicate or delete/, action.kind);
+  // Each switch stops its own named request and no other.
+  const requests = { delete: /cannot delete/, duplicate: /cannot duplicate/, insert: /cannot add elements/, paste: /cannot paste/ } as const;
+  for (const part of ['delete', 'duplicate', 'insert', 'paste'] as const) {
+    const without = role([...CANVAS_ONLY, part]);
+    assert.throws(run(without, ACTIONS[part]), requests[part], part);
+    for (const other of ['move', 'delete', 'duplicate', 'insert', 'paste'] as const) {
+      if (other !== part) {
+        assert.doesNotThrow(run(without, ACTIONS[other]), `${part} off keeps ${other}`);
+      }
+    }
   }
-  assert.doesNotThrow(run(fixed, ACTIONS.move));
+  // Giving bare text a tag adds an element.
+  assert.throws(run(role(['insert']), ACTIONS.wrap), /cannot add elements/);
+  assert.doesNotThrow(run(role(['delete']), ACTIONS.wrap));
+  const copyOff = role([...CANVAS_ONLY, 'copy']);
+  for (const kind of ['move', 'delete', 'duplicate', 'insert', 'paste'] as const) {
+    assert.doesNotThrow(run(copyOff, ACTIONS[kind]), `copying sends the server nothing: ${kind}`);
+  }
   for (const action of Object.values(ACTIONS)) {
     assert.throws(run(role(READ_ONLY), action), RoleRefusal, `read only: ${action.kind}`);
   }
@@ -366,7 +392,7 @@ test('a roles file that cannot be read stays as before, and one using options fa
   await writeFile(roles, '{ "version": 2, "roles": [{ "id": "client", "editorOff": ["text"] }] }');
   const locked = await requestRole(site.root, request);
   assert.equal(locked.id, 'client');
-  assert.deepEqual([...locked.editorOff].sort(), ['canvasBar', 'drag', 'elements', 'images', 'navigator', 'sidePanel', 'text']);
+  assert.deepEqual([...locked.editorOff].sort(), [...EDITOR_PARTS].sort());
   assert.equal(routeAllowed(locked, '/studio/api/publish'), false);
 });
 
@@ -493,6 +519,60 @@ test('over the socket a limited role is held to its options, and may undo only i
   const reverted = await send(writer, state.room, typed);
   assert.match(String(reverted['message']), /cannot change styles or settings/, 'an admin’s restyle cannot be undone by the writer');
   assert.equal(state.room.text.toString(), restyled);
+});
+
+test('over the socket "Delete" off holds against both the named request and a raw edit, and leaves the rest on', async (context) => {
+  process.env['STUDIO_CONTAINER_TOKEN'] = 'test-token';
+  const state = await studio(['delete']);
+  context.after(async () => {
+    delete process.env['STUDIO_CONTAINER_TOKEN'];
+    await state.close();
+  });
+  const writer = await state.connect('writer');
+  assert.match(String((await act(writer, state.room, ACTIONS.delete))['message']), /cannot delete elements/);
+  for (const label of ['a removed element', 'a new element', 'reordered elements in a raw edit']) {
+    assert.equal((await send(writer, state.room, NEVER_WITHOUT_PANEL[label] ?? ''))['type'], 'error', label);
+  }
+  assert.equal(state.room.text.toString(), PAGE_SOURCE, 'nothing was removed');
+  assert.equal((await send(writer, state.room, TEXT_EDITS['words in a text'] ?? ''))['type'], 'saved');
+  assert.equal((await act(writer, state.room, ACTIONS.duplicate))['type'], 'saved');
+});
+
+test('over the socket each of Duplicate and Paste off refuses its own request', async (context) => {
+  process.env['STUDIO_CONTAINER_TOKEN'] = 'test-token';
+  const state = await studio(['duplicate', 'paste']);
+  context.after(async () => {
+    delete process.env['STUDIO_CONTAINER_TOKEN'];
+    await state.close();
+  });
+  const writer = await state.connect('writer');
+  assert.match(String((await act(writer, state.room, ACTIONS.duplicate))['message']), /cannot duplicate/);
+  assert.match(String((await act(writer, state.room, ACTIONS.paste))['message']), /cannot paste/);
+  assert.equal(state.room.text.toString(), PAGE_SOURCE);
+  assert.equal((await act(writer, state.room, ACTIONS.delete))['type'], 'saved');
+});
+
+test('in the browser each canvas control stops its own keys, menu rows and copy', (context) => {
+  context.after(() => setStudioRoles(DEFAULT_PROJECT_ROLES, ADMIN_VIEW));
+  const KEYS = { copy: [true, 'c'], duplicate: [true, 'd'], paste: [true, 'v'], delete: [false, 'backspace'] } as const;
+  const page = { file: PAGE, ready: true, text: { toString: () => PAGE_SOURCE } } as unknown as Parameters<typeof copyNode>[0];
+  const options = { document: page, selected: 'n0.1', components: [], action: () => undefined, report: assert.ifError, editRootId: undefined } as const;
+  for (const part of ['copy', 'duplicate', 'paste', 'delete'] as const) {
+    const without = role([part]);
+    setStudioRoles(DEFAULT_PROJECT_ROLES, without);
+    for (const [other, [primary, key]] of Object.entries(KEYS)) {
+      assert.equal(keyOff(without.editorOff, primary, key), other === part, `${part} off, the ${other} key`);
+    }
+    const menu = studioElementActions({ ...options, openComponent: () => undefined }, 'admin');
+    assert.deepEqual([...(menu.roleOff ?? [])], [part], 'the context menu hears which rows to disable');
+  }
+  assert.equal(keyOff(role(['delete']).editorOff, false, 'delete'), true);
+  setStudioRoles(DEFAULT_PROJECT_ROLES, role(['copy']));
+  copyNode(page, 'n0.1', assert.ifError);
+  assert.equal(hasCopiedNode(), false, 'Copy off copies nothing');
+  setStudioRoles(DEFAULT_PROJECT_ROLES, role(['paste']));
+  copyNode(page, 'n0.1', assert.ifError);
+  assert.equal(hasCopiedNode(), true, 'Copy stays while only Paste is off');
 });
 
 test('over the socket a read only role changes nothing', async (context) => {

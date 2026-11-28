@@ -74,7 +74,7 @@ export function Editor(props: EditorProps) {
     props.report,
     () => {
       // Phone panels cover the canvas. Selection must not open an overlay. Without the Navigator there is nothing to show.
-      if (!isMobileEditor() && !props.view.studioRole.editorOff.has('navigator')) {
+      if (!isMobileEditor() && can(props.view.studioRole, 'panel:navigator')) {
         // Code and Apps keep their panel: a running app reads the selection while visible.
         setPanel((current) => (current === 'code' || current === 'apps' ? current : 'navigator'));
       }
@@ -281,7 +281,7 @@ function EditorContent({
         model={model}
         project={props.project}
         enabled={
-          !props.view.studioRole.editorOff.has('elements') &&
+          !props.view.studioRole.editorOff.has('insert') &&
           !model.collection &&
           !(props.view.panel === 'collections' && props.view.cms) &&
           props.view.panel !== 'variables' &&

@@ -14,11 +14,12 @@ import {
   type ProjectRole,
   type StaticAccessFeature,
 } from '../../../shared/properties/projectRoles';
+import { canvasRows } from './roleCanvasModel';
 import type { AppSummary } from '../../../shared/properties/apps';
 import type { Described } from '../../../shared/properties/i18n/messageRef';
 
 /** The detail views a role card opens, in the order the card lists them. */
-export const ROLE_SECTIONS = ['members', 'pins', 'components', 'editing', 'permissions'] as const;
+export const ROLE_SECTIONS = ['members', 'pins', 'components', 'permissions'] as const;
 export type RoleSection = (typeof ROLE_SECTIONS)[number];
 
 /** Where Settings → Roles is: the cards, or one section of one role. */
@@ -32,7 +33,7 @@ export interface PermissionRowView {
   readonly feature: StaticAccessFeature | typeof APP_ACCESS_ALL;
   readonly label: string;
   readonly checked: boolean;
-  /** The role's Editing options take it away whatever the switch says, so it shows off and cannot be switched here. */
+  /** The right panel or a canvas control being off takes it away whatever the switch says, so it shows off and cannot be switched here. */
   readonly withheld: boolean;
 }
 
@@ -45,11 +46,11 @@ export interface PermissionGroupView {
   readonly on: number;
   readonly total: number;
   readonly state: GroupState;
-  /** Every feature of the whole group, so its switch changes all of it even while a search shows some. */
+  /** Every switchable feature of the whole group, so its switch changes all of it even while a search shows some. A locked one is left as it is. */
   readonly features: readonly StaticAccessFeature[];
 }
 
-/** Whether the role's editing options take `feature` away. */
+/** Whether the role's right panel or canvas controls take `feature` away. */
 function withheld(role: ProjectRole, feature: StaticAccessFeature | typeof APP_ACCESS_ALL): boolean {
   return role.id !== ADMIN_ROLE_ID && editorWithholds(roleView(role).editorOff, feature);
 }
@@ -68,11 +69,13 @@ function switchOn(role: ProjectRole, feature: StaticAccessFeature): boolean {
   return role.access.includes(feature);
 }
 
-/** Granted and total switches: every grouped feature plus "Every app". */
+/** Granted and total switches: every grouped feature, "Every app", and every canvas control of a role that has them. */
 export function permissionCounts(role: ProjectRole): { readonly granted: number; readonly total: number } {
   const features = ACCESS_GROUPS.flatMap((group) => group.features.map((item) => item.feature));
-  const total = features.length + 1;
-  const granted = features.filter((feature) => switchOn(role, feature)).length + (role.access.includes(APP_ACCESS_ALL) ? 1 : 0);
+  const canvas = role.id === ADMIN_ROLE_ID ? [] : canvasRows(role);
+  const total = features.length + 1 + canvas.length;
+  const granted =
+    features.filter((feature) => switchOn(role, feature)).length + (role.access.includes(APP_ACCESS_ALL) ? 1 : 0) + canvas.filter((row) => row.checked).length;
   assert(granted <= total, 'Role permissions: granted switches are among the listed ones');
   assert(total > 1, 'Role permissions: the grid lists features');
   return { granted, total };
@@ -135,9 +138,11 @@ export function permissionGroups(
     }
     const counting = all.slice(0, counted);
     const on = counting.filter((row) => row.checked).length;
-    const features = counting.flatMap((row) => (row.feature === APP_ACCESS_ALL ? [] : [row.feature]));
-    assert(features.length === counted, 'The counted rows are the static features');
-    groups.push({ key: group.label, label, rows, on, total: counted, state: groupState(on, counted), features });
+    // A locked row takes no part in the group's switch: switching a group on never grants what cannot be seen.
+    const switchable = counting.filter((row) => !row.withheld);
+    const features = switchable.flatMap((row) => (row.feature === APP_ACCESS_ALL ? [] : [row.feature]));
+    assert(features.length === switchable.length, 'The counted rows are the static features');
+    groups.push({ key: group.label, label, rows, on, total: counted, state: groupState(on, switchable.length), features });
   }
   assert(groups.length <= ACCESS_GROUPS.length, 'A search never adds groups');
   return groups;

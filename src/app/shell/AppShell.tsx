@@ -279,7 +279,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       </PanelBoundary>
       <CanvasTextFormatBar />
       <CanvasTextSourceCue />
-      {app.insertOpen && !role.editorOff.has('elements') && <DesktopInsertSearch app={app} />}
+      {app.insertOpen && !role.editorOff.has('insert') && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
       <ErrorToast
         message={

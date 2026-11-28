@@ -8,7 +8,14 @@
 // last-admin refusal behave exactly as they did inline.
 import { useId, useMemo, type KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { APPS_ACCESS_GROUP, sameLogin, type ProjectRole } from '../../../shared/properties/projectRoles';
+import {
+  ADMIN_ROLE_ID,
+  APPS_ACCESS_GROUP,
+  LEFT_PANEL_ACCESS_GROUP,
+  RIGHT_PANEL_ACCESS_GROUP,
+  sameLogin,
+  type ProjectRole,
+} from '../../../shared/properties/projectRoles';
 import CommitAvatar from '../../features/history/CommitAvatar';
 import { ChevronLeftIcon, CloseIcon, SearchIcon } from '../../ui/Icons';
 import { Switch } from '../../ui/Switch';
@@ -22,8 +29,9 @@ import { RoleAppPermissions } from './RoleAppPermissions';
 import { useInstalledApps } from './RoleAppPicker';
 import { RoleComponents } from './RoleComponents';
 import { RolePinnedApps } from './RolePinnedApps';
-import { RoleEditing } from './RoleEditing';
-import { editingSummary } from './roleEditingModel';
+import { RoleCanvasControls, matchingCanvasRows } from './RoleCanvasControls';
+import { RoleRightPanel } from './RoleRightPanel';
+import { readOnlyRole } from './roleCanvasModel';
 import { permissionCounts, permissionGroups, matchesQuery, type PermissionGroupView, type RoleSection } from './roleDetailModel';
 import type { RoleCardActions } from './RoleCard';
 
@@ -73,7 +81,6 @@ export function RoleDetail(props: {
         <h3>{title}</h3>
         {/* What the Components list means is a tip beside the title, not a paragraph above the list. */}
         {section === 'components' && <InfoHint text={translate('settings.roles.components.info')} />}
-        {section === 'editing' && <InfoHint text={translate('roles.editing.info')} />}
         <span className="app-role-detail-role">{role.name}</span>
         <span className="app-role-detail-count">{sectionCount(role, section, tree, translate)}</span>
         {section === 'components' && editable && (
@@ -102,7 +109,6 @@ export function RoleDetail(props: {
           actions={{ setVisibility: actions.setComponentVisibility, copyFrom: actions.copyComponentRules, removeRule: actions.removeComponentRule }}
         />
       )}
-      {section === 'editing' && <RoleEditing role={role} editable={editable} actions={actions} query={query} />}
       {section === 'permissions' && <PermissionsView role={role} editable={editable} actions={actions} projectPath={props.projectPath} query={query} />}
     </section>
   );
@@ -116,8 +122,6 @@ function sectionTitle(section: RoleSection, translate: ReturnType<typeof useTran
       return translate('settings.roles.pins.title');
     case 'components':
       return translate('settings.roles.components.title');
-    case 'editing':
-      return translate('roles.editing.title');
     case 'permissions':
       return translate('settings.roles.permissions.title');
     default: {
@@ -137,13 +141,10 @@ function sectionCount(role: ProjectRole, section: RoleSection, tree: ComponentTr
       return String(role.pinnedApps.length);
     case 'components':
       return translate('settings.roles.components.count', { visible: tree.visible, total: tree.total });
-    case 'editing': {
-      const summary = editingSummary(role);
-      return summary.kind === 'readOnly'
-        ? translate('roles.editing.readOnly')
-        : translate('settings.roles.summary.ofTotal', { count: summary.on, total: summary.total });
-    }
     case 'permissions': {
+      if (readOnlyRole(role)) {
+        return translate('roles.permissions.readOnly');
+      }
       const { granted, total } = permissionCounts(role);
       return translate('settings.roles.permissions.count', { granted, total });
     }
@@ -163,9 +164,7 @@ function DetailSearch(props: { readonly section: RoleSection; readonly query: st
         ? translate('settings.roles.detail.search.pins')
         : props.section === 'components'
           ? translate('settings.roles.components.search')
-          : props.section === 'editing'
-            ? translate('roles.editing.search')
-            : translate('settings.roles.detail.search.permissions');
+          : translate('settings.roles.detail.search.permissions');
   return (
     <label className="app-role-search">
       <SearchIcon size={12} />
@@ -201,6 +200,8 @@ function MembersView(props: ViewProps & { readonly currentLogin: string | undefi
   const shown = role.members.filter((member) => matchesQuery(member, props.query));
   return (
     <div className="app-role-members">
+      {/* The add field comes first: the list below it runs to the dialog's bottom edge, and the suggestions open over it. */}
+      {editable && <MemberInvite role={role} projectPath={props.projectPath} addMember={actions.addMember} addInvited={actions.addInvitedMember} />}
       <ul className="app-role-people-list app-role-detail-list" aria-label={translate('settings.roles.members.list', { name: role.name })}>
         {shown.map((member) => (
           <li key={member} className="app-role-chip">
@@ -224,7 +225,6 @@ function MembersView(props: ViewProps & { readonly currentLogin: string | undefi
         {role.members.length === 0 && <li className="app-role-none">{translate('settings.roles.members.none')}</li>}
       </ul>
       {role.members.length > 0 && shown.length === 0 && <NoMatch query={props.query} />}
-      {editable && <MemberInvite role={role} projectPath={props.projectPath} addMember={actions.addMember} addInvited={actions.addInvitedMember} />}
     </div>
   );
 }
@@ -255,19 +255,29 @@ function PermissionsView(props: ViewProps) {
   const appsShown =
     query.trim() === '' ||
     apps.some((app) => matchesQuery(app.manifest.name, query) || app.manifest.permissions.some((permission) => matchesQuery(permission.label, query)));
-  const nothing = groups.length === 0 && !appsShown;
+  // Admin's access is fixed, so it has no canvas controls (and no Permissions row to reach this view by).
+  const canvas = role.id === ADMIN_ROLE_ID ? [] : matchingCanvasRows(role, query, translate);
+  const nothing = groups.length === 0 && canvas.length === 0 && !appsShown;
   const appSections = (
     <RoleAppPermissions role={role} installed={installed} editable={editable} query={query} change={actions.setAppPermissions} access={actions.setAppAccess} />
+  );
+  // The two panel sections lead, then what can be done on the page, then everything else.
+  const right = groups.find((group) => group.key === RIGHT_PANEL_ACCESS_GROUP);
+  const left = groups.find((group) => group.key === LEFT_PANEL_ACCESS_GROUP);
+  const rest = groups.filter((group) => group !== right && group !== left);
+  const drawn = (group: PermissionGroupView) => (
+    <div key={group.key} className="app-role-group-block">
+      <PermissionGroup group={group} role={role} editable={editable} actions={actions} />
+      {group.key === APPS_ACCESS_GROUP && appSections}
+    </div>
   );
   return (
     <div className="app-role-detail-list app-role-access">
       {nothing && <NoMatch query={query} />}
-      {groups.map((group) => (
-        <div key={group.key} className="app-role-group-block">
-          <PermissionGroup group={group} role={role} editable={editable} actions={actions} />
-          {group.key === APPS_ACCESS_GROUP && appSections}
-        </div>
-      ))}
+      {right !== undefined && <RoleRightPanel group={right} role={role} editable={editable} actions={actions} />}
+      {left !== undefined && drawn(left)}
+      {canvas.length > 0 && <RoleCanvasControls role={role} editable={editable} actions={actions} rows={canvas} />}
+      {rest.map(drawn)}
       {/* A search that matches only an app's own permissions still shows the apps, after the groups. */}
       {!groups.some((group) => group.key === APPS_ACCESS_GROUP) && appSections}
     </div>
@@ -293,12 +303,12 @@ function PermissionGroup(props: {
           label={translate('settings.roles.permissions.allLabel', { group: group.label })}
           checked={group.state === 'on'}
           mixed={group.state === 'mixed'}
-          disabled={!props.editable}
+          disabled={!props.editable || group.features.length === 0}
           onToggle={() => actions.toggleGroup(group.features, group.state === 'on' ? 'withdraw' : 'grant')}
         />
       </div>
       {group.rows.map((row) => (
-        <div key={row.feature} className="app-role-toggle" title={row.withheld ? translate('roles.editing.withheld') : undefined}>
+        <div key={row.feature} className="app-role-toggle" title={row.withheld ? translate('roles.permissions.locked') : undefined}>
           <span className="app-role-toggle-icon" aria-hidden="true">
             <FeatureIcon feature={row.feature} size={14} />
           </span>

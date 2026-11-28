@@ -3,10 +3,13 @@ import { canvasInstanceOpener } from '../../features/preview/componentCanvas/com
 import type { ElementActionProps } from '../../features/structure/ElementContextMenu';
 import { structuralSelection } from '../model/selectionStructure';
 import { addNodeToChatOffer } from './aiAddToChat';
+import { currentRole } from '../../lib/currentRole';
 
 export function desktopElementActions(app: ShellView): Omit<ElementActionProps, 'nodes'> {
   return {
     editRootId: app.defaultsCanvas.rootId,
+    // The canvas controls "View as" previews as off.
+    roleOff: currentRole().editorOff,
     onOpenComponent: (name, id) => {
       void app.openComponent(name, app.pathFor(id)).catch(app.reportFailure);
     },

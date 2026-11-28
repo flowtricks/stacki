@@ -7,7 +7,7 @@
 // feature before and after, and walk the invalid shapes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { EDITOR_PARTS, effectiveEditorOff, parseEditorOff, readOnlyEditor, limitsEditing } from '#dist/shared/properties/projectRoles.js';
+import { EDITOR_PARTS, effectiveEditorOff, parseEditorOff, readOnlyEditor, limitsEditing, limitsStructure } from '#dist/shared/properties/projectRoles.js';
 import {
   ACCESS_FEATURES,
   ADMIN_VIEW,
@@ -58,7 +58,19 @@ test('editing options are stored in one order, kept through a save, and ignored 
 });
 
 test('a list this version cannot read switches everything off', () => {
-  for (const bad of ['text', {}, true, 7, JSON.parse('null'), ['text', 'a-part-from-later'], [1], Array.from({ length: 40 }, () => 'text')]) {
+  // Names an unreleased build used (`navigator`, `elements`) are unknown too, so they switch everything off.
+  for (const bad of [
+    'text',
+    {},
+    true,
+    7,
+    JSON.parse('null'),
+    ['text', 'a-part-from-later'],
+    ['elements'],
+    ['navigator'],
+    [1],
+    Array.from({ length: 40 }, () => 'text'),
+  ]) {
     assert.deepEqual(parseEditorOff(bad), EDITOR_PARTS, JSON.stringify(bad));
   }
   assert.deepEqual(parseEditorOff(undefined), []);
@@ -104,32 +116,35 @@ test('without the right panel nothing else reaches styles or settings', () => {
   }
 });
 
-test('the navigator and the canvas bar are views: hiding them limits nothing else', () => {
-  const noNavigator = view(['navigator']);
-  assert.deepEqual(
-    allowed(noNavigator),
-    EVERY_GRANT.filter((feature) => feature !== 'panel:navigator'),
-  );
-  assert.equal(limitsEditing(noNavigator.editorOff), false);
-  const noBar = view(['canvasBar']);
-  assert.deepEqual(allowed(noBar), EVERY_GRANT);
-  assert.equal(limitsEditing(noBar.editorOff), false);
-  // Add elements came with the Navigator grant, and hiding the Navigator does not take it away.
-  assert.equal(can(view(['navigator'], ['panel:navigator']), 'panel:elements'), true);
+test('the canvas toolbar and copying change nothing: switching them off limits nothing else', () => {
+  for (const part of ['canvasBar', 'copy'] as const) {
+    const role = view([part]);
+    assert.deepEqual(allowed(role), EVERY_GRANT, part);
+    assert.equal(limitsEditing(role.editorOff), false, part);
+    assert.equal(limitsStructure(role.editorOff), false, part);
+  }
+  for (const part of ['drag', 'insert', 'delete', 'duplicate', 'paste'] as const) {
+    assert.equal(limitsStructure(view([part]).editorOff), true, part);
+  }
+  assert.equal(limitsStructure(view(['text', 'images', 'sidePanel']).editorOff), false);
 });
 
 test('each page option takes the other ways to change the same thing', () => {
   assert.deepEqual(gone(view(['text']), ['panel:cms', ...UNCHECKABLE]), []);
   assert.equal(can(view(['text']), 'panel:assets'), true);
   assert.deepEqual(gone(view(['images']), ['panel:cms', 'panel:assets', ...UNCHECKABLE]), []);
-  assert.deepEqual(gone(view(['elements']), ['panel:elements', 'panel:components', ...UNCHECKABLE]), []);
+  assert.deepEqual(gone(view(['insert']), ['panel:elements', 'panel:components', ...UNCHECKABLE]), []);
+  for (const part of ['delete', 'duplicate', 'paste'] as const) {
+    assert.deepEqual(gone(view([part]), UNCHECKABLE), [], part);
+    assert.equal(can(view([part]), 'panel:elements'), true, `${part} off keeps inserting`);
+  }
   assert.deepEqual(gone(view(['drag']), UNCHECKABLE), []);
   assert.equal(can(view(['drag']), 'panel:cms'), true);
 });
 
-test('dragging, text and images off is read only, and adding elements goes with them', () => {
+test('dragging, text and images off is read only, and inserting, deleting, duplicating and pasting go with them', () => {
   const reader = view(['drag', 'text', 'images']);
-  assert.equal(reader.editorOff.has('elements'), true);
+  assert.deepEqual([...reader.editorOff].sort(), ['delete', 'drag', 'duplicate', 'images', 'insert', 'paste', 'text']);
   assert.equal(readOnlyEditor(reader.editorOff), true);
   assert.deepEqual(
     gone(reader, ['panel:elements', 'panel:cms', 'panel:assets', 'publish', 'page:delete', 'page:rename', 'cli:config', 'marketplace:install', ...UNCHECKABLE]),

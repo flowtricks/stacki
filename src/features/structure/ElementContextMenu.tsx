@@ -3,11 +3,14 @@ import { findNavigatorNode, type NavigatorNode } from './structureModel';
 import { canConvertText, canWrapNode, type TextTag, type WrapperTag } from '../../editor/wrapRules';
 import { isFragmentNode } from '../../editor/liveClasses';
 import { currentUnlinkMenu } from './unlinkMenu';
+import type { EditorPart } from '../../../shared/properties/projectRoles';
 
 /** Shared by navigator and canvas so action availability cannot drift between them. */
 export interface ElementActionProps {
   readonly nodes: readonly NavigatorNode[];
   readonly clientMode?: boolean;
+  /** The canvas controls the person's role has off (shared/properties/projectRoles.ts): their menu rows are disabled. */
+  readonly roleOff?: ReadonlySet<EditorPart>;
   readonly editRootId?: string | undefined;
   readonly onSetDefaults?: (name: string, id: string) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
@@ -43,7 +46,6 @@ export function ElementContextMenu(
     <ContextMenu
       position={props.position}
       {...contextCapabilities(props, props.position)}
-      canPaste={typeof props.hasClipboard === 'function' && props.hasClipboard()}
       onClose={props.onClose}
       onAction={(action) => {
         props.onClose();
@@ -87,7 +89,7 @@ function runContextAction(action: ContextAction, props: ElementActionProps, menu
     }
     case 'unlink': {
       const offer = currentUnlinkMenu();
-      if (capabilities.component && capabilities.canChange && offer !== undefined) {
+      if (capabilities.component && capabilities.canUnlink && offer !== undefined) {
         offer.unlink(menu.nodeId);
       }
       return;
@@ -98,20 +100,22 @@ function runContextAction(action: ContextAction, props: ElementActionProps, menu
       }
       return;
     case 'copy':
-      if (capabilities.canChange) {
+      if (capabilities.canCopy) {
         props.onCopyNode(menu.nodeId);
       }
       return;
     case 'duplicate':
-      if (capabilities.canChange) {
+      if (capabilities.canDuplicate) {
         props.onDuplicateNode(menu.nodeId);
       }
       return;
     case 'paste':
-      props.onPasteNode();
+      if (capabilities.canPaste) {
+        props.onPasteNode();
+      }
       return;
     case 'delete':
-      if (capabilities.canChange) {
+      if (capabilities.canDelete) {
         props.onRemoveNode(menu.nodeId);
       }
       return;
@@ -153,16 +157,26 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
     node.kind === 'branch' ||
     (props.clientMode === true && node.id === 'layout');
   const canChange = !protectedNode && props.canChangeStructure?.(position.nodeId) !== false;
-  const wrap = props.onWrapNode !== undefined && canChange;
-  const convert = props.onConvertText !== undefined && canChange;
+  // Each action answers to its own canvas control; cutting is a copy and a delete.
+  const allows = (part: EditorPart): boolean => props.roleOff?.has(part) !== true;
+  const canCopy = canChange && allows('copy');
+  const canDelete = canChange && allows('delete');
+  const wrap = props.onWrapNode !== undefined && canChange && allows('insert');
+  const convert = props.onConvertText !== undefined && canChange && allows('insert');
   return {
+    canCopy,
+    canDelete,
+    canDuplicate: canChange && allows('duplicate'),
+    canPaste: allows('paste') && typeof props.hasClipboard === 'function' && props.hasClipboard(),
+    // Unlinking replaces the instance with its markup: elements go and others arrive.
+    canUnlink: canChange && allows('insert') && allows('delete'),
     component,
     addToChat: addToChatState({ offered: props.onAddToChat !== undefined, hasCode: node !== undefined && node.kind !== 'chunk-group' }),
     plainText: node?.kind === 'text' && props.onConvertText !== undefined,
     protectedNode,
     canChange,
     canSetDefaults: component && !props.clientMode && props.onSetDefaults !== undefined,
-    canCut: props.onCutNode !== undefined && canChange,
+    canCut: props.onCutNode !== undefined && canCopy && canDelete,
     canOpen: component && !node.astroAsset && props.onOpenComponent !== undefined,
     // The same rule as Open component: an Astro component of the project, not an asset or a dynamic tag.
     openCanvas: openCanvasState({ offered: props.onOpenCanvas !== undefined, opens: component && !node.astroAsset }),

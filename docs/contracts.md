@@ -863,28 +863,38 @@ transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`)
   Navigator, and may be copied, pasted or duplicated. It never changes `can()`, so a restricted admin keeps
   Settings. Nothing in the app moves or renames a component yet; `moveComponentRules` is ready for the
   rename that does, and until then a moved path shows as missing.
-- Editing options: any role but admin may hold `editorOff: ["sidePanel", "navigator", "canvasBar", "drag", "text",
-  "images", "elements"]` (any subset; shared/properties/projectRoles.ts), written only when non-empty. It is a deny
-  list: an option only takes away, and a file without it grants and reads exactly as before. `sidePanel` is the
-  right panel (Style and Settings), `navigator` the element tree, `canvasBar` the bar over the page; `drag`, `text`,
-  `images` and `elements` (add, paste, duplicate, delete) are what may be done on the page. With `drag`, `text` and
-  `images` all off the role is read only and `elements` goes with them (also when a role with neither right panel
-  permission switches off `drag` and `text`: it never changed pictures). A value this version cannot read, an unknown
-  part included, reads as every part off. `can()` withholds what would reach a switched-off option another way
-  (`editorWithholds`): `navigator` takes `panel:navigator`; `sidePanel` takes the Style, Settings, Selectors and
-  Variables panels and breakpoint settings; `sidePanel` or any page option takes Code, `code:edit`, AI chat, Git,
-  Audits, component properties, creating and editing components and `page:create`; `text` or `images` takes the CMS;
-  `images` takes Assets; `elements` takes Add elements and Components; read only also takes publishing, renaming and
-  deleting pages, settings writes and the CLI's write commands. The navigator and canvas bar alone limit no write.
+- Editing options: any role but admin may hold `editorOff`, any subset of `sidePanel`, `text`, `drag`, `images`,
+  `insert`, `delete`, `duplicate`, `copy`, `paste`, `canvasBar` (shared/properties/projectRoles.ts), written only when
+  non-empty. It is a deny list: an option only takes away, and a file without it grants and reads exactly as before.
+  `sidePanel` is the whole right panel; the rest are the canvas controls. With `drag`, `text` and `images` all off the
+  role is read only and `insert`, `delete`, `duplicate` and `paste` go with them (a role with neither right panel
+  permission that switches off `drag` and `text` is read only too: it never changed pictures). A value this version
+  cannot read, an unknown part included (`navigator` and `elements`, from unreleased builds, among them), reads as
+  every part off. `can()` withholds what would reach a switched-off option another way (`editorWithholds`):
+  `sidePanel` takes the Style, Settings, Selectors and Variables panels and breakpoint settings; `sidePanel` or any
+  change to the page takes Code, `code:edit`, AI chat, Git, Audits, component properties, creating and editing
+  components and `page:create`; `text` or `images` takes the CMS; `images` takes Assets; `insert` takes Add elements
+  and Components; read only also takes publishing, renaming and deleting pages, settings writes and the CLI's write
+  commands. `copy` and `canvasBar` change nothing, so alone they withhold and limit no write.
+- Settings → Roles → Permissions shows these in three sections. Right panel: its switch stores or removes
+  `sidePanel`, and its rows are the `panel:style` and `panel:settings` grants. Switching off the last row also stores
+  `sidePanel` and keeps that grant, so a panel switched off in this view always carries the protection above and
+  comes back as it was (`setRightPanel`, rolesEdits.ts). A file that grants neither tab and has no `sidePanel` reads
+  as it always did: no panel, and nothing else withheld. Left panel: the other `panel:*` grants. Canvas controls:
+  the remaining options.
 - Studio enforces editing options on the server. A read only role sends no write route at all but the few POSTs
   that only read (`READ_ONLY_POSTS`, editorRoutes.ts) and changes no document. A limited role may not create page
-  files or save markup through `/studio/api/create` or `/studio/api/source`. Over the socket, named actions are
-  judged by kind (`editorActions.ts`: `move` is `drag`; `insert`, `duplicate`, `delete` and `paste` are `elements`;
-  a paste must be a verbatim copy of a node on that page; app markup is refused). A plain text edit is judged by what
-  it changes (`editorContent.ts`): without the panel only the allowed words and pictures may differ, byte for byte;
-  with it, what is switched off must read the same. Which component props are words, and which frontmatter strings
-  the page prints, come from the canvas text editor's own tracers. A limited person may undo and redo their own
-  accepted changes while nobody else has changed the file (`editorUndo.ts`).
+  files or save markup through `/studio/api/create` or `/studio/api/source`. Over the socket, each named action is
+  judged by its own option (`editorActions.ts`: `move` is `drag`; `insert`, `delete`, `duplicate` and `paste` are
+  their namesakes; wrapping text is `insert`; a paste must be a verbatim copy of a node on that page; app markup is
+  refused). `duplicate` and `paste` write the same markup, so each stops its own request and only both together stop
+  a copy of an element being added. `copy` sends the server nothing and is held in the editor alone, as is
+  `canvasBar`. A plain text edit is judged by what it changes (`editorContent.ts`): without the panel only the
+  allowed words and pictures may differ, byte for byte; with it, what is switched off must read the same, and with
+  any of `drag`, `insert`, `delete`, `duplicate` or `paste` off the elements must stay as they were. Which component
+  props are words, and which frontmatter strings the page prints, come from the canvas text editor's own tracers. A
+  limited person may undo and redo their own accepted changes while nobody else has changed the file
+  (`editorUndo.ts`).
 - Editing options and older versions: 1.4.21 and earlier ignore the unknown key, so they apply none of these options
   (nobody gains anything the role's `access` did not already give), and their Roles tab or CLI drops the key when it
   saves the file. Options therefore hold only once the Studio server runs this version or later. A broken roles file

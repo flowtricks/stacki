@@ -442,7 +442,6 @@ button.app-role-name-button:hover:not(:disabled) {
   gap: 6px;
 }
 .app-role-pin-list {
-  max-height: min(384px, calc(100dvh - 300px));
   overflow-y: auto;
   scrollbar-gutter: stable;
   display: flex;
@@ -622,6 +621,14 @@ button.app-role-name-button:hover:not(:disabled) {
   position: static;
   padding-inline-start: 8px;
 }
+/* Rules for paths that are gone sit under the tree, in their own bounded scroller. */
+.app-role-components-missing {
+  flex: 0 1 auto;
+  max-height: 40%;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-bottom: 16px;
+}
 .app-role-components-missing h4 {
   margin: 0 0 4px;
   color: var(--text-faint);
@@ -763,8 +770,35 @@ button.app-role-row:hover:not(:disabled) {
   color: var(--text-faint);
 }
 
-/* A detail view (RoleDetail.tsx): header, search, then the list, which scrolls inside the view while the header
-   and search stay put. Every scroll container reserves its scrollbar gutter, so rows never shift sideways. */
+/* A detail view (RoleDetail.tsx): header, search, then the list, which scrolls while the header and search stay
+   put. The view takes the whole page under the dialog's header, so the list runs to the dialog's bottom edge and
+   ends with its own padding there. Every scroll container reserves its scrollbar gutter, so rows never shift
+   sideways. */
+.app-settings-scroll:has(.app-role-detail) {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+.app-settings-scroll:has(.app-role-detail) > .app-settings-content,
+.app-settings-scroll:has(.app-role-detail) .app-settings-panel:not([hidden]),
+.app-settings-panel > .app-roles:has(> .app-role-detail),
+.app-role-detail,
+.app-role-members,
+.app-role-pins-view,
+.app-role-pins-view > .app-role-pins,
+.app-role-components-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.app-settings-scroll:has(.app-role-detail) > .app-settings-content {
+  width: 100%;
+}
+/* "Saved" sits in the room above the header, never over the count at its end. */
+.app-roles:has(> .app-role-detail) .app-settings-save-row .app-settings-saved {
+  top: -20px;
+}
 .app-role-detail {
   display: flex;
   flex-direction: column;
@@ -853,8 +887,15 @@ button.app-role-back:hover:not(:disabled) {
   font-size: 13px;
   outline: none;
 }
+.app-role-detail-list,
+.app-role-pins-view .app-role-pin-list,
+.app-role-components-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The room after the last row, inside the scrolled content, so nothing ends flush against the dialog's edge. */
+  padding-bottom: var(--settings-gutter, 32px);
+}
 .app-role-detail-list {
-  max-height: min(384px, calc(100dvh - 300px));
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
@@ -863,9 +904,6 @@ button.app-role-back:hover:not(:disabled) {
   padding: 0 8px;
   color: var(--text-faint);
   font-size: 12px;
-}
-.app-role-components-tree {
-  max-height: min(384px, calc(100dvh - 300px));
 }
 /* The Roles tab's placeholder (RolesSkeleton in RolesSettings.tsx): a picker's shape at the picker's own width, and
    summary rows at the real rows' height, so the first read swaps content in place without moving anything. */
@@ -876,7 +914,7 @@ button.app-role-back:hover:not(:disabled) {
   cursor: default;
 }
 
-/* An editing option: the row's tip sits before its switch (RoleEditing.tsx). */
-.app-role-toggle.app-role-editing-toggle {
+/* A canvas control: the row's tip sits before its switch (RoleCanvasControls.tsx). */
+.app-role-toggle.app-role-canvas-toggle {
   grid-template-columns: 16px minmax(0, 1fr) auto auto;
 }

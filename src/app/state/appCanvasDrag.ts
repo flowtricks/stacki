@@ -183,8 +183,8 @@ function startNativeDrag(context: { readonly app: CanvasDragHost; readonly role:
   if (state === undefined || !state.editable || native === undefined) {
     return undefined;
   }
-  // A row dragged from the Navigator moves an element; a component or an Add elements tile adds one.
-  if (context.role.editorOff.has(native.kind === 'node' ? 'drag' : 'elements')) {
+  // A row dragged from the Navigator moves an element; a component or an Add elements tile inserts one.
+  if (context.role.editorOff.has(native.kind === 'node' ? 'drag' : 'insert')) {
     return undefined;
   }
   switch (native.kind) {

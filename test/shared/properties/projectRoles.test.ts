@@ -330,7 +330,7 @@ test('Add elements: the parser accepts the id and still refuses a lookalike, and
     assert.throws(() => parseProjectRoles(file([admin, { id: 'writer', name: 'W', access: [lookalike] }])), /Unknown access feature/, lookalike);
   }
   assert.ok(
-    ACCESS_GROUPS[0]?.features.some((item) => item.feature === 'panel:elements' && item.label === 'Add elements'),
+    ACCESS_GROUPS.find((group) => group.label === 'Left panel')?.features.some((item) => item.feature === 'panel:elements' && item.label === 'Add elements'),
     'the Panels group lists it',
   );
 });

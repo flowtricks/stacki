@@ -150,7 +150,7 @@ export function useAddComponent(
   // target: {parentId: string | undefined, index: number} | undefined (append at end)
   const addComponent = useCallback(
     async (componentName: string, target: InsertTarget | undefined) => {
-      const refusedFor = editingOffFor('elements');
+      const refusedFor = editingOffFor('insert');
       if (refusedFor !== undefined) {
         showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
         return;
@@ -609,7 +609,7 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
 
   const removeNode = useCallback(
     (nodeId: string) => {
-      const refusedFor = editingOffFor('elements');
+      const refusedFor = editingOffFor('delete');
       if (refusedFor !== undefined) {
         showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
         return;
@@ -684,6 +684,11 @@ export function useCopyNode(
 
   const copyNode = useCallback(
     (nodeId: string) => {
+      const refusedFor = editingOffFor('copy');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
@@ -712,12 +717,12 @@ export function useCopyNode(
       };
       // Copying is silent, as it is everywhere else: a notice for it only gets in the way.
     },
-    [nodeClipboardRef, pageStateRef],
+    [nodeClipboardRef, pageStateRef, showToast, translate],
   );
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
-      const refusedFor = editingOffFor('elements');
+      const refusedFor = editingOffFor('duplicate');
       if (refusedFor !== undefined) {
         showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
         return;
@@ -789,7 +794,7 @@ export function usePasteNode(
   // parent), or at the end of the page. Imports for components in the pasted
   // subtree are added if the target page is missing them (cross-page paste).
   const pasteNode = useCallback(async () => {
-    const refusedFor = editingOffFor('elements');
+    const refusedFor = editingOffFor('paste');
     if (refusedFor !== undefined) {
       showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
       return;

@@ -1,5 +1,5 @@
 import type { SharedDocument } from '../collaboration/useDocument';
-import { getEditorRole } from '../roles/roleStore';
+import { getEditorRole, getStudioRole } from '../roles/roleStore';
 import { frontmatterRange } from '../source/frontmatter';
 import type { NodeClipboard } from '../source/clipboardPayload';
 import { bounds, nodeAt } from '../source/source';
@@ -12,6 +12,10 @@ export function hasCopiedNode() {
 }
 export function copyNode(document: SharedDocument | undefined, id: string, report: (error: unknown) => void) {
   if (!document) {
+    return;
+  }
+  // Copying sends the server nothing, so the browser is where "Copy" is held.
+  if (getStudioRole().editorOff.has('copy')) {
     return;
   }
   if (getEditorRole() === 'client' && id === 'layout') {

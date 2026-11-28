@@ -392,13 +392,14 @@ test('the card lists flat summary rows that open their parts, and Admin has no P
   const rows = [...document.querySelectorAll('.app-role-row')];
   assert.deepEqual(
     rows.map((row) => row.dataset.section),
-    ['members', 'pins', 'components', 'editing', 'permissions'],
+    ['members', 'pins', 'components', 'permissions'],
   );
-  assert.match(rows[4].textContent, /^Permissions3 of \d+$/);
+  // Three grants, and the eight canvas controls on without a right panel tab.
+  assert.match(rows[3].textContent, /^Permissions11 of \d+$/);
   assert.equal(rows[0].textContent, 'Members1');
   assert.equal(rows[1].textContent, 'Sidebar apps1');
   assert.equal(document.querySelectorAll('.app-role [role="switch"]').length, 0, 'no switches on the card');
-  await act(async () => rows[4].click());
+  await act(async () => rows[3].click());
   assert.deepEqual(opened, ['permissions']);
   await unmount();
 

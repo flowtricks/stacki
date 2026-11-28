@@ -12,7 +12,7 @@ export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history:
   const wrapNode = useCallback(
     (nodeId: string, name: WrapperTag): void => {
       const state = pageStateRef.current.pageState;
-      if (!state?.editable || editingOffFor('elements') !== undefined) {
+      if (!state?.editable || editingOffFor('insert') !== undefined) {
         return;
       }
       if (!canWrapNode(state.model.nodes, nodeId, name)) {
@@ -30,7 +30,7 @@ export function useWrapNode(coreState: ReturnType<typeof useCoreState>, history:
   const convertText = useCallback(
     (nodeId: string, name: TextTag): void => {
       const state = pageStateRef.current.pageState;
-      if (!state?.editable || editingOffFor('elements') !== undefined) {
+      if (!state?.editable || editingOffFor('insert') !== undefined) {
         return;
       }
       if (!canConvertText(state.model.nodes, nodeId, name)) {

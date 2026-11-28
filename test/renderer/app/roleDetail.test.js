@@ -176,8 +176,9 @@ test('permissionGroups counts and states the whole group, and a search keeps mat
 test('permissionCounts counts every listed switch and Every app', () => {
   const none = { id: 'x', name: 'X', members: [], access: [], appPermissions: {}, pinnedApps: [], componentRules: [], editorOff: [] };
   const counts = roles.permissionCounts(none);
-  assert.equal(counts.granted, 0);
-  assert.equal(roles.permissionCounts({ ...none, access: ['app:*', 'panel:cms'] }).granted, 2);
+  // Eight canvas controls are on by default; "Change images" waits for a right panel tab.
+  assert.equal(counts.granted, 8);
+  assert.equal(roles.permissionCounts({ ...none, access: ['app:*', 'panel:cms'] }).granted, 10);
   assert.equal(roles.permissionCounts({ ...none, access: ['app:*'] }).total, counts.total);
 });
 
@@ -201,14 +202,11 @@ test('a card is a header and flat summary rows with counts; no switches and no a
   assert.match(rows[0], /^Members0$/);
   assert.match(rows[1], /^Sidebar apps0$/);
   assert.match(rows[2], /^Components3 of 3$/);
-  assert.match(rows[3], /^Editing4 of 7$/);
-  assert.match(rows[4], /^Permissions1 of \d+$/);
+  // The CMS grant, plus the canvas controls it leaves on: all but "Change images", which needs a right panel tab.
+  assert.match(rows[3], /^Permissions9 of \d+$/);
+  assert.equal(rows.length, 4, 'one Permissions row: canvas controls are inside it');
   assert.equal(client.querySelectorAll('[role="switch"], input').length, 0, 'the card holds no controls but its rows and menu');
-  assert.equal(
-    document.querySelector('section[aria-label="Admin role"]').querySelectorAll('.app-role-row').length,
-    3,
-    'admin has no Editing or Permissions row',
-  );
+  assert.equal(document.querySelector('section[aria-label="Admin role"]').querySelectorAll('.app-role-row').length, 3, 'admin has no Permissions row');
   await unmount();
 });
 
@@ -235,9 +233,11 @@ test('permissions are grouped, searchable, and the group switch reads mixed, on 
   await mount();
   await click(row('Client', 'Permissions'));
   // page:create is one switch, and a page edit permission gives Add elements by default, so it reads on too (canElements).
-  assert.match(detail().querySelector('.app-role-detail-count').textContent, /^On 2 of \d+$/);
+  // Those two, and the eight canvas controls on without a right panel tab.
+  assert.match(detail().querySelector('.app-role-detail-count').textContent, /^On 10 of \d+$/);
   const headings = labels('.app-role-group h4');
-  assert.ok(headings.includes('Pages') && headings.includes('Panels'), 'grouped by area');
+  assert.deepEqual(headings.slice(0, 4), ['Right panel', 'Left panel', 'Canvas controls', 'Pages'], 'the panels and the canvas lead');
+  assert.equal(new Set(labels('.app-role-toggle-label')).size, labels('.app-role-toggle-label').length, 'nothing is listed twice');
   const all = () => detail().querySelector('[role="switch"][aria-label="All Pages"]');
   assert.equal(all().getAttribute('aria-checked'), 'mixed', 'one of several on is mixed');
   assert.match(detail().querySelector('.app-role-group-count').textContent, /^\d+ of \d+$/);
@@ -254,6 +254,9 @@ test('permissions are grouped, searchable, and the group switch reads mixed, on 
 
   await type(search(), 'delete pages');
   assert.deepEqual(labels('.app-role-toggle-label'), ['Delete pages'], 'the search filters instantly');
+  await type(search(), 'duplicate');
+  assert.deepEqual(labels('.app-role-group h4'), ['Canvas controls'], 'canvas controls are searched too');
+  await type(search(), 'delete pages');
   assert.deepEqual(labels('.app-role-group h4'), ['Pages']);
   await type(search(), 'zzzz');
   assert.match(detail().textContent, /Nothing matches “zzzz”/);
@@ -392,60 +395,117 @@ test('a project without Studio keeps the GitHub field', async () => {
   });
 });
 
-// The Editing view.
+// The Right panel and Canvas controls sections.
 
-const editingSwitch = (part) => detail().querySelector(`.app-role-editing-toggle[data-part="${part}"] [role="switch"]`);
+const canvasSwitch = (part) => detail().querySelector(`.app-role-canvas-toggle[data-part="${part}"] [role="switch"]`);
+const permissionSwitch = (label) => detail().querySelector(`[role="switch"][aria-label="${label}"]`);
+const checkedOf = (label) => permissionSwitch(label).getAttribute('aria-checked');
 const savedClient = () => JSON.parse(writes.at(-1).source).roles.find((role) => role.id === 'client');
+const CANVAS = ['text', 'drag', 'images', 'insert', 'delete', 'duplicate', 'copy', 'paste', 'canvasBar'];
+const BOTH_TABS = ['panel:navigator', 'panel:style', 'panel:settings', 'publish', 'code:edit'];
 
-test('Editing starts as what the permissions give, switches only take away, and read only carries add and delete', async () => {
-  fresh({ access: ['panel:navigator', 'panel:style', 'panel:settings', 'publish'] });
-  await mount();
-  await click(row('Client', 'Editing'));
-  assert.equal(detail().querySelector('h3').textContent, 'Editing');
-  for (const part of ['sidePanel', 'navigator', 'canvasBar', 'drag', 'text', 'images', 'elements']) {
-    assert.equal(editingSwitch(part).getAttribute('aria-checked'), 'true', part);
-    assert.equal(editingSwitch(part).disabled, false, part);
-  }
-  await click(editingSwitch('sidePanel'));
-  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
-  assert.deepEqual(savedClient().access, ['panel:navigator', 'panel:style', 'panel:settings', 'publish'], 'the permissions are untouched');
-  assert.equal(editingSwitch('sidePanel').disabled, false, 'what was switched off can always be switched back on');
-  for (const part of ['drag', 'text', 'images']) {
-    await click(editingSwitch(part));
-  }
-  assert.equal(editingSwitch('elements').getAttribute('aria-checked'), 'false');
-  assert.equal(editingSwitch('elements').disabled, true, 'adding and deleting go with read only');
-  assert.equal(detail().querySelector('.app-role-detail-count').textContent, 'Read only');
-  // The whole page group back on gives everything back.
-  await click(detail().querySelector('[role="switch"][aria-label="All On the page"]'));
-  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
-  await click(editingSwitch('sidePanel'));
-  assert.equal(savedClient().editorOff, undefined, 'with nothing off the file is written as before');
-  await unmount();
-});
-
-test('an option the permissions already settle cannot be switched, and says which permission', async () => {
-  fresh({ access: ['panel:cms'] });
-  await mount();
-  await click(row('Client', 'Editing'));
-  for (const part of ['sidePanel', 'navigator', 'images']) {
-    assert.equal(editingSwitch(part).getAttribute('aria-checked'), 'false', part);
-    assert.equal(editingSwitch(part).disabled, true, part);
-    assert.match(editingSwitch(part).closest('.app-role-editing-toggle').querySelector('.app-role-toggle-label').getAttribute('title'), /Permissions/, part);
-  }
-  await unmount();
-});
-
-test('a permission the editing options take away shows off and fixed in Permissions', async () => {
-  fresh({ access: ['panel:cms', 'panel:style', 'code:edit'], editorOff: ['sidePanel'] });
+test('the Right panel switch hides the whole panel, keeps its tabs for later, and locks the other ways to reach styles', async () => {
+  fresh({ access: BOTH_TABS });
   await mount();
   await click(row('Client', 'Permissions'));
-  for (const label of ['Style panel', 'Edit code']) {
-    const toggle = detail().querySelector(`.app-role-toggle [role="switch"][aria-label="${label}"]`);
-    assert.equal(toggle.getAttribute('aria-checked'), 'false', label);
-    assert.equal(toggle.disabled, true, label);
-    assert.match(toggle.closest('.app-role-toggle').getAttribute('title'), /Editing options/);
+  assert.equal(checkedOf('All Right panel'), 'true');
+  await click(permissionSwitch('All Right panel'));
+  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
+  assert.deepEqual(savedClient().access, BOTH_TABS, 'the permissions are untouched');
+  for (const label of ['All Right panel', 'Style panel', 'Settings panel']) {
+    assert.equal(checkedOf(label), 'false', label);
+    assert.equal(permissionSwitch(label).disabled, false, `${label} can be switched back on`);
   }
-  assert.equal(detail().querySelector('.app-role-toggle [role="switch"][aria-label="CMS"]').getAttribute('aria-checked'), 'true');
+  assert.equal(checkedOf('Edit code'), 'false');
+  assert.equal(permissionSwitch('Edit code').disabled, true);
+  assert.match(permissionSwitch('Edit code').closest('.app-role-toggle').getAttribute('title'), /right panel/);
+  await click(permissionSwitch('All Right panel'));
+  assert.equal(savedClient().editorOff, undefined, 'with nothing off the file is written as before');
+  assert.deepEqual(savedClient().access, BOTH_TABS);
+  assert.equal(checkedOf('Edit code'), 'true');
+  await unmount();
+});
+
+test('switching off the last tab is switching the panel off, with the same protection, and one tab brings back only itself', async () => {
+  fresh({ access: BOTH_TABS });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  await click(permissionSwitch('Style panel'));
+  assert.equal(savedClient().editorOff, undefined, 'one tab off is only that tab');
+  assert.deepEqual(savedClient().access, ['panel:navigator', 'panel:settings', 'publish', 'code:edit']);
+  assert.equal(checkedOf('All Right panel'), 'true', 'the panel still shows, so its switch is on');
+  assert.equal(checkedOf('Edit code'), 'true');
+  await click(permissionSwitch('Settings panel'));
+  assert.deepEqual(savedClient().editorOff, ['sidePanel']);
+  assert.deepEqual(savedClient().access, ['panel:navigator', 'panel:settings', 'publish', 'code:edit']);
+  assert.equal(permissionSwitch('Edit code').disabled, true);
+  await click(permissionSwitch('Style panel'));
+  assert.equal(savedClient().editorOff, undefined);
+  assert.deepEqual(
+    savedClient().access.filter((feature) => /panel:(style|settings)/.test(feature)),
+    ['panel:style'],
+  );
+  assert.equal(checkedOf('Settings panel'), 'false');
+  await unmount();
+});
+
+test('a role with neither tab reads off, and the panel switch gives it both', async () => {
+  fresh({ access: ['panel:cms'] });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  assert.equal(checkedOf('All Right panel'), 'false');
+  assert.equal(canvasSwitch('images').disabled, true);
+  assert.match(
+    canvasSwitch('images').closest('.app-role-toggle').querySelector('.app-role-toggle-label').getAttribute('title'),
+    /Style panel or Settings panel/,
+  );
+  await click(permissionSwitch('All Right panel'));
+  assert.deepEqual(savedClient().access, ['panel:cms', 'panel:style', 'panel:settings']);
+  assert.equal(canvasSwitch('images').disabled, false);
+  await unmount();
+});
+
+test('each canvas control is its own row; text, dragging and images off make the role read only', async () => {
+  fresh({ access: BOTH_TABS });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  for (const part of CANVAS) {
+    assert.equal(canvasSwitch(part).getAttribute('aria-checked'), 'true', part);
+    assert.equal(canvasSwitch(part).disabled, false, part);
+  }
+  for (const part of ['delete', 'duplicate', 'paste', 'copy']) {
+    await click(canvasSwitch(part));
+  }
+  assert.deepEqual(savedClient().editorOff, ['delete', 'duplicate', 'copy', 'paste']);
+  assert.equal(canvasSwitch('insert').getAttribute('aria-checked'), 'true', 'each row stands alone');
+  for (const part of ['drag', 'text', 'images']) {
+    await click(canvasSwitch(part));
+  }
+  for (const part of ['insert', 'delete', 'duplicate', 'paste']) {
+    assert.equal(canvasSwitch(part).getAttribute('aria-checked'), 'false', part);
+  }
+  assert.equal(canvasSwitch('insert').disabled, true, 'changing elements goes with read only');
+  assert.equal(detail().querySelector('.app-role-detail-count').textContent, 'Read only');
+  await click(detail().querySelector('.app-role-back'));
+  assert.match(row('Client', 'Permissions').textContent, /^PermissionsRead only$/);
+  await click(row('Client', 'Permissions'));
+  // The whole section back on gives everything back.
+  await click(permissionSwitch('All Canvas controls'));
+  assert.equal(savedClient().editorOff, undefined);
+  await click(permissionSwitch('All Canvas controls'));
+  assert.deepEqual(savedClient().editorOff, CANVAS);
+  await unmount();
+});
+
+test('a group switch never grants what a switched-off option locks', async () => {
+  fresh({ access: ['panel:style'], editorOff: ['sidePanel'] });
+  await mount();
+  await click(row('Client', 'Permissions'));
+  await click(permissionSwitch('All Left panel'));
+  const access = savedClient().access;
+  assert.ok(access.includes('panel:pages'));
+  for (const locked of ['panel:code', 'panel:ai', 'panel:history', 'panel:variables', 'panel:selectors']) {
+    assert.ok(!access.includes(locked), locked);
+  }
   await unmount();
 });

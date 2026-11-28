@@ -8,7 +8,7 @@
 //
 // The tree is drawn as a window over its rows (fixed row height), so thousands of components cost a screenful
 // of elements per frame. Changes save at once through the card's actions (RolesSettings.tsx).
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import {
   missingComponentRules,
@@ -28,8 +28,10 @@ import { buildComponentTree, flattenRows, initialOpenFolders, type ComponentTree
 export const COMPONENT_ROW_HEIGHT = 32;
 /** Rows drawn above and below what shows, so a fast scroll never reveals a gap. */
 const OVERSCAN_ROWS = 6;
-/** The tree's visible height, in rows. */
+/** The tree's height in rows before it is measured, and its smallest window. */
 const VIEWPORT_ROWS = 12;
+/** The tallest window drawn: a tree stretched past this many rows (a 2,000px dialog) draws no more. */
+const VIEWPORT_ROWS_MAX = 64;
 
 export interface RoleComponentsActions {
   readonly setVisibility: (target: ComponentTarget, state: ComponentState) => void;
@@ -96,21 +98,17 @@ function ComponentRows(props: {
   const translate = useTranslate();
   const [scrollTop, setScrollTop] = useState(0);
   const { rows } = props;
+  const [viewportRows, area] = useViewportRows(rows.length === 0 ? 'empty' : 'drawn');
   if (rows.length === 0) {
     return (
       <p className="app-role-components-empty">{translate(props.empty === 'none' ? 'settings.roles.components.none' : 'settings.roles.components.noMatch')}</p>
     );
   }
   const first = Math.max(0, Math.floor(scrollTop / COMPONENT_ROW_HEIGHT) - OVERSCAN_ROWS);
-  const last = Math.min(rows.length, Math.ceil((scrollTop + VIEWPORT_ROWS * COMPONENT_ROW_HEIGHT) / COMPONENT_ROW_HEIGHT) + OVERSCAN_ROWS);
-  assert(last - first <= VIEWPORT_ROWS + 2 * OVERSCAN_ROWS + 1, 'The window draws a bounded number of rows');
+  const last = Math.min(rows.length, Math.ceil((scrollTop + viewportRows * COMPONENT_ROW_HEIGHT) / COMPONENT_ROW_HEIGHT) + OVERSCAN_ROWS);
+  assert(last - first <= viewportRows + 2 * OVERSCAN_ROWS + 1, 'The window draws a bounded number of rows');
   return (
-    <div
-      className="app-role-components-tree"
-      role="tree"
-      style={{ maxHeight: VIEWPORT_ROWS * COMPONENT_ROW_HEIGHT }}
-      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-    >
+    <div ref={area} className="app-role-components-tree" role="tree" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
       <div style={{ height: rows.length * COMPONENT_ROW_HEIGHT, position: 'relative' }}>
         {rows.slice(first, last).map((row, offset) => (
           <TreeRow key={`${row.kind}:${row.path}`} row={row} top={(first + offset) * COMPONENT_ROW_HEIGHT} {...props} />
@@ -118,6 +116,27 @@ function ComponentRows(props: {
       </div>
     </div>
   );
+}
+
+// How many rows the tree shows: it fills the dialog (roles.css), so its height is measured, within the bounds above.
+// `tree` names whether the tree is drawn, so the measure starts again when a search brings it back.
+function useViewportRows(tree: 'drawn' | 'empty'): readonly [number, RefObject<HTMLDivElement>] {
+  const [count, setCount] = useState(VIEWPORT_ROWS);
+  const area = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = area.current;
+    if (!element || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      const rows = Math.ceil(element.clientHeight / COMPONENT_ROW_HEIGHT);
+      setCount(Math.min(VIEWPORT_ROWS_MAX, Math.max(VIEWPORT_ROWS, rows)));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [tree]);
+  assert(count >= VIEWPORT_ROWS, 'The window is never smaller than its first draw');
+  return [count, area];
 }
 
 function TreeRow(props: {

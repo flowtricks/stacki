@@ -30,7 +30,10 @@ interface MenuProps {
   readonly canConvertSpan: boolean;
   readonly canPaste: boolean;
   readonly canCut: boolean;
-  readonly canChange: boolean;
+  readonly canCopy: boolean;
+  readonly canDuplicate: boolean;
+  readonly canDelete: boolean;
+  readonly canUnlink: boolean;
   readonly protectedNode: boolean;
   /** "Add to chat": absent where there is no AI panel (Studio), so the row is left out. */
   readonly addToChat: 'enabled' | 'disabled' | 'absent';
@@ -79,18 +82,18 @@ export function ContextMenu(props: MenuProps) {
       {props.plainText ? <ConvertMenu {...props} /> : <WrapMenu {...props} />}
       <div className="ctx-divider" role="separator" />
       <MenuItem label={translate('structure.menu.cut')} disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
-      <MenuItem label={translate('structure.menu.copy')} shortcut={shortcut('C')} disabled={!props.canChange} onSelect={() => props.onAction('copy')} />
+      <MenuItem label={translate('structure.menu.copy')} shortcut={shortcut('C')} disabled={!props.canCopy} onSelect={() => props.onAction('copy')} />
       <MenuItem label={translate('structure.menu.paste')} shortcut={shortcut('V')} disabled={!props.canPaste} onSelect={() => props.onAction('paste')} />
       <MenuItem
         label={translate('structure.menu.duplicate')}
         shortcut={shortcut('D')}
-        disabled={!props.canChange}
+        disabled={!props.canDuplicate}
         onSelect={() => props.onAction('duplicate')}
       />
       <MenuItem
         label={translate('structure.menu.delete')}
         shortcut={currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del'}
-        disabled={!props.canChange}
+        disabled={!props.canDelete}
         onSelect={() => props.onAction('delete')}
       />
       {props.component && defaultsMenu === 'offered' && (
@@ -103,7 +106,7 @@ export function ContextMenu(props: MenuProps) {
   );
 }
 
-function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | 'canChange' | 'onAction'>) {
+function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | 'canUnlink' | 'onAction'>) {
   const translate = useTranslate();
   const unlink = useUnlinkMenu();
   return (
@@ -112,7 +115,7 @@ function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'openCanvas' | '
       {props.openCanvas !== 'absent' && (
         <MenuItem label={translate('componentCanvas.menu.open')} disabled={props.openCanvas === 'disabled'} onSelect={() => props.onAction('canvas')} />
       )}
-      {unlink !== undefined && <MenuItem label={unlink.label} disabled={!props.canChange} onSelect={() => props.onAction('unlink')} />}
+      {unlink !== undefined && <MenuItem label={unlink.label} disabled={!props.canUnlink} onSelect={() => props.onAction('unlink')} />}
       <div className="ctx-divider" role="separator" />
     </>
   );

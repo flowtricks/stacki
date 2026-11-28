@@ -10,8 +10,6 @@ export interface CanvasGestures {
   readonly images: boolean;
   /** Type into text on the page. */
   readonly text: boolean;
-  /** Add, paste, duplicate and delete elements. */
-  readonly elements: boolean;
   /** The bar over the page. */
   readonly bar: boolean;
 }
@@ -27,7 +25,6 @@ export function canvasGestures(role: RoleView): CanvasGestures {
     drag: !off.has('drag'),
     images: imagesBefore && !off.has('images'),
     text: !off.has('text'),
-    elements: !off.has('elements'),
     bar: !off.has('canvasBar'),
   };
 }

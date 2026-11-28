@@ -1,11 +1,20 @@
 import { useEffect } from 'react';
 import { copyNode, pasteNode } from './clipboard';
 import { getStudioRole } from '../roles/roleStore';
-import { readOnlyEditor } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { readOnlyEditor, type EditorPart } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { menuPasteClaimed } from '../../../vendor/stacki/src/ui/menuPasteClaim';
 import type { SharedDocument } from '../collaboration/useDocument';
 import type { TreeAction } from '../source/source';
 import type { Component } from '../project/projectClient';
+
+/** Whether the element key (`value`, with ⌘ or Ctrl when `primary`) belongs to a canvas control that is off. */
+export function keyOff(off: ReadonlySet<EditorPart>, primary: boolean, value: string): boolean {
+  if (primary) {
+    const part = value === 'c' ? 'copy' : value === 'd' ? 'duplicate' : value === 'v' ? 'paste' : undefined;
+    return part !== undefined && off.has(part);
+  }
+  return (value === 'backspace' || value === 'delete') && off.has('delete');
+}
 
 export function useEditorKeys(
   document: SharedDocument | undefined,
@@ -50,8 +59,8 @@ export function useEditorKeys(
       if (primary && value === 'v' && menuPasteClaimed()) {
         return;
       }
-      // Without adding and deleting, these keys do nothing; copying changes nothing, so it stays.
-      if (value !== 'c' && getStudioRole().editorOff.has('elements')) {
+      // A key whose canvas control the role has off does nothing.
+      if (keyOff(getStudioRole().editorOff, primary, value)) {
         return;
       }
       if (primary && ['c', 'd', 'v'].includes(value)) {

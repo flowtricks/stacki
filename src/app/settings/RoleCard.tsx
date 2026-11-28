@@ -19,11 +19,12 @@ import {
 } from '../../../shared/properties/projectRoles';
 import { FeatureIcon } from '../featureIcons';
 import MoreMenu from '../../ui/MoreMenu';
-import { ChevronRightIcon, CopyIcon, ElementComponentIcon, GearIcon, PencilIcon, PinIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CopyIcon, ElementComponentIcon, GearIcon, PinIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { buildComponentTree } from './componentTree';
 import { permissionCounts, type RoleSection } from './roleDetailModel';
-import { editingSummary } from './roleEditingModel';
+import { readOnlyRole } from './roleCanvasModel';
+import type { RightPanelChange } from './rolesEdits';
 import type { EditorPart } from '../../../shared/properties/projectRoles';
 import type { ComponentRule, ComponentState, ComponentTarget } from '../../../shared/properties/componentAccess';
 
@@ -41,8 +42,10 @@ export interface RoleCardActions {
   readonly setAppAccess: (appId: string, change: 'grant' | 'withdraw') => void;
   /** Turns one app permission, or all of an app's, on or off. */
   readonly setAppPermissions: (appId: string, permissionIds: readonly string[], change: 'grant' | 'withdraw') => void;
-  /** Switches editing options on (`grant`) or off (`withdraw`). */
+  /** Switches canvas controls on (`grant`) or off (`withdraw`). */
   readonly setEditing: (parts: readonly EditorPart[], change: 'grant' | 'withdraw') => void;
+  /** Shows or hides the right panel, or one of its tabs (`setRightPanel`). */
+  readonly setRightPanel: (change: RightPanelChange) => void;
   /** Pins an app to the left rail for the role, or unpins it. */
   readonly setPinnedApp: (appId: string, change: 'pin' | 'unpin') => void;
   /** Puts the role's pins in this order, top to bottom. */
@@ -91,21 +94,18 @@ export function RoleCard(props: {
       label: translate('settings.roles.components.title'),
       summary: translate('settings.roles.summary.ofTotal', { count: tree.visible, total: tree.total }),
     },
-    // Admin's access and editing are fixed, so it has neither row.
+    // Admin's access is fixed, so it has no Permissions row.
     ...(role.id === ADMIN_ROLE_ID
       ? []
       : [
           {
-            section: 'editing' as const,
-            icon: <PencilIcon size={14} />,
-            label: translate('roles.editing.title'),
-            summary: editingText(editingSummary(role), translate),
-          },
-          {
             section: 'permissions' as const,
             icon: <GearIcon size={14} />,
             label: translate('settings.roles.permissions.title'),
-            summary: translate('settings.roles.summary.ofTotal', { count: permissions.granted, total: permissions.total }),
+            // A role that can change nothing says so in place of its counts.
+            summary: readOnlyRole(role)
+              ? translate('roles.permissions.readOnly')
+              : translate('settings.roles.summary.ofTotal', { count: permissions.granted, total: permissions.total }),
           },
         ]),
   ];
@@ -146,12 +146,6 @@ export function RoleCard(props: {
       </ul>
     </section>
   );
-}
-
-function editingText(summary: ReturnType<typeof editingSummary>, translate: ReturnType<typeof useTranslate>): string {
-  return summary.kind === 'readOnly'
-    ? translate('roles.editing.readOnly')
-    : translate('settings.roles.summary.ofTotal', { count: summary.on, total: summary.total });
 }
 
 interface SummaryRow {

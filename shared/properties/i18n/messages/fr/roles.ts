@@ -4,7 +4,9 @@ import type { MessageKey } from '../en/roles';
 
 export const messages = {
   'roles.feature.settingsBreakpoints': 'Points d’arrêt',
-  'roles.group.panels': 'Panneaux',
+  'roles.group.rightPanel': 'Panneau de droite',
+  'roles.group.leftPanel': 'Panneau de gauche',
+  'roles.group.canvas': 'Commandes du canevas',
   'roles.group.pages': 'Pages', // same
   'roles.group.components': 'Composants',
   'roles.group.codeAndPublishing': 'Code et publication',
@@ -128,33 +130,32 @@ export const messages = {
   'roles.menu.yours': 'Votre rôle',
   'roles.menu.viewAs': 'Afficher en tant que',
   'roles.menu.waitForSave': 'Attendez que vos modifications soient enregistrées',
-  'roles.editing.title': 'Édition',
-  'roles.editing.info':
-    'Ces options ne font que retirer : un rôle n’obtient jamais plus que ce que ses autorisations permettent. Studio les applique et Desktop les montre avec « Voir en tant que ». Si le panneau ou une action sur la page est désactivé, Code, Git, le chat IA et la modification des composants le sont aussi.',
-  'roles.editing.search': 'Rechercher des options d’édition',
-  'roles.editing.readOnly': 'Lecture seule',
-  'roles.editing.group.around': 'Autour de la page',
-  'roles.editing.group.page': 'Sur la page',
-  'roles.editing.sidePanel': 'Panneau de style et réglages',
-  'roles.editing.sidePanel.tip': 'Le panneau de droite. Désactivé, ce rôle ne peut modifier ni styles ni réglages, et la page prend sa place.',
-  'roles.editing.navigator': 'Navigateur',
-  'roles.editing.navigator.tip': 'La liste des éléments de la page, avec son bouton latéral et son raccourci.',
-  'roles.editing.canvasBar': 'Barre du canevas',
-  'roles.editing.canvasBar.tip':
-    'La barre au-dessus de la page : boutons de points de rupture, fil d’Ariane, largeur de page, guide de colonnes et mode interaction.',
-  'roles.editing.drag': 'Glisser pour réorganiser',
-  'roles.editing.drag.tip': 'Déplacer des éléments en les faisant glisser, sur la page ou dans le Navigateur.',
-  'roles.editing.text': 'Modifier le texte',
-  'roles.editing.text.tip': 'Écrire dans le texte de la page. Désactivé, le CMS est aussi indisponible, car ses entrées contiennent du texte.',
-  'roles.editing.images': 'Changer les images',
-  'roles.editing.images.tip':
+  'roles.rightPanel.info':
+    'Désactivé, tout le panneau disparaît et la page prend sa place. Tous les autres accès aux styles ou aux réglages sont aussi verrouillés, comme Code, Git, le chat IA, les variables et la modification des composants. Désactiver les deux lignes a le même effet.',
+  'roles.canvas.info':
+    'Ce que ce rôle peut faire sur la page. Ces options ne font que retirer : Studio applique ce qui modifie la page et Desktop les montre avec « Voir en tant que ». Désactiver une modification de la page verrouille aussi Code, Git, le chat IA et la modification des composants. Quand Modifier le texte, Glisser pour réorganiser et Changer les images sont désactivés, le rôle est en lecture seule.',
+  'roles.canvas.text': 'Modifier le texte',
+  'roles.canvas.text.tip': 'Écrire dans le texte de la page. Désactivé, le CMS est aussi indisponible, car ses entrées contiennent du texte.',
+  'roles.canvas.drag': 'Glisser pour réorganiser',
+  'roles.canvas.drag.tip': 'Déplacer des éléments en les faisant glisser, sur la page ou dans le Navigateur.',
+  'roles.canvas.images': 'Changer les images',
+  'roles.canvas.images.tip':
     'Double-cliquez sur une image pour la changer ou modifier son texte alternatif. Désactivé, Ressources et CMS sont aussi indisponibles, car les deux peuvent changer des images.',
-  'roles.editing.elements': 'Ajouter et supprimer des éléments',
-  'roles.editing.elements.tip':
-    'Ajouter, coller, dupliquer et supprimer des éléments. Se désactive seule quand le glisser, le texte et les images sont désactivés.',
-  'roles.editing.blocked.rightPanel': 'Activez d’abord « Panneau de style » ou « Panneau des réglages » dans les autorisations.',
-  'roles.editing.blocked.navigator': 'Activez d’abord « Navigateur » dans les autorisations.',
-  'roles.editing.blocked.imagePanel': 'Nécessite « Panneau de style » ou « Panneau des réglages » dans les autorisations.',
-  'roles.editing.blocked.pageEditing': 'Désactivé tant que le glisser, le texte et les images le sont tous.',
-  'roles.editing.withheld': 'Désactivé par les options d’édition de ce rôle.',
+  'roles.canvas.insert': 'Insérer de nouveaux éléments',
+  'roles.canvas.insert.tip': 'Ajouter de nouveaux éléments et composants à la page. Désactivé, Ajouter des éléments et Composants sont aussi indisponibles.',
+  'roles.canvas.delete': 'Supprimer',
+  'roles.canvas.delete.tip': 'Supprimer des éléments. Couper nécessite Supprimer et Copier.',
+  'roles.canvas.duplicate': 'Dupliquer',
+  'roles.canvas.duplicate.tip': 'Créer une copie d’un élément à côté de lui.',
+  'roles.canvas.copy': 'Copier',
+  'roles.canvas.copy.tip': 'Copier des éléments. La copie ne modifie rien et ne verrouille donc rien d’autre.',
+  'roles.canvas.paste': 'Coller',
+  'roles.canvas.paste.tip': 'Coller les éléments copiés dans la page.',
+  'roles.canvas.toolbar': 'Barre du canevas',
+  'roles.canvas.toolbar.tip':
+    'La barre au-dessus de la page : boutons de points de rupture, fil d’Ariane, largeur de page, guide de colonnes et mode interaction.',
+  'roles.canvas.blocked.imagePanel': 'Nécessite l’autorisation Panneau de style ou Panneau des réglages.',
+  'roles.canvas.blocked.pageEditing': 'Désactivé tant que le glisser, le texte et les images le sont tous.',
+  'roles.permissions.readOnly': 'Lecture seule',
+  'roles.permissions.locked': 'Verrouillé tant que le panneau de droite ou une commande du canevas est désactivé pour ce rôle.',
 } as const satisfies CatalogOf<MessageKey>;

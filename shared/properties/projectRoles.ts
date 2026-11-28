@@ -33,8 +33,8 @@
 // it may open, so admin keeps its access to Settings however its components are hidden.
 //
 // Each role but admin may switch editing options off (`editorOff`, at the end of
-// this file): the right panel, the navigator, the canvas bar, and what can be done
-// on the page. `can()` withholds every permission that would reach a switched-off
+// this file): the whole right panel, the canvas bar, and what can be done on the
+// page. `can()` withholds every permission that would reach a switched-off
 // option another way.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
@@ -350,6 +350,10 @@ export const DEFAULT_PROJECT_ROLES: ProjectRoles = {
   ],
 };
 
+/** The Permissions view's two panel groups. The right panel's group switch is the `sidePanel` option, not a bulk grant. */
+export const RIGHT_PANEL_ACCESS_GROUP = 'Right panel';
+export const LEFT_PANEL_ACCESS_GROUP = 'Left panel';
+
 /** The Roles tab's group that also holds the per-app grants (`app:*`, `app:<id>`): RoleCard.tsx draws them under it. */
 export const APPS_ACCESS_GROUP = 'Apps';
 
@@ -361,8 +365,16 @@ export const ACCESS_GROUPS: readonly {
   readonly features: readonly { readonly feature: StaticAccessFeature; readonly label: string; readonly labelRef: TypedMessageRef }[];
 }[] = [
   {
-    label: 'Panels',
-    labelRef: messageRef('roles.group.panels'),
+    label: RIGHT_PANEL_ACCESS_GROUP,
+    labelRef: messageRef('roles.group.rightPanel'),
+    features: [
+      { feature: 'panel:style', label: 'Style panel', labelRef: messageRef('roles.feature.panelStyle') },
+      { feature: 'panel:settings', label: 'Settings panel', labelRef: messageRef('roles.feature.panelSettings') },
+    ],
+  },
+  {
+    label: LEFT_PANEL_ACCESS_GROUP,
+    labelRef: messageRef('roles.group.leftPanel'),
     features: [
       { feature: 'panel:elements', label: 'Add elements', labelRef: messageRef('roles.feature.panelElements') },
       { feature: 'panel:pages', label: 'Pages', labelRef: messageRef('roles.feature.panelPages') },
@@ -380,8 +392,6 @@ export const ACCESS_GROUPS: readonly {
       { feature: 'panel:instructions', label: 'Instructions (in Settings)', labelRef: messageRef('roles.feature.panelInstructions') },
       { feature: 'panel:audits', label: 'Audits', labelRef: messageRef('roles.feature.panelAudits') },
       { feature: 'panel:projectSettings', label: 'Project settings (secrets, MCP servers)', labelRef: messageRef('roles.feature.panelProjectSettings') },
-      { feature: 'panel:style', label: 'Style panel', labelRef: messageRef('roles.feature.panelStyle') },
-      { feature: 'panel:settings', label: 'Settings panel', labelRef: messageRef('roles.feature.panelSettings') },
     ],
   },
   {
@@ -1047,31 +1057,46 @@ function assertUnique(roles: readonly ProjectRole[]): void {
 // permission, the Studio server's included, follows it.
 
 export const EDITOR_PARTS = [
-  // Around the page.
-  /** The right panel: Style and Settings. */
+  /** The whole right panel, Style and Settings. Off, nothing else reaches styles or settings either. */
   'sidePanel',
-  /** The element tree, with its rail button and shortcut. */
-  'navigator',
-  /** The bar over the page: breakpoint buttons, breadcrumbs, size, column guide and interact mode. */
-  'canvasBar',
-  // On the page.
-  /** Drag to reorder. */
-  'drag',
+  // Canvas controls, in the order the Permissions view lists them.
   /** Change the page's text. */
   'text',
+  /** Drag to reorder. */
+  'drag',
   /** Change the page's images and their alt text. */
   'images',
-  /** Add, paste, duplicate and delete elements. */
-  'elements',
+  /** Insert new elements and components. */
+  'insert',
+  /** Delete elements. */
+  'delete',
+  /** Duplicate elements. */
+  'duplicate',
+  /** Copy elements. It changes nothing, so it limits no write. */
+  'copy',
+  /** Paste copied elements. */
+  'paste',
+  /** The bar over the page: breakpoint buttons, breadcrumbs, size, column guide and interact mode. */
+  'canvasBar',
 ] as const;
 export type EditorPart = (typeof EDITOR_PARTS)[number];
 
-/** The parts drawn around the page; the rest are things done on the page. */
-export const CHROME_PARTS = ['sidePanel', 'navigator', 'canvasBar'] as const satisfies readonly EditorPart[];
-export const PAGE_PARTS = ['drag', 'text', 'images', 'elements'] as const satisfies readonly EditorPart[];
+/** The canvas controls: every option but the right panel, which the Permissions view lists with its two tabs. */
+export const CANVAS_PARTS = ['text', 'drag', 'images', 'insert', 'delete', 'duplicate', 'copy', 'paste', 'canvasBar'] as const satisfies readonly EditorPart[];
+export type CanvasPart = (typeof CANVAS_PARTS)[number];
+
+/** The right panel's two tabs, which are ordinary permissions. */
+export const RIGHT_PANEL_FEATURES = ['panel:style', 'panel:settings'] as const satisfies readonly StaticAccessFeature[];
+export type RightPanelFeature = (typeof RIGHT_PANEL_FEATURES)[number];
+
+/** The options that change which elements are on the page. */
+const STRUCTURE_PARTS = ['insert', 'delete', 'duplicate', 'paste'] as const satisfies readonly EditorPart[];
 
 // With all three off the role is read only, and adding or deleting elements goes with them.
 const CORE_PAGE_PARTS = ['drag', 'text', 'images'] as const satisfies readonly EditorPart[];
+
+/** The options that limit what may be written: every one but those that change nothing (copying, the canvas bar). */
+const WRITE_PARTS = ['sidePanel', ...CORE_PAGE_PARTS, ...STRUCTURE_PARTS] as const satisfies readonly EditorPart[];
 
 /**
  * A role's stored `editorOff`: absent is none. Anything but a list of known parts,
@@ -1096,12 +1121,14 @@ export function parseEditorOff(input: unknown): readonly EditorPart[] {
   return parsed;
 }
 
-/** What is really off: the stored parts, plus adding elements when dragging, text and images are all off. */
+/** What is really off: the stored parts, plus inserting, deleting, duplicating and pasting when dragging, text and images are all off. */
 export function effectiveEditorOff(stored: readonly EditorPart[]): ReadonlySet<EditorPart> {
   assert(stored.length <= EDITOR_PARTS.length, 'Editing options are bounded');
   const off = new Set(stored);
   if (CORE_PAGE_PARTS.every((part) => off.has(part))) {
-    off.add('elements');
+    for (const part of STRUCTURE_PARTS) {
+      off.add(part);
+    }
   }
   assert(off.size >= new Set(stored).size, 'Nothing stored is switched back on');
   return off;
@@ -1113,11 +1140,16 @@ export function readOnlyEditor(off: ReadonlySet<EditorPart>): boolean {
 }
 
 /**
- * Whether the options limit what may be written, rather than only what is drawn.
- * The navigator and the canvas bar are views: hiding them alone limits no write.
+ * Whether the options limit what may be written, rather than only what is drawn or copied.
+ * The canvas bar is a view and copying changes nothing: alone they limit no write.
  */
 export function limitsEditing(off: ReadonlySet<EditorPart>): boolean {
-  return off.has('sidePanel') || PAGE_PARTS.some((part) => off.has(part));
+  return WRITE_PARTS.some((part) => off.has(part));
+}
+
+/** Whether any option holds the page's elements as they are in some way: their order, or which are there. */
+export function limitsStructure(off: ReadonlySet<EditorPart>): boolean {
+  return off.has('drag') || STRUCTURE_PARTS.some((part) => off.has(part));
 }
 
 // Routes that rewrite files with content nothing can check against the options:
@@ -1171,9 +1203,6 @@ const WITHHELD_WHEN_READ_ONLY: readonly string[] = [
 export function editorWithholds(off: ReadonlySet<EditorPart>, feature: string): boolean {
   assert(feature.length > 0, 'A feature id is never empty');
   assert(off.size <= EDITOR_PARTS.length, 'Editing options are bounded');
-  if (off.has('navigator') && feature === 'panel:navigator') {
-    return true;
-  }
   if (off.has('sidePanel') && WITHHELD_WITHOUT_SIDE_PANEL.includes(feature)) {
     return true;
   }
@@ -1192,5 +1221,5 @@ export function editorWithholds(off: ReadonlySet<EditorPart>, feature: string): 
     return true;
   }
   // The Add elements and Components panels are ways to add an element.
-  return off.has('elements') && (feature === 'panel:elements' || feature === 'panel:components');
+  return off.has('insert') && (feature === 'panel:elements' || feature === 'panel:components');
 }

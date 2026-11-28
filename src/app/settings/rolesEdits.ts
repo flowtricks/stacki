@@ -16,7 +16,7 @@ import {
   type ComponentTarget,
 } from '../../../shared/properties/componentAccess';
 import { DescribedError } from '../../../shared/properties/describedError';
-import { EDITOR_PARTS, type EditorPart } from '../../../shared/properties/projectRoles';
+import { EDITOR_PARTS, RIGHT_PANEL_FEATURES, type EditorPart, type RightPanelFeature } from '../../../shared/properties/projectRoles';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { described, type Translator } from '../../../shared/properties/i18n/messageRef';
 import {
@@ -246,6 +246,50 @@ export function setEditorParts(roles: ProjectRoles, id: string, parts: readonly 
     'Every named option is set',
   );
   return next;
+}
+
+/** A change in the Permissions view's Right panel section: its group switch, or one tab's row. */
+export type RightPanelChange =
+  | { readonly kind: 'panel'; readonly change: 'grant' | 'withdraw' }
+  | { readonly kind: 'tab'; readonly feature: RightPanelFeature; readonly change: 'grant' | 'withdraw' };
+
+/**
+ * Applies a Right panel change. Turning the whole panel off, by the group switch or by switching off its
+ * last tab, stores the `sidePanel` option, so the role cannot reach styles another way either; the tab
+ * grants stay, so turning the panel back on returns what it showed, and canvas pictures stay changeable.
+ */
+export function setRightPanel(roles: ProjectRoles, id: string, change: RightPanelChange): ProjectRoles {
+  assert(id !== ADMIN_ROLE_ID, 'Admin access is not editable');
+  const role = roleOf(roles, id);
+  const hidden = role.editorOff.includes('sidePanel');
+  const granted = RIGHT_PANEL_FEATURES.filter((feature) => role.access.includes(feature));
+  switch (change.kind) {
+    case 'panel': {
+      if (change.change === 'withdraw') {
+        return setEditorParts(roles, id, ['sidePanel'], 'withdraw');
+      }
+      const shown = setEditorParts(roles, id, ['sidePanel'], 'grant');
+      // A role that never had either tab gets both: a panel switched on has to show something.
+      return granted.length > 0 ? shown : setGroupAccess(shown, id, RIGHT_PANEL_FEATURES, 'grant');
+    }
+    case 'tab': {
+      if (change.change === 'grant') {
+        if (!hidden) {
+          return setAccess(roles, id, change.feature, 'grant');
+        }
+        // The panel was off: it comes back with the tab asked for, and only that one.
+        const cleared = setGroupAccess(roles, id, RIGHT_PANEL_FEATURES, 'withdraw');
+        return setEditorParts(setAccess(cleared, id, change.feature, 'grant'), id, ['sidePanel'], 'grant');
+      }
+      assert(!hidden, 'A tab of a panel that is off already reads off');
+      const others = granted.filter((feature) => feature !== change.feature);
+      return others.length > 0 ? setAccess(roles, id, change.feature, 'withdraw') : setEditorParts(roles, id, ['sidePanel'], 'withdraw');
+    }
+    default: {
+      const exhaustive: never = change;
+      return exhaustive;
+    }
+  }
 }
 
 /** Grants or withdraws a whole group of features at once: the group's "All" switch. */

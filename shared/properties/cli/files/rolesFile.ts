@@ -78,7 +78,7 @@ const role: ValueSchema = objectOf({
   ),
   editorOff: field(
     arrayOf(oneOf(...EDITOR_PARTS), EDITOR_PARTS.length, { unique: true }),
-    'Editing options switched off for this role: sidePanel (Style and Settings), navigator, canvasBar (breakpoints, breadcrumbs, guide), drag, text, images, elements (add, duplicate, delete). With drag, text and images off the role is read only. They also withhold permissions that reach the same thing another way. Dropped for admin.',
+    'Editing options switched off for this role: sidePanel (the whole right panel: Style and Settings), text, drag, images, insert, delete, duplicate, copy, paste (the canvas controls) and canvasBar (breakpoints, breadcrumbs, guide). With drag, text and images off the role is read only. All but copy and canvasBar also withhold permissions that reach the same thing another way. Dropped for admin.',
     { default: 'every option the permissions allow is on' },
   ),
   componentRules: field(
@@ -123,9 +123,9 @@ export const ROLES_FILE: FileSchema = {
   parserSources: ['shared/properties/projectRoles.ts', 'shared/properties/componentAccess.ts'],
   parserKeyExceptions: {
     sidePanel: EDITOR_OPTION,
-    navigator: EDITOR_OPTION,
     text: EDITOR_OPTION,
+    drag: EDITOR_OPTION,
     images: EDITOR_OPTION,
-    elements: EDITOR_OPTION,
+    insert: EDITOR_OPTION,
   },
 };

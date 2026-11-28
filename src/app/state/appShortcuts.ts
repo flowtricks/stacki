@@ -118,7 +118,7 @@ export function useInsertItem(
     (item: InsertChoice, aimed: InsertTarget) => {
       editTrace.begin(`insert ${item.type}`);
       setInsertOpen(false);
-      const refusedFor = editingOffFor('elements');
+      const refusedFor = editingOffFor('insert');
       if (refusedFor !== undefined) {
         showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
         return;
