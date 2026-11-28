@@ -30,6 +30,7 @@ const STILL_POLLS_NEEDED = 3;
 const MENU_ITEMS_MAX = 200;
 const FILM_FRAMES_MAX = 240;
 const EVALUATE_MS_MAX = 20000;
+const APP_TEXT_MAX = 600;
 // The grid a canvas press searches for a point the element itself receives. The soak page's
 // type overflows its boxes (Lumos headings over the paragraphs below them), so the first point
 // of an element can belong to its neighbour, and the press then selected that neighbour or the
@@ -114,7 +115,11 @@ function createDriver(window, project) {
       }
       await sleep(CANVAS_POLL_MS);
     }
-    throw new Error('soakDriver: the canvas never rendered the fixture');
+    // What was there instead: without it, a renderer that never loaded and a canvas that
+    // never drew read the same in a gate log.
+    const app = await evaluate(`document.body.innerText.slice(0, ${APP_TEXT_MAX})`).catch((error) => String(error));
+    const nodes = await canvasEvaluate(`document.querySelectorAll('[data-avb-p]').length`).catch((error) => String(error));
+    throw new Error(`soakDriver: the canvas never rendered the fixture (canvas elements: ${nodes}; the app shows: ${JSON.stringify(app)})`);
   }
 
   // The window point at the centre of a canvas element, by CSS selector inside the page.
