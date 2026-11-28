@@ -25,6 +25,7 @@ import { intelligenceProcess } from './lib/codeIntel/utilityChild';
 import { MODEL_SCHEME, MODEL_SCHEME_PRIVILEGES, serveModelRequest } from './app/dictationProtocol';
 import { whisperRoot } from './app/dictationStore';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
+import { guardIpcSenders, isAppWindowSender } from './lib/ipcSenders';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
 import { readSource } from './lib/mainLimits';
 import { isAtomicTemporary } from './documents/atomicWrite';
@@ -67,7 +68,8 @@ import { createFirstFrameSignal, revealOnFirstFrame } from './app/windowReveal';
 import { createBootStore, type BootStore } from './boot/bootStore';
 import { registerBootChannels } from './boot/bootChannels';
 import { describeStartup, markStartup } from './app/startupTiming';
-import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
+import { guardSessionPermissions, isBrowserLink } from './app/windowSecurity';
+import { keepOnAppPage } from './app/appPageNavigation';
 import { buildApplicationMenuTemplate, type ReloadCommand } from './app/applicationMenu';
 import { routeReload } from './app/reloadRouting';
 import { activeMainLocale, loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
@@ -125,7 +127,11 @@ import { createFolderOpenQueue, folderOpenChoice, launchFolderArguments } from '
 // Desktop does not enforce project roles (.stacki/roles.json): it previews them, and only Studio enforces
 // them (docs/contracts.md, "Project roles"). So no IPC gate refuses a write here.
 const githubIdentity = createGitHubIdentity();
-const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
+// Whether a message is the app window's own: every channel below answers no other sender (lib/ipcSenders.ts).
+const fromAppWindow = (event: Parameters<typeof isAppWindowSender>[0]) =>
+  isAppWindowSender(event, mainWindow === undefined || mainWindow.isDestroyed() ? undefined : mainWindow.webContents);
+const appIpc = guardIpcSenders(nativeIpcMain, fromAppWindow);
+const ipcMain = { handle: createIpcRegistrar(appIpc) };
 setToolPathHome(app.getPath('home'));
 
 // One Stacki per person, packaged: a second launch (a folder dropped on the program or a shortcut on
@@ -295,26 +301,12 @@ function registerAssetProtocol() {
   });
 }
 
-// Every window shares the default session, so one rule covers the app and its previews.
-function refusePrivatePermissions() {
+// The app's window and its previews share the default session; a window that keeps its own (the audits'
+// measuring window, handlers/auditMeasure.ts) is guarded as its session is made.
+function guardPermissions() {
   const appUrl = appPageUrl();
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
-    if (permission === 'media') {
-      // Dictation's microphone: audio from Stacki's own page only (windowSecurity.isAllowedMedia).
-      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
-      callback(isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl, appUrl }));
-      return;
-    }
-    callback(!isPrivatePermission(permission));
-  });
-  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
-    if (permission === 'media') {
-      // A check names one kind at a time; 'unknown' is the system asking whether any device exists.
-      const mediaTypes = 'mediaType' in details && details.mediaType !== 'video' ? ['audio'] : undefined;
-      return isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl });
-    }
-    return !isPrivatePermission(permission);
-  });
+  guardSessionPermissions(session.defaultSession, appUrl);
+  app.on('session-created', (created) => guardSessionPermissions(created, appUrl));
 }
 
 // The page the main window shows: the dev server in development, the built file when packaged.
@@ -332,20 +324,6 @@ function microphoneSystem(): MicrophoneSystem {
     askForAccess: () => systemPreferences.askForMediaAccess('microphone'),
     openExternal: (url) => shell.openExternal(url),
   };
-}
-
-// The preload hands Stacki's API to whatever page this window shows, so the
-// window never leaves Stacki's own page; web links open in the browser instead.
-function keepOnAppPage(window: Window, appUrl: string) {
-  window.webContents.on('will-navigate', (event) => {
-    if (isAppPage(event.url, appUrl)) {
-      return;
-    }
-    event.preventDefault();
-    if (isBrowserLink(event.url)) {
-      openExternalLink(event.url);
-    }
-  });
 }
 
 async function serveFile(abs: string, request: Request) {
@@ -488,7 +466,7 @@ function createWindow() {
     }
     return { action: 'deny' };
   });
-  keepOnAppPage(mainWindow, appPageUrl());
+  keepOnAppPage(mainWindow.webContents, appPageUrl(), openExternalLink);
 
   // Somebody closed the window. Whatever was open is over: the next window is a
   // fresh start and belongs on the welcome screen, not back in the project this
@@ -822,7 +800,7 @@ app.whenReady().then(
     registerAssetProtocol();
     protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
     protocol.handle(MODEL_SCHEME, (request) => serveModelRequest(request.url, request.method, whisperRoot(app.getPath('userData'))));
-    refusePrivatePermissions();
+    guardPermissions();
     // The canvas frames the project's own dev server; a site's own no-framing rule must not blank it (previewFraming.ts).
     allowLoopbackFraming(session.defaultSession);
     // The boot path before the window: the snapshot the first render is seeded with, and, for a project the window
@@ -834,7 +812,7 @@ app.whenReady().then(
       ipcMain: nativeIpcMain,
       store: bootStore,
       pendingProject: peekPendingProject,
-      isMainFrame: (event) => mainWindow !== undefined && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame,
+      isMainFrame: fromAppWindow,
       onFirstFrame: firstFrame.fire,
     });
     const earlyProject = peekPendingProject();
@@ -878,8 +856,8 @@ app.whenReady().then(
     });
     // Terminals open in the project the app has open — same reach as the asset
     // protocol, which is what `openProjectRoot` already scopes.
-    registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
-    registerAiSendChannels(nativeIpcMain, aiServices.host);
+    registerTerminalHandlers({ ipcMain: appIpc, send, projectRoot: () => openProjectRoot });
+    registerAiSendChannels(appIpc, aiServices.host);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();

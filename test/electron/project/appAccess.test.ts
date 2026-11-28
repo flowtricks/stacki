@@ -83,6 +83,124 @@ test('app file paths refuse traversal, absolute paths and protected folders, and
   assert.throws(() => parseAppFileOperation({ kind: 'move', from: 'a.txt', to: 'a.txt' }, APP), /same path/);
 });
 
+test('apps read files that run code but never change them, however the path is spelled', () => {
+  const runsCode = [
+    'package.json',
+    'Package.JSON',
+    'packages/site/package.json',
+    'package.json.',
+    'package-lock.json',
+    'pnpm-lock.yaml',
+    'yarn.lock',
+    'bun.lockb',
+    '.npmrc',
+    '.yarnrc.yml',
+    '.yarn/releases/yarn.cjs',
+    '.pnpmfile.cjs',
+    'astro.config.mjs',
+    'ASTRO.CONFIG.TS',
+    'apps/web/astro.config.mjs',
+    'vite.config.ts',
+    'postcss.config.cjs',
+    'tailwind.config.js',
+    'anything.config.mjs',
+    '.postcssrc.json',
+    '.eslintrc.cjs',
+    '.mcp.json',
+    '.claude/settings.json',
+    '.Claude/hooks/run.sh',
+    'sub/.claude/settings.json',
+    '.codex/config.toml',
+    '.cursor/mcp.json',
+    '.vscode/tasks.json',
+    '.vs\u200ccode/tasks.json',
+    '.husky/pre-commit',
+    '.githooks/pre-push',
+    '.envrc',
+    '.github/workflows/deploy.yml',
+    '.GitHub/Workflows/deploy.yml',
+    '.stacki/cli.json',
+    '.stacki/preview/astro.config.mjs',
+    '.stacki/canvas/c.astro',
+  ];
+  for (const candidate of runsCode) {
+    // Named for a read, the path is a project file like any other.
+    assert.equal(parseAppFileOperation({ kind: 'read', path: candidate }, APP).kind, 'read', candidate);
+    const changes = [
+      { kind: 'write', path: candidate, content: 'x' },
+      { kind: 'delete', path: candidate },
+      { kind: 'mkdir', path: candidate },
+      { kind: 'move', from: candidate, to: 'src/moved.txt' },
+      { kind: 'move', from: 'src/pages/index.astro', to: candidate },
+      { kind: 'restore', states: [{ path: candidate, kind: 'file', base64: '' }] },
+    ];
+    for (const change of changes) {
+      assert.throws(() => parseAppFileOperation(change, APP), /run code/, `${change.kind} ${candidate}`);
+    }
+  }
+  const ordinary = [
+    'src/content.config.ts',
+    'src/content/config.ts',
+    'src/pages/about.astro',
+    'src/data/package.json.md',
+    'public/robots.txt',
+    'public/_redirects',
+    'netlify.toml',
+    'tsconfig.json',
+    'README.md',
+    '.github/ISSUE_TEMPLATE/bug.md',
+    '.stacki/components.json',
+    `.stacki/apps/${APP}/package.json`,
+    `.stacki/app-data/${APP}.json`,
+  ];
+  for (const candidate of ordinary) {
+    assert.equal(parseAppFileOperation({ kind: 'write', path: candidate, content: 'x' }, APP).kind, 'write', candidate);
+  }
+});
+
+test('refused folders are refused in any letter case, and under the names Windows reads as the same', () => {
+  const spellings = [
+    'NODE_MODULES/react/index.js',
+    'Node_Modules/react/index.js',
+    'node_modules./react/index.js',
+    '.GIT/config',
+    '.git./config',
+    '.Env.local',
+    '.Stacki/apps/other-app/index.html',
+    '.stacki/APPS/other-app/index.html',
+    '.Stacki/App-Data/other-app.json',
+    '.. /outside.txt',
+    'src/. ./x',
+  ];
+  for (const candidate of spellings) {
+    assert.throws(() => parseAppFilePath(candidate, APP, { allowRoot: false }), /./, candidate);
+  }
+});
+
+test('a link cannot lead a change to a file that runs code', () => {
+  const root = project();
+  fs.mkdirSync(path.join(root, '.claude'));
+  fs.symlinkSync(path.join(root, 'package.json'), path.join(root, 'src/notes.txt'));
+  fs.symlinkSync(path.join(root, '.claude'), path.join(root, 'src/extras'));
+  const changes = [
+    { kind: 'write', path: 'src/notes.txt', content: 'changed' },
+    { kind: 'delete', path: 'src/notes.txt' },
+    { kind: 'write', path: 'src/extras/settings.json', content: '{}' },
+    { kind: 'mkdir', path: 'src/extras/hooks' },
+    { kind: 'move', from: 'src/pages/index.astro', to: 'src/extras/index.astro' },
+  ];
+  for (const change of changes) {
+    const answer = store(root, change).answer;
+    assert.ok(!answer.ok, JSON.stringify(change));
+    assert.match(answer.message, /run code/);
+  }
+  assert.equal(fs.readFileSync(path.join(root, 'package.json'), 'utf8'), '{}');
+  assert.deepEqual(fs.readdirSync(path.join(root, '.claude')), []);
+  // Reading through the link stays what reading the file is.
+  const read = store(root, { kind: 'read', path: 'src/notes.txt' }).answer;
+  assert.ok(read.ok && read.value.kind === 'content');
+});
+
 test('a file change answers before and after states, and restoring them undoes and redoes it', () => {
   const root = project();
   const written = store(root, { kind: 'write', path: 'src/data/stats.json', content: '{"views":1}\n' });

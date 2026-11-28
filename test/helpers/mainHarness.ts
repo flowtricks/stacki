@@ -34,7 +34,20 @@ export function mainHarness(userData: string, sourcePath?: string, entryPath = p
       "imageSizeOf: require('./project/assetFiles.js').imageSizeOf, " +
       "satisfiesRange: require('./preview/devServerChecks.js').satisfiesRange });",
     {
-      require: (name: string): unknown => (name === 'electron' ? electron : name === 'electron-updater' ? { autoUpdater: {} } : require(name)),
+      require: (name: string): unknown => {
+        if (name === 'electron') {
+          return electron;
+        }
+        if (name === 'electron-updater') {
+          return { autoUpdater: {} };
+        }
+        // `invoke` below stands in for the app window's own page, and there is no window here to be it. Who may
+        // send is tested on its own (test/electron/app/ipcSenders.test.ts).
+        if (name === './lib/ipcSenders') {
+          return { guardIpcSenders: (ipcMain: unknown) => ipcMain, isAppWindowSender: () => true };
+        }
+        return require(name);
+      },
       exports: {},
       __dirname: path.dirname(entry),
       process,

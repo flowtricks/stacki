@@ -1,5 +1,5 @@
-import { ipcMain as nativeIpcMain } from 'electron';
 import { createIpcRegistrar } from '../lib/ipcRegistrar';
+import type { AppIpc } from '../lib/ipcSenders';
 
 import path from 'node:path';
 import os from 'node:os';
@@ -251,21 +251,30 @@ function parseSendPayload<T>(channel: string, input: unknown, parse: (input: unk
 type Send = (channel: string, payload: unknown) => void;
 
 /**
+ * @param ipcMain     main's guarded `ipcMain`: a shell answers only the app's own window (lib/ipcSenders.ts)
  * @param send        (channel, payload) => void — posts to the renderer
  * @param projectRoot () => string|undefined — the open project, for the cwd check
  */
-function registerTerminalHandlers({ send, projectRoot }: { readonly send: Send; readonly projectRoot: () => string | undefined }): void {
-  const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
+function registerTerminalHandlers({
+  ipcMain: appIpc,
+  send,
+  projectRoot,
+}: {
+  readonly ipcMain: AppIpc;
+  readonly send: Send;
+  readonly projectRoot: () => string | undefined;
+}): void {
+  const ipcMain = { handle: createIpcRegistrar(appIpc), on: appIpc.on };
   ipcMain.handle('terminal:start', (_event: unknown, payload) => startTerminal(payload, { send, root: projectRoot() }));
   // `on`, not `handle`: keystrokes and acks are high-frequency one-way signals
   // that need no reply, so they shouldn't pay for a round trip.
-  nativeIpcMain.on('terminal:input', (_event: unknown, input: unknown) => {
+  ipcMain.on('terminal:input', (_event: unknown, input: unknown) => {
     const payload = parseSendPayload('terminal:input', input, parseTerminalInput);
     if (payload !== undefined) {
       writeTerminalInput(payload.id, payload.data);
     }
   });
-  nativeIpcMain.on('terminal:ack', (_event: unknown, input: unknown) => {
+  ipcMain.on('terminal:ack', (_event: unknown, input: unknown) => {
     const payload = parseSendPayload('terminal:ack', input, parseTerminalAck);
     if (payload !== undefined) {
       acknowledgeTerminal(payload.id, payload.count);
