@@ -21,6 +21,7 @@
 // SCRUB_REST_MS) into a bounded cache (FULL_FRAMES_CACHED); until a frame's own is there, a full neighbour within
 // SHARP_NEIGHBOUR_FRAMES stands in, else its 640 px thumbnail, in the same box. A click toggles the frame.
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { fitContain } from '../../../ui/fitContain';
 import { assert } from '../../../../shared/core/assert';
 import type { RecordedFrame } from '../../../../shared/ipc/aiChat';
 import { centralIcon } from '../../../ui/central/CentralIcon';
@@ -470,21 +471,6 @@ export function frameAt(offsetPx: number, widthPx: number, frameCount: number): 
 export function positionPercent(index: number, frameCount: number): number {
   assert(frameCount >= 1, 'positionPercent: there is a frame');
   return ((index + 0.5) * 100) / frameCount;
-}
-
-/**
- * The largest box of the frame's aspect that fits inside `box`, in whole pixels: the preview shows the entire frame
- * (contain), never a crop, whether the region was a narrow phone column or a wide banner.
- */
-export function fitContain(
-  frame: Pick<RecordedFrame, 'width' | 'height'>,
-  box: { readonly width: number; readonly height: number },
-): { readonly width: number; readonly height: number } {
-  assert(frame.width >= 1, 'fitContain: a frame has a width');
-  assert(frame.height >= 1, 'fitContain: a frame has a height');
-  const scale = Math.min(box.width / frame.width, box.height / frame.height);
-  // A hair of slack, so a side that scales to a whole number exactly is not floored one short by float error.
-  return { width: Math.max(1, Math.floor(frame.width * scale + 1e-9)), height: Math.max(1, Math.floor(frame.height * scale + 1e-9)) };
 }
 
 // An element's size, read on mount and on resize only (never while scrubbing); `fallback` until it lays out.

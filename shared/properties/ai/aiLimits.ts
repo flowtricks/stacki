@@ -100,6 +100,14 @@ export const AI_LIMITS = {
   /** The small preview stored beside a sent image's name (a JPEG data URL, 320 px wide), so the transcript shows it after a restart. */
   thumbnailCharsMax: 60_000,
   thumbnailEdgePx: 320,
+  /**
+   * The full copies of sent images kept so they can be opened later (electron/handlers/ai/chatImageStore.ts), per chat and
+   * per project, as files and bytes. Past either bound the oldest go first; their messages still show the small preview.
+   */
+  chatImagesMax: 256,
+  chatImagesBytesMax: 64 * 1024 * 1024,
+  projectImagesMax: 2_000,
+  projectImagesBytesMax: 512 * 1024 * 1024,
   /** Files one turn's change ledger tracks, and the bytes it keeps for them. */
   ledgerFilesMax: 500,
   ledgerBytesMax: 64 * 1024 * 1024,

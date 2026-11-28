@@ -672,6 +672,7 @@ export const messages = {
   'ai.screenshot.button': 'Снимок экрана',
   'ai.screenshot.close': 'Закрыть просмотр',
   'ai.screenshot.enlarge': 'Увеличить {name}',
+  'ai.images.smallOnly': 'Сохранена только уменьшенная копия этого изображения',
   'ai.screenshot.failed': 'Не удалось сделать снимок экрана. Повторите попытку.',
   'ai.screenshot.hint': 'Выделите перетаскиванием любую часть окна. Esc — отмена.',
   'ai.screenshot.name': 'Снимок экрана {number} ({width}×{height})',
@@ -965,7 +966,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Голосовой ввод недоступен в этом браузере. Попробуйте Chrome или Safari.',
   'ai.studio.discard': 'Отклонить',
   'ai.studio.discarded': 'Отклонено. Изменения не применены.',
-  'ai.studio.download': 'Скачать {name}',
   'ai.studio.dragPin': 'Перетащите чат сюда, чтобы закрепить его.',
   'ai.studio.dropImages': 'Перетащите изображения сюда',
   'ai.studio.filesToChange': {

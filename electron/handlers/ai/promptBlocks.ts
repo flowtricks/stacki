@@ -227,7 +227,7 @@ export function inside(root: string, file: string): boolean {
 
 // The text of a prompt with attachments: each image inline (a screenshot's one-line note as a text block just
 // before it, so the agent reads which image the line describes), each project file as a link the agent reads itself.
-// The image travels as base64 in the block: no file is written for it (electron/handlers/ai/screenshotCapture.ts).
+// The image travels to the agent as base64 in the block, not as a file; the chat's own copy is chatImageStore.ts.
 function attachmentBlocksOf(root: string, attachments: readonly PromptAttachment[]): unknown[] {
   const blocks: unknown[] = [];
   for (const attachment of attachments) {

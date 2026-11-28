@@ -94,7 +94,7 @@ export const DESIGN_CHANNELS: ReadonlySet<string> = new Set([
   ...['cmsRemote:references', 'cmsRemote:linkPreview', 'mediaHosting:connections', 'mediaHosting:list'],
   // Instructions are files in the copy; reading the AI panel's chats and taking a canvas picture write nothing.
   ...['instructions:list', 'instructions:read', 'instructions:create', 'instructions:createFolder', 'instructions:write'],
-  ...['ai:screenshot', 'ai:chats', 'ai:chatRead', 'ai:mentions', 'ai:sections', 'ai:pinsRead', 'ai:autoCompactGet', 'agents:list'],
+  ...['ai:screenshot', 'ai:chats', 'ai:chatRead', 'ai:chatImage', 'ai:mentions', 'ai:sections', 'ai:pinsRead', 'ai:autoCompactGet', 'agents:list'],
   // The AI panel's chat list and comment pins live in Stacki's own data folder. The agent itself (prompt, steer,
   // setup, compact, review, remember) is refused: it runs programs that could write anywhere.
   ...['ai:chatCreate', 'ai:chatUpdate', 'ai:chatDelete', 'ai:chatFork', 'ai:chatMove', 'ai:cancel', 'ai:setOption', 'ai:record', 'ai:pinsWrite'],

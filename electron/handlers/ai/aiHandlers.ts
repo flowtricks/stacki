@@ -247,6 +247,15 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     const events = closeInterruptedTurns(transcript.events, agentHost().runningTurn(root, input.chat));
     return ok({ summary: summaryOf(record), events, full: transcript.full });
   });
+  host.ipcMain.handle('ai:chatImage', (_event, input) => {
+    const root = open(input.projectPath);
+    if (chats().find(root, input.chat) === undefined) {
+      return err({ code: 'chat-missing' as const, ...described('ai.error.chatMissing') });
+    }
+    const image = chats().readImage(root, input.chat, input.image);
+    // The panel falls back to the message's small preview and says so in its own words.
+    return image === undefined ? err({ code: 'invalid' as const, ...described('ai.images.smallOnly') }) : ok(image);
+  });
   host.ipcMain.handle('ai:prompt', (_event, input) => {
     const root = open(input.projectPath);
     // A steer injects into the running turn (and starts one when none runs); a send is refused while a turn runs.

@@ -28,12 +28,13 @@ esbuild.buildSync({
       "export { screenshotNote, secondsText } from './src/features/ai/screenshot/screenshotNote';",
       "export { frameAttachment } from './src/features/ai/screenshot/useScreenshotCapture';",
       "export { barPlace } from './src/features/ai/screenshot/RecordingBar';",
-      "export { FramePicker, fitContain, frameAt, positionPercent, tileWidthFor, timelineTiles } from './src/features/ai/screenshot/FramePicker';",
+      "export { FramePicker, frameAt, positionPercent, tileWidthFor, timelineTiles } from './src/features/ai/screenshot/FramePicker';",
       "export { ScreenshotButton } from './src/features/ai/screenshot/ScreenshotButton';",
       "export { useScreenshotCapture } from './src/features/ai/screenshot/useScreenshotCapture';",
       "export { AI_LIMITS } from './shared/properties/ai/aiLimits';",
       "export { appendAttachments } from './src/features/ai/screenshot/draftAttachments';",
-      "export { lightboxSize } from './src/features/ai/screenshot/AttachmentChips';",
+      "export { lightboxSize } from './src/ui/ImageViewer';",
+      "export { fitContain } from './src/ui/fitContain';",
       "export { aiState, resetAiStore } from './src/features/ai/aiStore';",
       "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
     ].join('\n'),
@@ -260,7 +261,8 @@ test('labels stay on one line, the timeline never scrolls, and nothing in the sh
   assert.match(rule('.ai-frame-tile'), /object-fit: contain/, 'tiles are never cropped');
   const frameRules = css.slice(css.indexOf('.modal.ai-frame-picker {'));
   assert.ok(!/\bborder:/.test(frameRules), 'backgrounds, not borders');
-  assert.match(rule('.modal.ai-lightbox'), /width: auto/, "the lightbox is its image's size, not the dialog's fixed width");
+  const viewer = fs.readFileSync(repoPath('src/ui/imageViewer.css'), 'utf8');
+  assert.match(viewer, /\.modal\.ai-lightbox \{[^}]*width: auto/, "the lightbox is its image's size, not the dialog's fixed width");
 });
 
 test('the microphone holds the capture bar: at rest the mic alone, hover or focus grows it up to Screenshot and Record', async () => {

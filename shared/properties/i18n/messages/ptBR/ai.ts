@@ -617,6 +617,7 @@ export const messages = {
   'ai.screenshot.button': 'Captura de tela',
   'ai.screenshot.close': 'Fechar visualização',
   'ai.screenshot.enlarge': 'Ampliar {name}',
+  'ai.images.smallOnly': 'Apenas uma cópia pequena desta imagem foi salva',
   'ai.screenshot.failed': 'Não foi possível fazer a captura de tela. Tente novamente.',
   'ai.screenshot.hint': 'Arraste sobre qualquer parte da janela. Esc cancela.',
   'ai.screenshot.name': 'Captura de tela {number} ({width}×{height})',
@@ -865,7 +866,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'A entrada de voz não está disponível neste navegador. Tente o Chrome ou o Safari.',
   'ai.studio.discard': 'Descartar',
   'ai.studio.discarded': 'Descartado. Nenhuma alteração foi aplicada.',
-  'ai.studio.download': 'Baixar {name}',
   'ai.studio.dragPin': 'Arraste um chat para cá para fixá-lo.',
   'ai.studio.dropImages': 'Solte as imagens aqui',
   'ai.studio.filesToChange': {

@@ -12,6 +12,7 @@ import { mainHarness } from '../../../helpers/mainHarness.ts';
 import {
   parseAiAgentsReply,
   parseAiResult,
+  parseChatImageReply,
   parseChatList,
   parseDiffReply,
   parseMentionReply,
@@ -131,6 +132,14 @@ test('the list channels: move, sections, pin, archive, unread, fork, diff, menti
   assert.ok(!steered.ok && notRunnable.includes(steered.error.code), 'a steering prompt takes the same path as ai:steer');
   const missingChat = parseAiResult(await harness.invoke('ai:compact', { projectPath: project, chat: `c${'0'.repeat(24)}` }), parseCompactStarted);
   assert.ok(!missingChat.ok && missingChat.error.code === 'chat-missing');
+
+  // A sent image's full copy is read only for a chat of the open project; a copy that is not there is a value.
+  const image = `${'a'.repeat(32)}.png`;
+  const noImage = parseAiResult(await harness.invoke('ai:chatImage', { projectPath: project, chat: first, image }), parseChatImageReply);
+  assert.ok(!noImage.ok && noImage.error.code === 'invalid');
+  const noImageChat = parseAiResult(await harness.invoke('ai:chatImage', { projectPath: project, chat: `c${'0'.repeat(24)}`, image }), parseChatImageReply);
+  assert.ok(!noImageChat.ok && noImageChat.error.code === 'chat-missing');
+  await assert.rejects(harness.invoke('ai:chatImage', { projectPath: project, chat: first, image: '../../index.json' }), /ChatImageId/);
 
   // A change is readable while pending; nothing is pending here, so the diff is not available.
   const diff = parseAiResult(

@@ -619,6 +619,7 @@ export const messages = {
   'ai.screenshot.button': 'Screenshot', // same
   'ai.screenshot.close': 'Vorschau schließen',
   'ai.screenshot.enlarge': '{name} vergrößern',
+  'ai.images.smallOnly': 'Von diesem Bild wurde nur eine kleine Kopie gespeichert',
   'ai.screenshot.failed': 'Der Screenshot konnte nicht erstellt werden. Versuche es erneut.',
   'ai.screenshot.hint': 'Ziehe über einen beliebigen Teil des Fensters. Esc bricht ab.',
   'ai.screenshot.name': 'Screenshot {number} ({width}×{height})', // same
@@ -868,7 +869,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Spracheingabe ist in diesem Browser nicht verfügbar. Probiere Chrome oder Safari.',
   'ai.studio.discard': 'Verwerfen',
   'ai.studio.discarded': 'Verworfen. Es wurden keine Änderungen angewendet.',
-  'ai.studio.download': '{name} herunterladen',
   'ai.studio.dragPin': 'Ziehe einen Chat hierher, um ihn anzuheften.',
   'ai.studio.dropImages': 'Bilder hier ablegen',
   'ai.studio.filesToChange': {

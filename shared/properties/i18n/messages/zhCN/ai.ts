@@ -585,6 +585,7 @@ export const messages = {
   'ai.screenshot.button': '截图',
   'ai.screenshot.close': '关闭预览',
   'ai.screenshot.enlarge': '放大 {name}',
+  'ai.images.smallOnly': '此图片仅保存了缩小的副本',
   'ai.screenshot.failed': '无法截图。请重试。',
   'ai.screenshot.hint': '在窗口的任意区域拖动。按 Esc 取消。',
   'ai.screenshot.name': '截图 {number}（{width}×{height}）',
@@ -808,7 +809,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': '此浏览器不支持语音输入。请尝试 Chrome 或 Safari。',
   'ai.studio.discard': '放弃',
   'ai.studio.discarded': '已放弃，未应用任何更改。',
-  'ai.studio.download': '下载 {name}',
   'ai.studio.dragPin': '将聊天拖到此处以置顶。',
   'ai.studio.dropImages': '将图片拖放到此处',
   'ai.studio.filesToChange': {

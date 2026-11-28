@@ -11,6 +11,8 @@ import type { PinSendMode, SentPin } from '../../../../shared/properties/ai/comm
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import type { ChatView } from '../chatReducer';
 import { useState } from 'react';
+import { readSentImage } from '../aiStore';
+import { SentImageViewer } from '../transcript/SentImageViewer';
 import { isSubagentModel, type PinQuestion } from '../../../../shared/properties/ai/commentPinBrief';
 import { chosenModelName, deriveSubagentWork } from '../subagents';
 import { answerPinQuestion, goToPinAnswer } from './pinAnswer';
@@ -81,6 +83,40 @@ function PinModelTag({ pin, view, call }: { readonly pin: SentPin; readonly view
   );
 }
 
+// The crop a pin was sent with, at the row's end: it opens large.
+function PinPicture({
+  chat,
+  name,
+  thumbnail,
+  original,
+}: {
+  readonly chat: ChatId;
+  readonly name: string;
+  readonly thumbnail: string;
+  readonly original: ChatAttachmentName['original'];
+}) {
+  const translate = useTranslate();
+  const [viewing, setViewing] = useState(false);
+  const label = translate('ai.screenshot.enlarge', { name });
+  return (
+    <>
+      <button
+        type="button"
+        className="ai-image-open ai-pins-message-picture"
+        aria-label={label}
+        aria-haspopup="dialog"
+        title={original === undefined ? translate('ai.images.smallOnly') : label}
+        onClick={() => setViewing(true)}
+      >
+        <img className="ai-pin-thumb ai-pins-message-thumb" src={thumbnail} alt="" />
+      </button>
+      {viewing && (
+        <SentImageViewer name={name} thumbnail={thumbnail} original={original} load={(image) => readSentImage(chat, image)} onClose={() => setViewing(false)} />
+      )}
+    </>
+  );
+}
+
 export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenSubagent }: PinsMessageProps) {
   const translate = useTranslate();
   // The board, so a pin still on it can be opened on the canvas; its progress is the transcript's.
@@ -91,7 +127,7 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
         <div className="ai-pins-message-title">{translate('ai.pins.summaryTitle', { count: pins.length })}</div>
         <ol className="ai-pins-message-list">
           {pins.map((pin) => {
-            const thumbnail = pin.image === undefined ? undefined : attachments[pin.image]?.thumbnail;
+            const picture = pin.image === undefined ? undefined : attachments[pin.image];
             const onBoard = sentPinOf(chat, turn, pin.number);
             const progress = pinProgress({ number: pin.number, delivery: { kind: 'sent', chat, turn, mode, at: 0 } }, view);
             const call = mode === 'subagents' ? pinSubagentCall(view, turn, pin.number) : undefined;
@@ -138,7 +174,9 @@ export function PinsMessage({ chat, turn, mode, pins, attachments, view, onOpenS
                     <PinAsk chat={chat} pin={pin} asked={progress.question} onReply={() => void goToPinAnswer(chat, pin, progress)} />
                   )}
                 </span>
-                {thumbnail !== undefined && <img className="ai-pin-thumb ai-pins-message-thumb" src={thumbnail} alt="" />}
+                {picture?.thumbnail !== undefined && (
+                  <PinPicture chat={chat} name={pin.elementLabel} thumbnail={picture.thumbnail} original={picture.original} />
+                )}
               </li>
             );
           })}

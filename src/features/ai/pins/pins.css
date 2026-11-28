@@ -593,10 +593,14 @@ button.ai-pins-message-open:hover:not(:disabled) .ai-pins-message-comment {
   text-decoration-color: var(--text-faint);
 }
 /* The crop at the row's end (the start in a right-to-left interface), one size for every row, level with the words. */
+.ai-pins-message-picture {
+  align-self: flex-start;
+  margin-top: 1px;
+  border-radius: 5px;
+}
 .ai-pins-message-thumb {
   width: 48px;
   height: 34px;
-  margin-top: 1px;
 }
 .ai-pins-message-text {
   flex: 1;

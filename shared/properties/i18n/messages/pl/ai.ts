@@ -672,6 +672,7 @@ export const messages = {
   'ai.screenshot.button': 'Zrzut ekranu',
   'ai.screenshot.close': 'Zamknij podgląd',
   'ai.screenshot.enlarge': 'Powiększ {name}',
+  'ai.images.smallOnly': 'Zapisano tylko małą kopię tego obrazu',
   'ai.screenshot.failed': 'Nie udało się zrobić zrzutu ekranu. Spróbuj ponownie.',
   'ai.screenshot.hint': 'Przeciągnij po dowolnej części okna. Esc anuluje.',
   'ai.screenshot.name': 'Zrzut ekranu {number} ({width}×{height})',
@@ -963,7 +964,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Wprowadzanie głosowe jest niedostępne w tej przeglądarce. Spróbuj Chrome lub Safari.',
   'ai.studio.discard': 'Odrzuć',
   'ai.studio.discarded': 'Odrzucono. Nie zastosowano żadnych zmian.',
-  'ai.studio.download': 'Pobierz {name}',
   'ai.studio.dragPin': 'Przeciągnij tutaj czat, aby go przypiąć.',
   'ai.studio.dropImages': 'Upuść obrazy tutaj',
   'ai.studio.filesToChange': {

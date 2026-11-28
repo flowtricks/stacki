@@ -1,4 +1,4 @@
-/* Screenshots in the composer: image chips, the lightbox and the region selector (Desktop only). */
+/* Screenshots in the composer: image chips and the region selector (Desktop only). */
 .ai-attachment.is-image {
   padding: 2px 2px 2px 2px;
 }
@@ -21,33 +21,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* The lightbox is as large as its image: the image is sized by AttachmentChips (fitContain to the window), so the
-   whole image shows at its own aspect; `.modal.` out-ranks the shared dialog's fixed 420 px width and clipping. */
-.modal.ai-lightbox {
-  position: relative;
-  width: auto;
-  max-width: none;
-  padding: 8px;
-  background: var(--bg-panel);
-}
-.ai-lightbox-image {
-  display: block;
-  object-fit: contain;
-  border-radius: 4px;
-}
-.ai-lightbox-close {
-  position: absolute;
-  top: 12px;
-  inset-inline-end: 12px;
-  background: var(--bg-active);
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 .ai-tool-button.is-busy {
   opacity: 0.5;

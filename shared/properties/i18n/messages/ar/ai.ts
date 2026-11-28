@@ -726,6 +726,7 @@ export const messages = {
   'ai.screenshot.button': 'لقطة شاشة',
   'ai.screenshot.close': 'إغلاق المعاينة',
   'ai.screenshot.enlarge': 'تكبير {name}',
+  'ai.images.smallOnly': 'لم يُحفظ من هذه الصورة سوى نسخة صغيرة',
   'ai.screenshot.failed': 'تعذّر التقاط لقطة الشاشة. حاول مرة أخرى.',
   'ai.screenshot.hint': 'اسحب فوق أي جزء من النافذة. يلغي Esc العملية.',
   'ai.screenshot.name': 'لقطة الشاشة {number} ({width}×{height})',
@@ -1061,7 +1062,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'الإدخال الصوتي غير متاح في هذا المتصفح. جرّب Chrome أو Safari.',
   'ai.studio.discard': 'تجاهل',
   'ai.studio.discarded': 'تم التجاهل. لم تُطبَّق أي تغييرات.',
-  'ai.studio.download': 'تنزيل {name}',
   'ai.studio.dragPin': 'اسحب دردشة إلى هنا لتثبيتها.',
   'ai.studio.dropImages': 'أفلت الصور هنا',
   'ai.studio.filesToChange': {

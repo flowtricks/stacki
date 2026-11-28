@@ -74,6 +74,17 @@
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.07);
 }
+button.ai-message-attachment {
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: zoom-in;
+}
+button.ai-message-attachment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .ai-message-attachment:not(:has(.ai-message-thumb)) {
   padding-inline-start: 7px;
 }

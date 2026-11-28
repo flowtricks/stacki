@@ -615,6 +615,7 @@ export const messages = {
   'ai.screenshot.button': 'स्क्रीनशॉट',
   'ai.screenshot.close': 'प्रीव्यू बंद करें',
   'ai.screenshot.enlarge': '{name} बड़ा करें',
+  'ai.images.smallOnly': 'इस इमेज की केवल एक छोटी कॉपी सहेजी गई थी',
   'ai.screenshot.failed': 'स्क्रीनशॉट नहीं लिया जा सका। फिर कोशिश करें।',
   'ai.screenshot.hint': 'विंडो के किसी भी हिस्से पर ड्रैग करें। रद्द करने के लिए Esc दबाएँ।',
   'ai.screenshot.name': 'स्क्रीनशॉट {number} ({width}×{height})',
@@ -863,7 +864,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'इस ब्राउज़र में आवाज़ से इनपुट उपलब्ध नहीं है। Chrome या Safari आज़माएँ।',
   'ai.studio.discard': 'छोड़ें',
   'ai.studio.discarded': 'छोड़ दिया गया। कोई बदलाव लागू नहीं हुआ।',
-  'ai.studio.download': '{name} डाउनलोड करें',
   'ai.studio.dragPin': 'चैट को पिन करने के लिए यहाँ खींचें।',
   'ai.studio.dropImages': 'इमेज यहाँ छोड़ें',
   'ai.studio.filesToChange': {

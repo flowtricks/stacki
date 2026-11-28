@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormat, useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
+import { ImageViewer } from '../../../vendor/stacki/src/ui/ImageViewer';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { LoaderDots } from '../../../vendor/stacki/src/ui/LoaderDots';
 import { DiffView } from '../../../vendor/stacki/src/features/ai/transcript/DiffView';
@@ -95,15 +96,7 @@ function RunningLine({ chat }: { readonly chat: ChatThread }) {
 function MessageItem({ chat, message, refresh }: { readonly chat: ChatThread; readonly message: ChatMessage; readonly refresh: () => void }) {
   const translate = useTranslate();
   const { formatNumber } = useFormat();
-  const images = message.images.length > 0 && (
-    <div className="chat-message-images">
-      {message.images.map((image) => (
-        <a key={image.id} href={image.url} download={image.name} title={translate('ai.studio.download', { name: image.name })}>
-          <img src={image.url} alt={image.name} />
-        </a>
-      ))}
-    </div>
-  );
+  const images = <MessageImages images={message.images} />;
   if (message.role === 'user') {
     return (
       <article className="ai-message-user">
@@ -122,6 +115,33 @@ function MessageItem({ chat, message, refresh }: { readonly chat: ChatThread; re
         <div className="ai-worked">{translate('ai.transcript.workedFor', { duration: formatDuration(message.durationMs, formatNumber) })}</div>
       )}
     </article>
+  );
+}
+
+/** A message's images, each opening large in Desktop's own image viewer. Studio keeps the images whole in the chat. */
+function MessageImages({ images }: { readonly images: ChatMessage['images'] }) {
+  const translate = useTranslate();
+  const [viewing, setViewing] = useState<ChatMessage['images'][number] | undefined>(undefined);
+  if (images.length === 0) {
+    return undefined;
+  }
+  return (
+    <div className="chat-message-images">
+      {images.map((image) => (
+        <button
+          key={image.id}
+          type="button"
+          className="ai-image-open"
+          aria-label={translate('ai.screenshot.enlarge', { name: image.name })}
+          aria-haspopup="dialog"
+          title={image.name}
+          onClick={() => setViewing(image)}
+        >
+          <img src={image.url} alt={image.name} />
+        </button>
+      ))}
+      {viewing !== undefined && <ImageViewer name={viewing.name} source={viewing.url} onClose={() => setViewing(undefined)} />}
+    </div>
   );
 }
 

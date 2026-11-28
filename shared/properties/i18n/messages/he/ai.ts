@@ -641,6 +641,7 @@ export const messages = {
   'ai.screenshot.button': 'צילום מסך',
   'ai.screenshot.close': 'סגירת התצוגה המקדימה',
   'ai.screenshot.enlarge': 'הגדלת {name}',
+  'ai.images.smallOnly': 'נשמר רק עותק קטן של התמונה הזו',
   'ai.screenshot.failed': 'לא ניתן היה לצלם את המסך. אפשר לנסות שוב.',
   'ai.screenshot.hint': 'יש לגרור על חלק כלשהו בחלון. Esc מבטל.',
   'ai.screenshot.name': 'צילום מסך {number} ({width}×{height})',
@@ -910,7 +911,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'קלט קולי אינו זמין בדפדפן הזה. אפשר לנסות Chrome או Safari.',
   'ai.studio.discard': 'ביטול',
   'ai.studio.discarded': 'בוטל. לא הוחלו שינויים.',
-  'ai.studio.download': 'הורדת {name}',
   'ai.studio.dragPin': 'אפשר לגרור לכאן צ׳אט כדי להצמיד אותו.',
   'ai.studio.dropImages': 'אפשר לגרור לכאן תמונות',
   'ai.studio.filesToChange': {

@@ -296,6 +296,7 @@ interface InvokeChannels {
   readonly aiChatUpdate: 'ai:chatUpdate';
   readonly aiChatDelete: 'ai:chatDelete';
   readonly aiChatRead: 'ai:chatRead';
+  readonly aiChatImage: 'ai:chatImage';
   readonly aiPrompt: 'ai:prompt';
   readonly aiSteer: 'ai:steer';
   readonly aiCompact: 'ai:compact';

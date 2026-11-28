@@ -24,6 +24,7 @@ esbuild.buildSync({
       "export { EMPTY_CHAT, reduceChat } from './src/features/ai/chatReducer';",
       "export { loadAiProject, resetAiStore, openChat, aiState, draftText } from './src/features/ai/aiStore';",
       "export { buildPrompt } from './electron/handlers/ai/promptBlocks';",
+      "export { PinsMessage } from './src/features/ai/pins/PinsMessage';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -39,6 +40,7 @@ esbuild.buildSync({
 });
 
 const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost/', pretendToBeVisual: true });
+require('../../helpers/popupDom').installPopupDOM(dom.window);
 global.window = dom.window;
 for (const name of ['document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event', 'KeyboardEvent', 'MouseEvent', 'getComputedStyle', 'localStorage']) {
   Object.defineProperty(global, name, { value: dom.window[name], configurable: true, writable: true });
@@ -148,6 +150,18 @@ test('a message of pins: words and names, a status per pin, no instructions, no 
     assert.ok(shown.includes(wanted), `shows "${wanted}" in "${shown}"`);
   }
   assert.equal(message.querySelector('img')?.getAttribute('src'), THUMB, 'pin 1 shows the crop it was sent with');
+  // The crop opens large. This chat kept no full copy, so it opens the small one and says so.
+  const picture = message.querySelector('button.ai-pins-message-picture');
+  assert.equal(picture.getAttribute('aria-label'), 'Enlarge Heading 1');
+  assert.equal(picture.getAttribute('title'), 'Only a small copy of this image was saved');
+  assert.equal(message.querySelectorAll('.ai-pins-message-picture').length, 1, 'a comment with no picture is as it was');
+  await act(async () => picture.click());
+  assert.equal(document.querySelector('.ai-lightbox-image')?.getAttribute('src'), THUMB);
+  await act(async () => document.querySelector('.ai-lightbox-close').click());
+  for (let attempt = 0; attempt < 100 && document.querySelector('.ai-lightbox') !== null; attempt += 1) {
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+  }
+  assert.ok(document.querySelector('.ai-lightbox') === null, 'it closes');
   for (const hidden of ['src/', '.astro', '0.1', 'comment-pins', 'Wave', 'subagent', 'locator', 'toolu_', '768']) {
     assert.ok(!shown.includes(hidden), `shows no "${hidden}"`);
   }
@@ -252,4 +266,55 @@ test('a pin that needs the person shows its question with choices and Reply; a p
   assert.equal(named.getAttribute('title') ?? '', '');
   await act(async () => second.unmount());
   container.remove();
+});
+
+test('a reloaded chat’s pin crop reads its full copy from the chat', async () => {
+  const asked = [];
+  const chat = { id: CHAT, agent: 'claude', title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false };
+  window.avb = {
+    aiAgents: async () => ({ trusted: true, agents: [], options: [] }),
+    aiChats: async () => ({ chats: [chat], sections: [] }),
+    aiChatImage: async (payload) => {
+      asked.push(payload);
+      return { ok: true, value: { mimeType: 'image/png', data: 'RlVMTA==' } };
+    },
+    aiAck: () => undefined,
+    onAiEvents: () => () => undefined,
+    onAiAgentStatus: () => () => undefined,
+    onAiSetup: () => () => undefined,
+    platform: 'darwin',
+  };
+  ui.resetTranscriptUi();
+  ui.resetAiStore();
+  await ui.loadAiProject('/site');
+  const original = `${'a'.repeat(32)}.png`;
+  const brief = { mode: 'subagents', pins: [entry(1, { images: [0] })] };
+  const source = { root: '/site', home: '/home', agent: 'claude', embeddedContext: true, commands: new Set(), read: () => undefined };
+  const attachments = [{ kind: 'image', name: 'Pinned area', mimeType: 'image/png', data: 'aGVsbG8=' }];
+  const built = ui.buildPrompt(source, { text: 'Comments on 1 pin', attachments, parts: undefined, pins: brief });
+  assert.ok(built.ok);
+  const container = document.body.appendChild(document.createElement('div'));
+  const root = createRoot(container);
+  await act(async () =>
+    root.render(
+      React.createElement(ui.PinsMessage, {
+        chat: CHAT,
+        turn: TURN,
+        mode: 'subagents',
+        pins: built.value.sent.find((part) => part.kind === 'pins').pins,
+        attachments: [{ kind: 'image', name: 'Pinned area', thumbnail: THUMB, original }],
+        view: ui.EMPTY_CHAT,
+        onOpenSubagent: undefined,
+      }),
+    ),
+  );
+  try {
+    await act(async () => container.querySelector('.ai-pins-message-picture').click());
+    await act(async () => waitFor({ what: 'the full image', read: () => document.querySelector('.ai-lightbox-image')?.getAttribute('src'), until: Boolean }));
+    assert.deepEqual(asked, [{ projectPath: '/site', chat: CHAT, image: original }]);
+    assert.equal(document.querySelector('.ai-lightbox-image').getAttribute('src'), 'data:image/png;base64,RlVMTA==');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
 });

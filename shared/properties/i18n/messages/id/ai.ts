@@ -589,6 +589,7 @@ export const messages = {
   'ai.screenshot.button': 'Tangkapan layar',
   'ai.screenshot.close': 'Tutup pratinjau',
   'ai.screenshot.enlarge': 'Perbesar {name}',
+  'ai.images.smallOnly': 'Hanya salinan kecil gambar ini yang disimpan',
   'ai.screenshot.failed': 'Tidak dapat mengambil tangkapan layar. Coba lagi.',
   'ai.screenshot.hint': 'Seret di bagian mana pun pada jendela. Esc untuk membatalkan.',
   'ai.screenshot.name': 'Tangkapan layar {number} ({width}×{height})',
@@ -814,7 +815,6 @@ export const messages = {
   'ai.studio.dictation.unavailable': 'Input suara tidak tersedia di browser ini. Coba Chrome atau Safari.',
   'ai.studio.discard': 'Buang',
   'ai.studio.discarded': 'Dibuang. Tidak ada perubahan yang diterapkan.',
-  'ai.studio.download': 'Unduh {name}',
   'ai.studio.dragPin': 'Seret obrolan ke sini untuk menyematkannya.',
   'ai.studio.dropImages': 'Jatuhkan gambar di sini',
   'ai.studio.filesToChange': {

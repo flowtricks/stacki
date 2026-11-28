@@ -45,7 +45,7 @@ const plainFiles = {
 
 const noSnapshots = { snapshot: async () => undefined, changes: async () => [], blob: async () => undefined };
 
-function fakeHost() {
+function fakeHost(options: { readonly thumbnail?: () => string } = {}) {
   const root = fs.realpathSync(temporary('project'));
   const userData = temporary('user');
   const bin = temporary('bin');
@@ -55,6 +55,7 @@ function fakeHost() {
   const store = new ChatStore(path.join(userData, 'ai'));
   const pushes: ChatEvent[] = [];
   const host = new AgentHost({
+    ...options,
     userData,
     store,
     send: (channel: string, payload: unknown) => {
@@ -402,7 +403,7 @@ test('opening the panel allows agents in the project, unless Settings asks first
   }
 });
 
-test('a screenshot reaches the agent inline and the stored chat keeps only its name: no bytes, no note, no file', async (context) => {
+test('a screenshot reaches the agent inline; with no preview to open, the chat keeps only its name: no bytes, no note, no file', async (context) => {
   const { root, userData, store, host, events } = fakeHost();
   context.after(() => host.stopAll());
   store.trust(root);
@@ -435,4 +436,22 @@ test('a screenshot reaches the agent inline and the stored chat keeps only its n
     assert.ok(!text.includes('stacki-screenshot-bytes-marker'), 'nor their decoded form');
     assert.ok(!text.includes(note), 'nor the note');
   }
+});
+
+test('a sent image with a preview keeps its full copy beside the chat, and the reopened chat opens it', async (context) => {
+  const { root, userData, store, host, events } = fakeHost({ thumbnail: () => 'data:image/jpeg;base64,/9j/' });
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = created(store.create(root, 'codex', 'New chat', 1));
+  const data = Buffer.from('the-whole-picture').toString('base64');
+  const note = 'Screenshot 1: element';
+  const started = await host.prompt(root, chat.id, 'look', [{ kind: 'image', name: 'shot', mimeType: 'image/png', data, note }]);
+  assert.ok(started.ok);
+  await until('the end of the turn', () => ofKind(events(), 'turn-end').length > 0);
+  // A second store over the same folder: the app after a restart.
+  const reopened = new ChatStore(path.join(userData, 'ai'));
+  const user = created(ofKind(reopened.read(root, chat.id).events, 'user')[0]);
+  const original = created(user.attachments[0]?.original);
+  assert.deepEqual(reopened.readImage(root, chat.id, original), { mimeType: 'image/png', data });
+  assert.ok(!fs.readdirSync(root).includes('images'), 'the project holds no copy');
 });
