@@ -319,6 +319,7 @@ function foldSegment(segment: string): string {
 // A path an operation changes: well formed, one the app may reach, and one it may change.
 function parseAppFileChangePath(input: unknown, appId: string): string {
   const path = parseAppFilePath(input, appId, { allowRoot: false });
+  assert(path.length > 0, 'parseAppFileChangePath: a change never names the project root');
   const refusal = appFileChangeRefusal(path, appId);
   if (refusal !== undefined) {
     throw new Error(refusal);

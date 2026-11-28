@@ -294,6 +294,8 @@ export function parseNestedSitesChoice(input: unknown): NestedSitesChoice {
 
 // Both paths are absolute and normalized already, so "below" is a prefix that ends at a separator.
 function isBelow(folder: string, candidate: string): boolean {
+  assert(folder.length > 0, 'isBelow: the picked folder is a parsed absolute path');
+  assert(candidate.length > 0, 'isBelow: the site folder is a parsed absolute path');
   if (candidate.length <= folder.length) {
     return false;
   }
