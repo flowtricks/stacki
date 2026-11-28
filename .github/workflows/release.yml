@@ -41,12 +41,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           sparse-checkout: |
             scripts
             docs
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version-file: .nvmrc
       - id: target
@@ -74,14 +74,14 @@ jobs:
           SHA: ${{ steps.target.outputs.sha }}
           TAG: ${{ steps.target.outputs.tag }}
           DRY_RUN: ${{ steps.target.outputs.dry_run }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: candidate-*
           path: candidate
           merge-multiple: true
           run-id: ${{ steps.prove.outputs.candidate_run_id }}
           github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         continue-on-error: true
         with:
           name: optional-demo

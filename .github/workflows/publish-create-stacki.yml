@@ -3,17 +3,18 @@ name: Publish create-stacki
 on:
   workflow_dispatch:
 
+# Why three jobs: `id-token: write` lets a job publish to npm, and installing dependencies runs
+# their scripts. No job does both: `build` installs, tests and packs without that permission, and
+# `publish` holds it, installs no dependency and checks out no code.
 permissions:
   contents: read
-  id-token: write
-  # The test plan reads check.yml's result for this commit.
-  actions: read
 
 jobs:
-  publish:
+  preflight:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
-      - uses: actions/checkout@v6
       - name: Check npm trusted publishing before the long test run
         # Why: a missing or mismatched npm trusted publisher surfaces only as a bare E404 after ten
         # minutes of tests. This exchanges the job's OIDC identity for a publish token, fails in
@@ -32,20 +33,32 @@ jobs:
             cat "${response}"
             exit 1
           fi
-      - uses: actions/setup-node@v6
+
+  build:
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The test plan reads check.yml's result for this commit.
+      actions: read
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       # The suite already passed this exact commit in check.yml on every platform
       # (release.yml waited for that before it published), so it runs here only
       # when that cannot be shown (scripts/release/releasePlan.mts). The package
-      # build and the pack check below always run.
+      # build and the pack below always run.
       - id: plan
         run: node --experimental-strip-types scripts/release/releasePlan.mts --sha="$GITHUB_SHA" --wait-minutes=30 --force-tests=false
         env:
           GH_TOKEN: ${{ github.token }}
-      - run: npm install --global npm@11
+      - run: npm install --global npm@11.21.2
       - run: npm ci
       - run: npm --prefix studio ci
       - if: steps.plan.outputs.run_tests == 'true'
@@ -55,7 +68,50 @@ jobs:
       - if: steps.plan.outputs.run_tests == 'true'
         run: xvfb-run --auto-servernum npm test
       - run: npm run create-stacki:build
-      - run: npm pack --dry-run
-        working-directory: packages/create-stacki
-      - run: npm publish --access public
-        working-directory: packages/create-stacki
+      - id: pack
+        run: |
+          set -euo pipefail
+          directory="${RUNNER_TEMP}/package"
+          mkdir -p "${directory}"
+          npm pack ./packages/create-stacki --pack-destination "${directory}"
+          tarball="create-stacki-$(node -p "require('./packages/create-stacki/package.json').version").tgz"
+          sha256="$(sha256sum "${directory}/${tarball}" | cut -d ' ' -f 1)"
+          echo "tarball=${tarball}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: create-stacki-package
+          path: ${{ runner.temp }}/package/${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          # A rerun of every job replaces the earlier attempt's file.
+          overwrite: true
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      # Exact, so the program that holds the publish permission never changes by itself.
+      - run: npm install --global npm@11.21.2 --ignore-scripts
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: create-stacki-package
+          path: package
+      - name: Check this is the tarball the build job packed
+        run: |
+          set -euo pipefail
+          echo "${SHA256}  package/${TARBALL}" | sha256sum -c -
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+      # Why `./`: without it npm can read the argument as a package spec instead of a file.
+      - run: npm publish "./package/${TARBALL}" --access public --ignore-scripts
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
