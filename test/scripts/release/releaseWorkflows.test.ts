@@ -10,7 +10,15 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { parse } from 'yaml';
-import { CHECK_OPERATING_SYSTEMS, CHECK_SHARD_COUNT, REQUIRED_CHECK_JOBS, shardJobName, STATIC_CHECK_OPERATING_SYSTEMS, staticJobName, studioJobName } from '../../../scripts/release/releaseStatus.mts';
+import {
+  CHECK_OPERATING_SYSTEMS,
+  CHECK_SHARD_COUNT,
+  REQUIRED_CHECK_JOBS,
+  shardJobName,
+  STATIC_CHECK_OPERATING_SYSTEMS,
+  staticJobName,
+  studioJobName,
+} from '../../../scripts/release/releaseStatus.mts';
 
 type Node = Readonly<Record<string, unknown>>;
 
@@ -41,7 +49,9 @@ function steps(job: unknown): readonly Node[] {
 }
 
 function runs(file: Node): readonly string[] {
-  return Object.values(jobs(file)).flatMap((job) => steps(job).map((step) => step['run'])).filter((run): run is string => typeof run === 'string');
+  return Object.values(jobs(file))
+    .flatMap((job) => steps(job).map((step) => step['run']))
+    .filter((run): run is string => typeof run === 'string');
 }
 
 const WORKFLOWS = readdirSync('.github/workflows').filter((name) => name.endsWith('.yml'));
@@ -79,7 +89,11 @@ test('the post chain runs only scripts, and passes inputs through the environmen
     assert.ok(allowed, `release-post.yml: "${run}" is logic in YAML; put it in a script`);
     assert.doesNotMatch(run, /\$\{\{/, 'release-post.yml: interpolate nothing into a shell line; pass it as an env variable');
   }
-  assert.equal(existsSync('.github/workflows/release-go.yml'), false, 'the Release button needed settings that never existed; npm run release:ship replaced it');
+  assert.equal(
+    existsSync('.github/workflows/release-go.yml'),
+    false,
+    'the Release button needed settings that never existed; npm run release:ship replaced it',
+  );
 });
 
 test('the post chain follows release.yml by name and never calls the npm publish as a reusable workflow', () => {
@@ -109,16 +123,18 @@ test('candidate.yml: the plan gates every build; nothing is published or reteste
   for (const name of ['build-mac', 'build-windows', 'build-linux']) {
     const commands = steps(candidate[name]).map((step) => String(step['run'] ?? ''));
     assert.ok(commands.includes('npm run build'), `${name} builds what it packages`);
-    assert.ok(commands.some((command) => /^npx electron-builder --(mac|win|linux) --publish never$/.test(command)), `${name} packages without publishing`);
+    assert.ok(
+      commands.some((command) => /^npx electron-builder --(mac|win|linux) --publish never$/.test(command)),
+      `${name} packages without publishing`,
+    );
   }
   const windows = steps(candidate['build-windows']);
   const normalize = windows.findIndex((step) => String(step['run'] ?? '').includes('candidate.mts --stage=normalize --directory=release'));
   assert.ok(normalize >= 0, 'the Windows installer takes the dashed name latest.yml gives it');
-  assert.ok(
-    normalize < windows.findIndex((step) => step['uses'] === 'actions/upload-artifact@v6'),
-    'renamed before it is kept',
-  );
-  const linux = steps(candidate['build-linux']).map((step) => String(step['run'] ?? '')).join('\n');
+  assert.ok(normalize < windows.findIndex((step) => String(step['uses']).startsWith('actions/upload-artifact@')), 'renamed before it is kept');
+  const linux = steps(candidate['build-linux'])
+    .map((step) => String(step['run'] ?? ''))
+    .join('\n');
   assert.match(linux, /linuxSmoke\.js \/opt\/Stacki\/stacki/, 'the deb install smoke test stays');
   assert.match(linux, /squashfs-root\/AppRun/, 'the AppImage smoke test stays');
   const final = asNode(candidate['candidate'], 'candidate');
@@ -135,13 +151,13 @@ test('release.yml: proves the candidate first, rebuilds and retests nothing, and
   const commands = publish.map((step) => String(step['run'] ?? ''));
   assert.ok(!commands.some((command) => /\bnpm (test|ci|run build)\b|electron-builder/.test(command)), 'promotion never rebuilds or retests');
   const prove = publish.findIndex((step) => step['id'] === 'prove');
-  const firstDownload = publish.findIndex((step) => step['uses'] === 'actions/download-artifact@v7');
+  const firstDownload = publish.findIndex((step) => String(step['uses']).startsWith('actions/download-artifact@'));
   const firstUpload = publish.findIndex((step) => String(step['run'] ?? '').includes('gh release upload'));
   assert.ok(prove >= 0);
   assert.ok(prove < firstDownload, 'the proof comes before any download');
   assert.ok(firstDownload < firstUpload, 'the files come from the candidate run');
   assert.match(String(publish[prove]?.['run']), /^node --experimental-strip-types scripts\/release\/promote\.mts /);
-  for (const step of publish.filter((candidate) => candidate['uses'] === 'actions/download-artifact@v7')) {
+  for (const step of publish.filter((candidate) => String(candidate['uses']).startsWith('actions/download-artifact@'))) {
     assert.equal(asNode(step['with'], 'with')['run-id'], '${{ steps.prove.outputs.candidate_run_id }}');
   }
   for (const step of publish.filter((candidate) => /gh release (upload|edit|create)|gh workflow run/.test(String(candidate['run'] ?? '')))) {
@@ -158,16 +174,53 @@ test('release.yml: proves the candidate first, rebuilds and retests nothing, and
 });
 
 test('publish-create-stacki: the plan switches only the suite; build, pack and publish always run', () => {
-  const publish = steps(jobs(workflow('publish-create-stacki.yml'))['publish']);
-  const planIndex = publish.findIndex((step) => step['id'] === 'plan');
-  const testIndex = publish.findIndex((step) => String(step['run'] ?? '').includes('npm test'));
+  const file = jobs(workflow('publish-create-stacki.yml'));
+  const build = steps(file['build']);
+  const publish = steps(file['publish']);
+  const planIndex = build.findIndex((step) => step['id'] === 'plan');
+  const testIndex = build.findIndex((step) => String(step['run'] ?? '').includes('npm test'));
   assert.ok(planIndex >= 0);
   assert.ok(planIndex < testIndex);
-  assert.equal(publish[testIndex]?.['if'], "steps.plan.outputs.run_tests == 'true'");
-  for (const command of ['npm run create-stacki:build', 'npm pack --dry-run', 'npm publish --access public']) {
-    const step = publish.find((candidate) => candidate['run'] === command);
-    assert.ok(step !== undefined, command);
-    assert.equal(step['if'], undefined, `${command} is never skipped`);
+  assert.equal(build[testIndex]?.['if'], "steps.plan.outputs.run_tests == 'true'");
+  for (const step of [
+    build.find((candidate) => candidate['run'] === 'npm run create-stacki:build'),
+    build.find((candidate) => candidate['id'] === 'pack'),
+    publish.find((candidate) => String(candidate['run'] ?? '').startsWith('npm publish "./package/${TARBALL}" --access public')),
+  ]) {
+    assert.ok(step !== undefined, 'the build, the pack and the publish each have a step');
+    assert.equal(step['if'], undefined, 'never skipped');
+  }
+});
+
+test('publish-create-stacki: only jobs that run no dependency code can publish', () => {
+  const file = workflow('publish-create-stacki.yml');
+  assert.deepEqual(file['permissions'], { contents: 'read' }, 'no job inherits the publish permission');
+  const build = asNode(jobs(file)['build'], 'build');
+  assert.deepEqual(build['permissions'], { contents: 'read', actions: 'read' });
+  for (const name of ['preflight', 'publish']) {
+    const job = asNode(jobs(file)[name], name);
+    assert.deepEqual(job['permissions'], { 'id-token': 'write' }, `${name} holds only the publish permission`);
+    for (const step of steps(job)) {
+      assert.doesNotMatch(String(step['uses'] ?? ''), /^actions\/checkout@/, `${name} checks out no code`);
+      for (const line of String(step['run'] ?? '').split('\n')) {
+        if (/\bnpm (ci|install|i|exec|run|test)\b|\bnpx\b/.test(line)) {
+          assert.match(line, /^npm install --global npm@\d+\.\d+\.\d+ --ignore-scripts$/, `${name} installs only an exact npm`);
+        }
+      }
+    }
+  }
+  assert.equal(asNode(jobs(file)['publish'], 'publish')['needs'], 'build');
+});
+
+test('every action is pinned to a full commit SHA', () => {
+  for (const name of WORKFLOWS) {
+    for (const job of Object.values(jobs(workflow(name)))) {
+      for (const step of steps(job)) {
+        if (step['uses'] !== undefined) {
+          assert.match(String(step['uses']), /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${name}: pin ${String(step['uses'])} to a commit`);
+        }
+      }
+    }
   }
 });
 
@@ -175,12 +228,19 @@ test('check.yml: the shard matrix is the count the release scripts expect, under
   const check = jobs(workflow('check.yml'));
   const shard = asNode(check['shard'], 'shard');
   const matrix = asNode(asNode(shard['strategy'], 'strategy')['matrix'], 'matrix');
-  assert.deepEqual(matrix['shard'], Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => index + 1));
+  assert.deepEqual(
+    matrix['shard'],
+    Array.from({ length: CHECK_SHARD_COUNT }, (_, index) => index + 1),
+  );
   assert.deepEqual(matrix['os'], [...CHECK_OPERATING_SYSTEMS]);
   assert.equal(String(shard['name']).replace('${{ matrix.os }}', 'ubuntu-latest').replace('${{ matrix.shard }}', '2'), shardJobName('ubuntu-latest', 2));
   const checks = asNode(check['static'], 'static');
   assert.equal(String(checks['name']).replace('${{ matrix.os }}', 'ubuntu-latest'), staticJobName('ubuntu-latest'));
-  assert.deepEqual(asNode(asNode(checks['strategy'], 'strategy')['matrix'], 'matrix')['os'], [...STATIC_CHECK_OPERATING_SYSTEMS], 'static checks on Linux only');
+  assert.deepEqual(
+    asNode(asNode(checks['strategy'], 'strategy')['matrix'], 'matrix')['os'],
+    [...STATIC_CHECK_OPERATING_SYSTEMS],
+    'static checks on Linux only',
+  );
   assert.ok(steps(checks).some((step) => String(step['run'] ?? '').endsWith('npm test -- --checks=desktop')));
   const studio = asNode(check['studio'], 'studio');
   assert.equal(String(studio['name']).replace('${{ matrix.os }}', 'windows-latest'), studioJobName('windows-latest'));

@@ -74,14 +74,14 @@ jobs:
           SHA: ${{ steps.target.outputs.sha }}
           TAG: ${{ steps.target.outputs.tag }}
           DRY_RUN: ${{ steps.target.outputs.dry_run }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: candidate-*
           path: candidate
           merge-multiple: true
           run-id: ${{ steps.prove.outputs.candidate_run_id }}
           github-token: ${{ github.token }}
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         continue-on-error: true
         with:
           name: optional-demo

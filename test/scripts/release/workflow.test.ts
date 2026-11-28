@@ -25,9 +25,7 @@ function command(step: Readonly<Record<string, unknown>>): string {
 }
 
 function verifySandboxSteps(steps: readonly Record<string, unknown>[]): void {
-  const probe = steps.findIndex((step) =>
-    command(step).includes('xvfb-run --auto-servernum npm test'),
-  );
+  const probe = steps.findIndex((step) => command(step).includes('xvfb-run --auto-servernum npm test'));
   assert.ok(probe >= 0, 'Linux tests must run under a virtual display');
   const install = steps.findIndex((step) => command(step) === 'npm ci');
   assert.ok(install >= 0, 'Linux installs dependencies before configuring the sandbox');
@@ -54,21 +52,13 @@ test('Check prepares the Linux sandbox after install and before Electron tests',
     const withoutSetup = steps.filter((step) => !setup.includes(step));
     assert.throws(() => verifySandboxSteps(withoutSetup));
     assert.throws(() => verifySandboxSteps([...withoutSetup, ...setup]));
-    assert.throws(() =>
-      verifySandboxSteps(
-        steps.map((step) =>
-          setup.includes(step) ? { ...step, if: "runner.os == 'Windows'" } : step,
-        ),
-      ),
-    );
+    assert.throws(() => verifySandboxSteps(steps.map((step) => (setup.includes(step) ? { ...step, if: "runner.os == 'Windows'" } : step))));
   }
 });
 
 test('extracted AppImage smoke launches with APPDIR supplied by the missing FUSE runtime', () => {
   const jobs = workflowJobs('.github/workflows/candidate.yml');
-  const launch = jobSteps(jobs['build-linux']).find((step) =>
-    command(step).includes('squashfs-root/AppRun'),
-  );
+  const launch = jobSteps(jobs['build-linux']).find((step) => command(step).includes('squashfs-root/AppRun'));
   assert.ok(launch, 'The extracted AppImage launcher must be exercised');
   const source = command(launch);
   const environment = source.indexOf('export APPDIR="$(realpath squashfs-root)"');
@@ -110,10 +100,11 @@ test('only the promotion uploads, and it creates the draft before its single upl
 });
 
 test('create-stacki publishing checks npm trusted publishing before the long test run', () => {
-  const steps = jobSteps(workflowJobs('.github/workflows/publish-create-stacki.yml')['publish']);
+  const jobs = workflowJobs('.github/workflows/publish-create-stacki.yml');
+  const steps = jobSteps(jobs['preflight']);
   const probe = steps.findIndex((step) => command(step).includes('/-/npm/v1/oidc/token/exchange/package/create-stacki'));
-  const tests = steps.findIndex((step) => command(step).includes('npm test'));
   assert.ok(probe >= 0, 'The OIDC exchange probe must exist');
-  assert.ok(probe < tests, 'The probe must fail before ten minutes of tests');
+  assert.equal(record(jobs['build'])['needs'], 'preflight', 'The probe must fail before ten minutes of tests');
+  assert.ok(jobSteps(jobs['build']).some((step) => command(step).includes('npm test')));
   assert.doesNotMatch(command(steps[probe] ?? {}), /cat "\$\{?jwt|echo "\$\{?jwt\}"(?!.*add-mask)/);
 });

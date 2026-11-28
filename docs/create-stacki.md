@@ -53,7 +53,9 @@ In the npm package settings, add a GitHub Actions trusted publisher:
 The Release button (docs/release-runbook.md) bumps the matching versions, tags them, and
 `release-post.yml` dispatches this workflow from the tag once the desktop release is public, then
 waits for the registry (30-second retries, at most 30 minutes). It skips its test run only when
-`Check` already passed that exact commit on every platform (`scripts/release/releasePlan.mts`). The workflow builds and checks the source and package before publishing.
+`Check` already passed that exact commit on every platform (`scripts/release/releasePlan.mts`). The workflow checks npm's trusted publisher first, then one job installs, tests and packs
+without permission to publish, and a second job publishes that exact tarball without installing
+dependencies. If only the publish job fails, rerun the failed jobs.
 It requires GitHub-hosted runners and npm 11.5.1 or later. No long-lived npm token is needed.
 This workflow publishes only the npm installer; desktop releases have their own workflow.
 
