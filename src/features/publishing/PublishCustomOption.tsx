@@ -12,11 +12,11 @@ interface Props {
   readonly busy: boolean;
   readonly publish: () => void;
   readonly url: string | undefined;
-  /** Whether the menu also offers staging, which is when this row has to say it is production. */
-  readonly staged: boolean;
+  /** Whether the menu also offers other destinations, which is when this row has to say it is production. */
+  readonly hasDestinations: boolean;
 }
 
-export function CustomHostOption({ custom, availability, busy, publish, url, staged }: Props) {
+export function CustomHostOption({ custom, availability, busy, publish, url, hasDestinations }: Props) {
   const translate = useTranslate();
   const format = useFormat();
   const fromGitHub = custom.deploy === 'github';
@@ -28,9 +28,9 @@ export function CustomHostOption({ custom, availability, busy, publish, url, sta
     unconfigured: translate('publish.menu.hostingUnknown'),
   } as const;
   const status = fromGitHub ? translate('publish.custom.updatesFromGitHub') : descriptions[availability.hosting];
-  const publishedAtMs = fromGitHub || !staged ? undefined : availability.hostingPublishedAtMs;
+  const publishedAtMs = fromGitHub || !hasDestinations ? undefined : availability.hostingPublishedAtMs;
   const named = custom.hostName === undefined ? undefined : translate('publish.custom.deployTo', { host: custom.hostName });
-  const deploy = staged ? translate('publish.staging.menu.production') : (named ?? translate('publish.menu.deploy'));
+  const deploy = hasDestinations ? translate('publish.destination.menu.production') : (named ?? translate('publish.menu.deploy'));
   const title = fromGitHub
     ? translate('publish.custom.updatesFromGitHubTip')
     : custom.deploy === 'link'
@@ -46,7 +46,7 @@ export function CustomHostOption({ custom, availability, busy, publish, url, sta
           <small>
             {publishedAtMs === undefined
               ? status
-              : translate('publish.staging.menu.published', { status, time: format.formatRelativeTime(publishedAtMs, Date.now()) })}
+              : translate('publish.destination.menu.published', { status, time: format.formatRelativeTime(publishedAtMs, Date.now()) })}
           </small>
         </span>
       </button>

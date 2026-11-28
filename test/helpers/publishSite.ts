@@ -10,6 +10,7 @@ import { git, setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import type { DesktopPublisher } from '#dist/electron/project/publisher.js';
 import { DeployLinkStore } from '#dist/electron/project/deployLinkStore.js';
 import { list, record, text } from '#dist/shared/core/boundary.js';
+import type { PublishConfig } from '#dist/shared/properties/publishConfig.js';
 
 setToolPathHome(os.homedir());
 
@@ -17,7 +18,7 @@ export const REPOSITORY_URL = 'https://github.com/example/fixture.git';
 
 // Records each run of a package script: its name and the variables Stacki promises scripts.
 const RECORD_SCRIPT = `const fs = require('node:fs');
-const names = ['STACKI_PUBLISH_ENV', 'STACKI_PUBLISH_TARGET', 'CLOUDFLARE_ENV', 'WRANGLER_CI_OVERRIDE_NAME'];
+const names = ['STACKI_PUBLISH_ENV', 'STACKI_PUBLISH_TARGET', 'STACKI_PUBLISH_DESTINATION', 'CLOUDFLARE_ENV', 'WRANGLER_CI_OVERRIDE_NAME'];
 const env = Object.fromEntries(names.flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]]])));
 fs.appendFileSync(LOG, JSON.stringify({ tool: 'script', argv: [process.argv[2]], env }) + '\\n');
 fs.mkdirSync('dist', { recursive: true });
@@ -28,12 +29,12 @@ if (process.argv[2] === 'broken') process.exit(7);
 const FAKE_CLI = `#!/usr/bin/env node
 const fs = require('node:fs');
 const argv = process.argv.slice(2);
-const names = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_ENV', 'WRANGLER_CI_OVERRIDE_NAME', 'STACKI_PUBLISH_ENV', 'VERCEL_PROJECT_ID', 'VERCEL_ORG_ID'];
+const names = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_ENV', 'WRANGLER_CI_OVERRIDE_NAME', 'STACKI_PUBLISH_ENV', 'STACKI_PUBLISH_DESTINATION', 'VERCEL_PROJECT_ID', 'VERCEL_ORG_ID'];
 const env = Object.fromEntries(names.flatMap((name) => (process.env[name] === undefined ? [] : [[name, process.env[name]]])));
 const at = argv.indexOf('--config');
 const config = at === -1 ? undefined : JSON.parse(fs.readFileSync(argv[at + 1], 'utf8'));
 fs.appendFileSync(LOG, JSON.stringify({ tool: TOOL, argv, env, config }) + '\\n');
-if (TOOL === 'netlify') process.stdout.write(JSON.stringify({ site_id: argv[argv.indexOf('--site') + 1], deploy_id: 'draft1', deploy_url: 'https://draft1--site.netlify.app' }, null, 2));
+if (TOOL === 'netlify') process.stdout.write(JSON.stringify({ site_id: argv[argv.indexOf('--site') + 1], deploy_id: 'draft1', deploy_url: 'https://draft1--site.netlify.app', url: 'https://site.netlify.app' }, null, 2));
 if (TOOL === 'vercel') process.stdout.write('https://site-abc123.vercel.app');
 if (TOOL === 'wrangler') process.stdout.write('Deployed\\n  https://staging.site.pages.dev\\n');
 `;
@@ -46,7 +47,7 @@ export interface ToolCall {
 }
 
 export interface SiteOptions {
-  readonly publish: Readonly<Record<string, unknown>>;
+  readonly publish: Readonly<Record<string, unknown>> | PublishConfig;
   readonly destinations?: Readonly<Record<string, unknown>>;
   readonly files?: Readonly<Record<string, string>>;
   readonly scripts?: readonly string[];

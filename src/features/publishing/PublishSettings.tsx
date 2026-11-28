@@ -1,12 +1,19 @@
 import { usePublishSettingsConfig } from './usePublishSettingsConfig';
 import { PublishCustomFields } from './PublishCustomFields';
-import { PublishStaging } from './PublishStaging';
+import { PublishDestinations, type InvalidDestination } from './PublishDestinations';
+import { ManualHosting } from './PublishManualHosting';
 import { ScriptListField, TextField } from './publishFields';
 import { useCustomHostInfo } from './useCustomHostInfo';
-import { readStoredDestinations, useStagingDefaults, useStagingSettings, type StoredDestinations } from './useStagingSettings';
-import { NO_LINK_DRAFTS, saveDeployLinks, settingsRefusal, type LinkDrafts } from './saveDeployLinks';
-import { findMissingStagingField, type MissingStagingField } from '../../../shared/properties/publishMissing';
-import type { Destination } from '../../../shared/properties/publishDestinations';
+import {
+  readStoredDestinations,
+  useDestinationDefaults,
+  useDestinationSettings,
+  type DestinationSettings,
+  type StoredDestinations,
+} from './useDestinationSettings';
+import { linkDraft, NO_LINK_DRAFTS, saveDeployLinks, settingsRefusal, type LinkDrafts } from './saveDeployLinks';
+import { findMissingDestinationField, type MissingDestinationField } from '../../../shared/properties/publishMissing';
+import { destinationLabelProblem, type Destination, type DestinationId, type LabelProblem } from '../../../shared/properties/publishDestinations';
 import { PublishedSiteField } from './PublishedSiteField';
 import { PublishWorkflow } from './PublishWorkflow';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -31,6 +38,7 @@ import {
 import { findMissingPublishField, type MissingPublishField } from '../../../shared/properties/publishMissing';
 import { PublishInvalidFieldContext } from './publishInvalidField';
 import { PublishSettingsRebaseContext } from './setUpWorker';
+import { PRODUCTION_LINK } from '../../../shared/properties/publishDeployLink';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { cleanError } from '../../lib/cleanError';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
@@ -153,30 +161,32 @@ function PublishSettingsForm({
 }) {
   const translate = useTranslate();
   const { config, changeConfig: setConfig, changeHosting, discoveringHosting } = usePublishSettingsConfig(projectPath, stored);
-  const staging = useStagingSettings(stored.destinations);
+  const destinations = useDestinationSettings(stored.destinations);
   const [drafts, setDrafts] = useState<LinkDrafts>(NO_LINK_DRAFTS);
   const { info, removeLink } = useCustomHostInfo(projectPath, {
-    needed: config.customHosting !== undefined || staging.staging !== undefined,
+    needed: config.customHosting !== undefined || destinations.destinations.length > 0,
   });
-  const stagingDefaults = useStagingDefaults(config, staging, info);
+  const destinationDefaults = useDestinationDefaults(config, destinations, info, translate('publish.destination.defaultLabel'));
+  const cards = useExpandedDestinations();
   const [repository, setRepository] = useState<Extract<RepositoryRequest, { action: 'connect' }>>();
   const [repositoryBusy, setRepositoryBusy] = useState(false);
   const scroll = useRef<HTMLDivElement>(null);
-  const [refused, setRefused] = useState<{ readonly field: MissingSettingsField; readonly attempt: number }>();
+  const [refused, setRefused] = useState<{ readonly problem: MissingSetting; readonly attempt: number }>();
   const { error, saving, save, rebase } = usePublishSettingsSave({
     projectPath,
     config,
     base: stored.base,
     repository,
-    staging,
+    destinations,
     drafts,
     close,
     translate,
-    refuse: (field) => setRefused({ field, attempt: (refused?.attempt ?? 0) + 1 }),
+    refuse: (problem) => setRefused({ problem, attempt: (refused?.attempt ?? 0) + 1 }),
+    reveal: cards.reveal,
   });
   // The mark clears itself: it shows only while the refused field is still the first one missing.
-  const missing = findMissingSettingsField(config, staging.staging);
-  const invalidField = refused !== undefined && missing === refused.field ? refused.field : undefined;
+  const missing = findMissingSetting(config, editableDestinations(destinations));
+  const invalid = refused !== undefined && sameSetting(missing, refused.problem) ? refused.problem : undefined;
   useEffect(() => {
     // Each refused Save brings the empty field into view, even when it was already marked.
     if (refused !== undefined) {
@@ -186,7 +196,7 @@ function PublishSettingsForm({
     }
   }, [refused]);
   return (
-    <PublishInvalidFieldContext.Provider value={isStagingField(invalidField) ? undefined : invalidField}>
+    <PublishInvalidFieldContext.Provider value={invalid?.place === 'production' ? invalid.field : undefined}>
       <PublishSettingsRebaseContext.Provider value={rebase}>
         <div className="publish-settings-scroll" ref={scroll}>
           <fieldset className="modal-body publish-fields" disabled={saving || repositoryBusy}>
@@ -227,26 +237,34 @@ function PublishSettingsForm({
                   custom={config.customHosting}
                   change={setConfig}
                   info={info}
-                  draft={drafts.production}
-                  changeDraft={(production) => setDrafts({ ...drafts, production })}
-                  removeLink={() => void removeLink('production')}
+                  draft={linkDraft(drafts, PRODUCTION_LINK)}
+                  changeDraft={(draft) => setDrafts({ ...drafts, [PRODUCTION_LINK]: draft })}
+                  removeLink={() => void removeLink(PRODUCTION_LINK)}
                 />
               )}
             </section>
-            <PublishStaging
+            <PublishDestinations
               projectPath={projectPath}
-              access={staging.access}
+              access={destinations.access}
               production={config}
-              staging={staging.staging}
-              add={stagingDefaults.add}
-              remove={stagingDefaults.remove}
-              change={staging.change}
-              changeHost={stagingDefaults.changeHost}
+              destinations={destinations.destinations}
+              full={destinations.full}
+              expanded={cards.expanded}
+              toggle={cards.toggle}
+              add={() => {
+                const added = destinationDefaults.add();
+                if (added !== undefined) {
+                  cards.reveal(added);
+                }
+              }}
+              remove={destinations.remove}
+              change={destinations.change}
+              changeHost={destinationDefaults.changeHost}
               info={info}
-              draft={drafts.staging}
-              changeDraft={(draft) => setDrafts({ ...drafts, staging: draft })}
-              removeLink={() => void removeLink('staging')}
-              invalid={isStagingField(invalidField) ? invalidField : undefined}
+              drafts={drafts}
+              changeDraft={(id, draft) => setDrafts({ ...drafts, [id]: draft })}
+              removeLink={(id) => void removeLink(id)}
+              invalid={invalid?.place === 'destination' ? invalid : undefined}
             />
             {config.customHosting?.deploy !== 'github' && <AdvancedFields config={config} setConfig={setConfig} />}
             {error && <ErrorToast message={error} />}
@@ -304,20 +322,32 @@ function PublishTargetToggle({
   );
 }
 
+/** Which destination cards are open. With one destination its card is always open; these are for several. */
+function useExpandedDestinations() {
+  const [expanded, setExpanded] = useState<ReadonlySet<DestinationId>>(new Set());
+  return {
+    expanded,
+    toggle: (id: DestinationId) => setExpanded((previous) => new Set(previous.has(id) ? [...previous].filter((entry) => entry !== id) : [...previous, id])),
+    reveal: (id: DestinationId) => setExpanded((previous) => new Set([...previous, id])),
+  };
+}
+
 function usePublishSettingsSave({
   projectPath,
   config,
   base: initialBase,
   repository,
-  staging,
+  destinations,
   drafts,
   close,
   translate,
   refuse,
+  reveal,
 }: {
   readonly translate: Translator;
-  readonly refuse: (field: MissingSettingsField) => void;
-  readonly staging: ReturnType<typeof useStagingSettings>;
+  readonly refuse: (problem: MissingSetting) => void;
+  readonly reveal: (id: DestinationId) => void;
+  readonly destinations: DestinationSettings;
   readonly drafts: LinkDrafts;
   readonly projectPath: string;
   readonly config: PublishConfig;
@@ -330,10 +360,13 @@ function usePublishSettingsSave({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   async function save() {
-    const missing = findMissingSettingsField(config, staging.staging);
+    const missing = findMissingSetting(config, editableDestinations(destinations));
     if (missing !== undefined) {
       // Said as a toast (never a paragraph) that names the field; the form marks it and takes the person to it.
-      reportErrorToast(translate(MISSING_FIELD_MESSAGES[missing]));
+      reportErrorToast(missingMessage(missing, destinations.destinations, translate));
+      if (missing.place === 'destination') {
+        reveal(missing.id);
+      }
       refuse(missing);
       return;
     }
@@ -341,12 +374,15 @@ function usePublishSettingsSave({
     try {
       const validated = validateSettings(config);
       // Everything that can be refused is refused before anything is written.
-      const refusal = settingsRefusal(validated, staging, drafts);
+      const refusal = settingsRefusal(validated, destinations, drafts);
       if (refusal !== undefined) {
-        reportErrorToast(translateDescribed(refusal));
+        if (refusal.destination !== undefined) {
+          reveal(refusal.destination);
+        }
+        reportErrorToast(translateDescribed(refusal.problem));
         return;
       }
-      await staging.save(projectPath);
+      await destinations.save(projectPath);
       const written = await writeMetadata(projectPath, {
         kind: 'publish',
         source: JSON.stringify(validated, undefined, 2) + '\n',
@@ -361,7 +397,7 @@ function usePublishSettingsSave({
         }
       }
       // Last, because a link is bound to the repository connected above.
-      const linkProblem = await saveDeployLinks(projectPath, validated, staging, drafts);
+      const linkProblem = await saveDeployLinks(projectPath, validated, destinations, drafts);
       if (linkProblem !== undefined) {
         setError(translate('publish.settings.savedWithError', { message: translateDescribed(linkProblem) }));
         return;
@@ -436,6 +472,7 @@ function HostingFields({
           provider={hosting.provider === 'cloudflare-workers' ? 'cloudflare' : hosting.provider}
           value={hosting}
           change={change}
+          workerSetup="now"
         />
       )}
     </>
@@ -470,53 +507,6 @@ function AdvancedFields({ config, setConfig }: { readonly config: PublishConfig;
         <p className="hint-text">{translate('publish.settings.advanced.scriptsHint')}</p>
       </div>
     </details>
-  );
-}
-
-function CloudflareFields({
-  hosting,
-  change,
-}: {
-  readonly hosting: Extract<Hosting, { provider: 'cloudflare' }>;
-  readonly change: (hosting: Hosting) => void;
-}) {
-  const translate = useTranslate();
-  return (
-    <>
-      <TextField label={translate('publish.settings.advanced.pagesProject')} value={hosting.project} change={(project) => change({ ...hosting, project })} />
-      <TextField label={translate('publish.settings.advanced.productionBranch')} value={hosting.branch} change={(branch) => change({ ...hosting, branch })} />
-      <TextField
-        label={translate('publish.settings.advanced.outputDirectory')}
-        value={hosting.directory}
-        change={(directory) => change({ ...hosting, directory })}
-      />
-    </>
-  );
-}
-
-function ManualHosting({ hosting, change }: { readonly hosting: Hosting; readonly change: (hosting: Hosting) => void }) {
-  const translate = useTranslate();
-  return (
-    <>
-      {hosting.provider === 'cloudflare' && <CloudflareFields hosting={hosting} change={change} />}
-      {hosting.provider === 'netlify' && (
-        <TextField label={translate('publish.settings.advanced.netlifySite')} value={hosting.siteId} change={(siteId) => change({ ...hosting, siteId })} />
-      )}
-      {hosting.provider === 'vercel' && (
-        <>
-          <TextField
-            label={translate('publish.settings.advanced.vercelOrganization')}
-            value={hosting.organizationId}
-            change={(organizationId) => change({ ...hosting, organizationId })}
-          />
-          <TextField
-            label={translate('publish.settings.advanced.vercelProject')}
-            value={hosting.projectId}
-            change={(projectId) => change({ ...hosting, projectId })}
-          />
-        </>
-      )}
-    </>
   );
 }
 
@@ -567,26 +557,77 @@ const MISSING_FIELD_MESSAGES = {
   vercelOrganization: 'publish.settings.missing.vercelOrganization',
   deployScript: 'publish.settings.missing.deployScript',
   buildScript: 'publish.settings.missing.buildScript',
-  stagingEnvironment: 'publish.staging.missing.environment',
-  stagingWorker: 'publish.staging.missing.worker',
-  stagingBranch: 'publish.staging.missing.branch',
-  stagingAlias: 'publish.staging.missing.alias',
-  stagingScript: 'publish.staging.missing.script',
-} as const satisfies Record<MissingSettingsField, MessageKey>;
+} as const satisfies Record<MissingPublishField, MessageKey>;
 
-type MissingSettingsField = MissingPublishField | MissingStagingField;
+const MISSING_DESTINATION_MESSAGES = {
+  environment: 'publish.destination.missing.environment',
+  worker: 'publish.destination.missing.worker',
+  branch: 'publish.destination.missing.branch',
+  alias: 'publish.destination.missing.alias',
+  script: 'publish.destination.missing.script',
+  cloudflareAccount: 'publish.destination.missing.cloudflareAccount',
+  hostingProject: 'publish.destination.missing.hostingProject',
+  vercelOrganization: 'publish.destination.missing.vercelOrganization',
+} as const satisfies Record<MissingDestinationField, MessageKey>;
 
-function findMissingSettingsField(config: PublishConfig, staging: Destination | undefined): MissingSettingsField | undefined {
-  const production = findMissingPublishField(config);
-  if (!production.ok) {
-    return production.error.field;
-  }
-  const other = staging === undefined ? undefined : findMissingStagingField(staging);
-  return other === undefined || other.ok ? undefined : other.error.field;
+const LABEL_MESSAGES = {
+  blank: 'publish.destination.labelProblem.blank',
+  invalid: 'publish.destination.labelProblem.invalid',
+  reserved: 'publish.destination.labelProblem.reserved',
+  taken: 'publish.destination.labelProblem.taken',
+} as const satisfies Record<LabelProblem, MessageKey>;
+
+/** The first thing Save still needs, in the order the form shows it. */
+type MissingSetting =
+  | { readonly place: 'production'; readonly field: MissingPublishField }
+  | (InvalidDestination & { readonly place: 'destination'; readonly label?: LabelProblem });
+
+function editableDestinations(settings: DestinationSettings): readonly Destination[] {
+  return settings.access === 'supported' ? settings.destinations : [];
 }
 
-function isStagingField(field: MissingSettingsField | undefined): field is MissingStagingField {
-  return field?.startsWith('staging') === true;
+function findMissingSetting(config: PublishConfig, destinations: readonly Destination[]): MissingSetting | undefined {
+  const production = findMissingPublishField(config);
+  if (!production.ok) {
+    return { place: 'production', field: production.error.field };
+  }
+  for (const [index, destination] of destinations.entries()) {
+    const { id } = destination;
+    // Each label is compared with those above it, so the later of two alike is the one marked.
+    const label = destinationLabelProblem(
+      destination.label,
+      destinations.slice(0, index).map((other) => other.label),
+    );
+    if (label !== undefined) {
+      return { place: 'destination', id, field: 'label', label };
+    }
+    const field = findMissingDestinationField(destination);
+    if (!field.ok) {
+      return { place: 'destination', id, field: field.error.field };
+    }
+  }
+  return undefined;
+}
+
+function sameSetting(left: MissingSetting | undefined, right: MissingSetting): boolean {
+  if (left === undefined || left.field !== right.field) {
+    return false;
+  }
+  if (left.place === 'production') {
+    return right.place === 'production';
+  }
+  return right.place === 'destination' && left.id === right.id;
+}
+
+function missingMessage(missing: MissingSetting, destinations: readonly Destination[], translate: Translator): string {
+  if (missing.place === 'production') {
+    return translate(MISSING_FIELD_MESSAGES[missing.field]);
+  }
+  const label = destinations.find((destination) => destination.id === missing.id)?.label.trim() ?? '';
+  if (missing.field === 'label') {
+    return translate(LABEL_MESSAGES[missing.label ?? 'blank'], { label });
+  }
+  return translate(MISSING_DESTINATION_MESSAGES[missing.field], { label });
 }
 
 function validateSettings(config: PublishConfig): PublishConfig {

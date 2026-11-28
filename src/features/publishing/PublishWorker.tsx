@@ -15,7 +15,7 @@ interface Props {
   readonly projects: readonly PublishProject[];
   readonly close: () => void;
   readonly change: (hosting: Hosting) => void;
-  /** `now` sets the site up and saves it as production. `on-first-deploy` only names a Worker, for staging. */
+  /** `now` sets the site up and saves it as production. `on-first-deploy` only names a Worker, for a destination. */
   readonly setup: 'now' | 'on-first-deploy';
 }
 
@@ -32,7 +32,7 @@ export function AddWorker(props: Props) {
   const ready = valid && !exists && props.account.length > 0;
   async function add(): Promise<void> {
     if (props.setup === 'on-first-deploy') {
-      // Setting the site up would make this Worker production's. Staging's first deploy creates it.
+      // Setting the site up would make this Worker production's. The destination's first deploy creates it.
       props.change({ provider: 'cloudflare-workers', accountId: props.account, project: name });
       return;
     }

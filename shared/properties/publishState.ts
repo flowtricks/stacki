@@ -1,8 +1,8 @@
-import { boolean, count, object, optional, record, text } from '../core/boundary';
+import { boolean, count, list, object, optional, record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseReviewReceipt, type ReviewReceipt } from './publishReview';
 import { CUSTOM_DEPLOYS, type CustomDeploy, type PublishTarget } from './publishConfig';
-import { DESTINATION_IDS, type DestinationId } from './publishDestinations';
+import { DESTINATION_LIMITS, parseDestinationId, parseDestinationLabel, type DestinationId } from './publishDestinations';
 import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export type PublishDestinationState = 'current' | 'pending' | 'unknown' | 'unconfigured';
@@ -12,11 +12,12 @@ export interface PublishAvailability {
   readonly hosting: PublishDestinationState;
   readonly githubPush?: GitHubPush;
   readonly hostingPublishedAtMs?: number;
-  /** Staging's own status, from its own record: neither destination's publish ever changes the other's. */
-  readonly staging?: DestinationStatus;
+  /** Each added destination's status, from its own record: publishing one never changes another's. Absent with none. */
+  readonly destinations?: readonly DestinationStatus[];
 }
 
 export interface DestinationStatus {
+  readonly id: DestinationId;
   readonly state: Exclude<PublishDestinationState, 'unconfigured'>;
   readonly publishedAtMs?: number;
   readonly url?: string;
@@ -116,7 +117,7 @@ export function parsePublishAvailability(input: unknown): PublishAvailability {
     hosting: parseDestinationState,
     githubPush: optional(parseGitHubPush),
     hostingPublishedAtMs: optional(count),
-    staging: optional(parseDestinationStatus),
+    destinations: optional(parseDestinationStatuses),
   })(input);
   assert(value.github !== 'unconfigured', 'GitHub is always a publishing destination');
   if (value.github === 'current') {
@@ -127,8 +128,15 @@ export function parsePublishAvailability(input: unknown): PublishAvailability {
   return { ...value, github: value.github };
 }
 
+function parseDestinationStatuses(input: unknown): readonly DestinationStatus[] {
+  const statuses = list(parseDestinationStatus)(input);
+  assert(statuses.length <= DESTINATION_LIMITS.destinationsMax, 'Destination statuses stay bounded');
+  assert(new Set(statuses.map((status) => status.id)).size === statuses.length, 'Each destination has one status');
+  return statuses;
+}
+
 function parseDestinationStatus(input: unknown): DestinationStatus {
-  const value = object({ state: parseDestinationState, publishedAtMs: optional(count), url: optional(parseDeploymentURL) })(input);
+  const value = object({ id: parseDestinationId, state: parseDestinationState, publishedAtMs: optional(count), url: optional(parseDeploymentURL) })(input);
   assert(value.state !== 'unconfigured', 'A saved destination is configured');
   return { ...value, state: value.state };
 }
@@ -162,6 +170,8 @@ export type DesktopPublishState =
       /** The translatable form of `step`; absent from older producers, which show the English `step`. */
       readonly stepRef?: MessageRef | undefined;
       readonly progress?: DesktopPublishProgress;
+      /** Absent for production. */
+      readonly destination?: PublishedDestination | undefined;
     }
   | {
       readonly kind: 'done';
@@ -170,7 +180,7 @@ export type DesktopPublishState =
       /** Set for a custom host, so the popup says only what Stacki saw happen, never that the site is live. */
       readonly handoff?: CustomDeploy | undefined;
       /** Absent for production. */
-      readonly destination?: DestinationId | undefined;
+      readonly destination?: PublishedDestination | undefined;
     }
   | {
       readonly kind: 'failed';
@@ -180,8 +190,14 @@ export type DesktopPublishState =
       readonly github: boolean;
       readonly hosting: boolean;
       readonly handoff?: CustomDeploy | undefined;
-      readonly destination?: DestinationId | undefined;
+      readonly destination?: PublishedDestination | undefined;
     };
+
+/** The destination a publish is about, with the label it had when the publish started. */
+export interface PublishedDestination {
+  readonly id: DestinationId;
+  readonly label: string;
+}
 
 export interface DesktopPublishProgress {
   readonly completed: number;
@@ -207,6 +223,7 @@ export function parseDesktopPublishState(input: unknown): DesktopPublishState {
       return {
         kind: 'running',
         ...object({ step: text, progress: optional(parseDesktopPublishProgress) })(value),
+        ...destinationField(value['destination']),
         ...stepRefField(optionalRef(value, 'stepRef')),
       };
     case 'done':
@@ -229,13 +246,8 @@ export function parseDesktopPublishState(input: unknown): DesktopPublishState {
   }
 }
 
-function destinationField(input: unknown): { readonly destination?: DestinationId } {
-  if (input === undefined) {
-    return {};
-  }
-  const destination = DESTINATION_IDS.find((entry) => entry === input);
-  assert(destination !== undefined, 'Unknown publish destination');
-  return { destination };
+function destinationField(input: unknown): { readonly destination?: PublishedDestination } {
+  return input === undefined ? {} : { destination: object({ id: parseDestinationId, label: parseDestinationLabel })(input) };
 }
 
 function handoffField(input: unknown): { readonly handoff?: CustomDeploy } {

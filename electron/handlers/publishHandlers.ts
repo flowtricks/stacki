@@ -12,11 +12,20 @@ import { publishedProjectSiteURL } from '../project/publishSite';
 import { translateMain } from '../lib/mainLocale';
 import { setUpWorkerHosting } from '../project/publishWorkerSetup';
 import { createNetlifySite } from '../project/publishNetlify';
-import { described } from '../../shared/properties/i18n/messageRef';
-import type { CustomPublishRequest, CustomPublishResult } from '../../shared/properties/publishDeployLink';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import {
+  PRODUCTION_LINK,
+  type CustomPublishRequest,
+  type CustomPublishResult,
+  type DeployLinkState,
+  type DeployLinkStates,
+} from '../../shared/properties/publishDeployLink';
+import type { DestinationId } from '../../shared/properties/publishDestinations';
+import { err, type Result } from '../../shared/core/result';
 import type { DeployLinkStore } from '../project/deployLinkStore';
 import { readPackageScripts } from '../project/publishCustom';
-import { readWorkerEnvironments } from '../project/publishStagingWorker';
+import { readWorkerEnvironments } from '../project/publishDestinationWorker';
+import { readPublishDestinations } from '../project/publishDestination';
 
 export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>, deployLinks: DeployLinkStore): void {
   const publisher = new DesktopPublisher(undefined, { deployLinks });
@@ -74,12 +83,7 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
 // Nothing here sends or runs anything: it lists the site's script and environment names and keeps deploy links. Only a publish uses either.
 async function customPublishRequest(project: string, request: CustomPublishRequest, deployLinks: DeployLinkStore): Promise<CustomPublishResult> {
   await ensureToolPath();
-  const changed =
-    request.action === 'saveLink'
-      ? await deployLinks.save(project, request.link, request.destination)
-      : request.action === 'removeLink'
-        ? deployLinks.remove(project, request.destination)
-        : undefined;
+  const changed = request.action === 'read' ? undefined : await changeDeployLink(project, request, deployLinks);
   if (changed !== undefined && !changed.ok) {
     return { kind: 'failed', ...changed.error };
   }
@@ -87,6 +91,44 @@ async function customPublishRequest(project: string, request: CustomPublishReque
     kind: 'ready',
     scripts: await readPackageScripts(project),
     environments: await readWorkerEnvironments(project),
-    links: { production: await deployLinks.state(project, 'production'), staging: await deployLinks.state(project, 'staging') },
+    links: await deployLinkStates(project, deployLinks),
+  };
+}
+
+/** The saved destinations' ids. An unreadable file names none: its destinations cannot be edited or published. */
+function destinationIds(project: string): readonly DestinationId[] {
+  try {
+    return readPublishDestinations(project).destinations.map((destination) => destination.id);
+  } catch {
+    return [];
+  }
+}
+
+async function changeDeployLink(
+  project: string,
+  request: Exclude<CustomPublishRequest, { readonly action: 'read' }>,
+  deployLinks: DeployLinkStore,
+): Promise<Result<undefined, Described>> {
+  if (request.action === 'removeLink') {
+    // A removed destination is no longer in the file, and its link must still be removable.
+    return deployLinks.remove(project, request.destination);
+  }
+  const ids = destinationIds(project);
+  // Only production and saved destinations keep links, so a project's links stay bounded.
+  if (request.destination !== PRODUCTION_LINK && !ids.includes(request.destination)) {
+    return err(described('publish.destination.error.notSetUp'));
+  }
+  return deployLinks.save(project, request.link, request.destination, ids);
+}
+
+async function deployLinkStates(project: string, deployLinks: DeployLinkStore): Promise<DeployLinkStates> {
+  const destinations: [DestinationId, DeployLinkState][] = [];
+  for (const id of destinationIds(project)) {
+    destinations.push([id, await deployLinks.state(project, id)]);
+  }
+  return {
+    production: await deployLinks.state(project, PRODUCTION_LINK),
+    destinations: Object.fromEntries(destinations),
+    unsaved: deployLinks.unsavedState(),
   };
 }

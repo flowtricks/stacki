@@ -126,6 +126,31 @@ already deploys on push, that automation still runs. Disable the provider's auto
 when using direct publishing to avoid duplicate deployments. Leave the provider set to
 “GitHub only / existing automation” to retain an existing Git-triggered deployment.
 
+## Staging and other destinations
+
+Desktop can publish to up to ten destinations besides production. **Publish settings → Add destination**
+adds one. The first is labeled **Staging**; rename any of them at any time. A label is only a name: status,
+last published time and deploy links stay with the destination.
+
+Each destination chooses its own hosting:
+
+| Hosting | What publishing it does |
+|---|---|
+| Same as production | Cloudflare: a Wrangler environment or a separate Worker; Pages: a preview branch; Vercel: a preview; Netlify: a draft under an alias |
+| Cloudflare, Vercel or Netlify | Publishes as the live site of an account and project used only for this destination |
+| Custom | Pushes a branch, runs a package.json script, or pushes a branch and sends a deploy link |
+
+The Publish menu lists production first, then each destination. Publishing one changes only that one.
+There is no approval step or required order.
+
+Stacki refuses to publish a destination that could change production or another destination, wherever it
+can tell, and says why. It cannot see what a script or a deploy link does, or settings that exist only in a
+host's dashboard. Scripts see `STACKI_PUBLISH_ENV=staging` and `STACKI_PUBLISH_TARGET=staging` for every
+destination, plus `STACKI_PUBLISH_DESTINATION` with that destination's id. Production's scripts see
+`STACKI_PUBLISH_ENV=production`. See `docs/contracts.md` for the full list of checks.
+
+Studio names saved destinations in Publish settings but does not publish to them.
+
 ## Advanced automation
 
 Choose a build script and up to eight package.json scripts before and after publishing:

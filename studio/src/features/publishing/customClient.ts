@@ -7,8 +7,8 @@ import {
 import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { request as studioRequest } from '../project/projectClient';
 
-/** Staging publishes from Desktop only, so the shared screens leave its controls out in Studio. */
-export const STAGING_SUPPORT: boolean = false;
+/** Added destinations publish from Desktop only, so the shared screens leave their controls out in Studio. */
+export const DESTINATION_SUPPORT: boolean = false;
 
 // Studio's stand-in for Desktop's custom host bridge. It only reads: Studio keeps no deploy links, so a request
 // to save or remove one is answered here and the link is never sent to the server.

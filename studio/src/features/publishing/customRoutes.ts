@@ -17,7 +17,7 @@ export async function customRoute(root: string, request: IncomingMessage, respon
     kind: 'ready',
     scripts: await readPackageScripts(root),
     environments: [],
-    links: { production: { kind: 'unsupported' }, staging: { kind: 'unsupported' } },
+    links: { production: { kind: 'unsupported' }, destinations: {}, unsaved: { kind: 'unsupported' } },
   };
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');

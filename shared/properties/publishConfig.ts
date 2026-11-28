@@ -229,7 +229,7 @@ export function parsePublishSource(source: string | undefined): PublishConfig {
   return parsePublishConfig(value);
 }
 
-function parseHosting(input: unknown): Hosting {
+export function parseHosting(input: unknown): Hosting {
   const value = record(input);
   switch (value['provider']) {
     case 'none':

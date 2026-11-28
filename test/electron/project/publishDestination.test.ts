@@ -1,6 +1,7 @@
-// Goal: publishing to staging can never change production, for every provider, and a staging destination that
-// resolves to production's target is refused before anything runs. The first tests are the setup of issue 105
-// (Cloudflare Workers, env.staging in wrangler.jsonc, its own build:staging script).
+// Goal: publishing to a destination can never change production, for every provider, and a destination that resolves
+// to production's target is refused before anything runs. The first tests are the setup of issue 105 (Cloudflare
+// Workers, env.staging in wrangler.jsonc, its own build:staging script). Several destinations at once, and what keeps
+// them from changing each other, are in publishDestinationPairs.test.ts.
 // Method: the real publisher on temporary Git projects with a local bare remote. Stand-in wrangler, vercel and
 // netlify CLIs record the exact arguments, environment and config they were given; the questions only a host can
 // answer are stubbed. Each publish is followed by the invariant: GitHub's main, the person's branch and
@@ -10,27 +11,27 @@ import test, { type TestContext } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { git } from '#dist/electron/lib/nodeTools.js';
-import { DesktopPublisher } from '#dist/electron/project/publisher.js';
-import { STAGING_SERVICES, type StagingServices } from '#dist/electron/project/publishStaging.js';
-import { claimsProductionHost, readWorkerEnvironments } from '#dist/electron/project/publishStagingWorker.js';
+import { claimsHost, readWorkerEnvironments } from '#dist/electron/project/publishDestinationWorker.js';
 import { readPackageScripts } from '#dist/electron/project/publishCustom.js';
 import { readPublishAvailability } from '#dist/electron/project/publishAvailability.js';
 import { readDeploymentReceipt } from '#dist/electron/project/publishReceipt.js';
-import { PUBLISH_TEMPORARY_SEAMS } from '#dist/electron/project/publishTemporary.js';
 import type { DeployTransport } from '#dist/electron/project/deployRequest.js';
-import { DEFAULT_PUBLISH_CONFIG, type Hosting } from '#dist/shared/properties/publishConfig.js';
-import { suggestStaging, type StagingTarget } from '#dist/shared/properties/publishDestinations.js';
+import type { Hosting } from '#dist/shared/properties/publishConfig.js';
+import { suggestDestination } from '#dist/shared/properties/publishDestinationDefaults.js';
+import type { DestinationTarget } from '#dist/shared/properties/publishDestinations.js';
 import { publishNeedsWorkerSetup } from '#dist/shared/properties/publishWorkerSetup.js';
 import { deployCalls, fakeLinkStore, finished, publishSite, scriptsRun, write, type SiteOptions } from '../../helpers/publishSite.ts';
-
-type Site = Awaited<ReturnType<typeof publishSite>>;
-
-/** The answers a test gives in place of a host. */
-interface ServiceAnswers {
-  readonly workerToolInstalled?: StagingServices['workerToolInstalled'];
-  readonly pagesProductionBranch?: StagingServices['pagesProductionBranch'];
-  readonly vercelHasProduction?: StagingServices['vercelHasProduction'];
-}
+import {
+  destinationsFile,
+  destinationSite,
+  entry,
+  production,
+  publishDestination,
+  publisherFor,
+  refusedAs,
+  services,
+  type Site,
+} from '../../helpers/publishDestinations.ts';
 
 const WORKERS: Hosting = { provider: 'cloudflare-workers', accountId: 'account-1', project: 'my-site' };
 const PAGES: Hosting = { provider: 'cloudflare', accountId: 'account-1', project: 'my-pages', branch: 'main', directory: 'dist' };
@@ -53,86 +54,23 @@ const REPORTER_WRANGLER = `{
   }
 }`;
 
-// Production's own hooks, which must never run for staging.
-function production(hosting: Hosting) {
-  return { ...DEFAULT_PUBLISH_CONFIG, hosting, beforePublish: ['before'], afterPublish: ['after'] };
-}
+/** The one destination of these tests: `staging`, built with its own script. */
+const destinations = (target: DestinationTarget, extra: Readonly<Record<string, unknown>> = {}) => destinationsFile([entry('staging', target, extra)]);
 
-function destinations(target: StagingTarget, extra: Readonly<Record<string, unknown>> = {}) {
-  return {
-    version: 1,
-    destinations: [{ id: 'staging', target, buildScript: 'build:staging', beforePublish: [], afterPublish: [], ...extra }],
-  };
-}
+const stagingSite = (context: TestContext, hosting: Hosting, target: DestinationTarget, options: Pick<SiteOptions, 'files'> = {}) =>
+  destinationSite(context, hosting, destinations(target), options);
 
-function services(changes: ServiceAnswers = {}): StagingServices {
-  return {
-    ...STAGING_SERVICES,
-    workerToolInstalled: () => true,
-    pagesProductionBranch: async () => 'main',
-    vercelHasProduction: async () => true,
-    netlifySite: async () => undefined,
-    ...changes,
-  };
-}
-
-function publisherFor(
-  options: { readonly services?: StagingServices; readonly store?: ReturnType<typeof fakeLinkStore>; readonly transport?: DeployTransport } = {},
-) {
-  return new DesktopPublisher(PUBLISH_TEMPORARY_SEAMS, {
-    staging: options.services ?? services(),
-    ...(options.store === undefined ? {} : { deployLinks: options.store }),
-    transport:
-      options.transport ??
-      (async () => {
-        throw new Error('No request is expected');
-      }),
-  });
-}
-
-/** Everything production is made of on this computer and on GitHub. */
-async function productionState(site: Site) {
-  return {
-    main: await site.revision(site.remote, 'refs/heads/main'),
-    head: await site.revision(site.root, 'HEAD'),
-    branch: (await git(site.root, ['symbolic-ref', '--short', 'HEAD'])).stdout,
-    index: (await git(site.root, ['diff', '--cached', '--name-status'])).stdout,
-    status: (await git(site.root, ['status', '--porcelain'])).stdout,
-    receipt: await readDeploymentReceipt(site.root),
-  };
-}
-
-async function publishStaging(site: Site, publisher: DesktopPublisher) {
-  const before = await productionState(site);
-  publisher.start(site.root, 'staging');
-  const state = await finished(publisher, site.root);
-  assert.deepEqual(await productionState(site), before, 'Publishing to staging changed production');
-  return state;
-}
-
-async function stagingSite(context: TestContext, hosting: Hosting, target: StagingTarget, options: Pick<SiteOptions, 'files'> = {}) {
-  const site = await publishSite(context, { publish: production(hosting), destinations: destinations(target), ...options });
-  // Uncommitted work, which staging publishes without committing it to the person's branch.
-  write(site.root, 'page.txt', 'A draft');
-  return site;
-}
-
-async function refusedAs(site: Site, publisher: DesktopPublisher, key: string) {
-  const refs = await site.refs();
-  const state = await publishStaging(site, publisher);
-  assert.equal(state.kind === 'failed' ? state.messageRef?.key : state.kind, key);
-  assert.equal(await site.refs(), refs, 'A refused publish pushes nothing');
-  assert.deepEqual(site.calls(), [], 'A refused publish builds and deploys nothing');
-  assert.equal(await readDeploymentReceipt(site.root, 'staging'), undefined);
-}
+const publishStaging = (site: Site, publisher: ReturnType<typeof publisherFor>) => publishDestination(site, publisher, 'staging');
+const STAGING = { id: 'staging', label: 'Staging' };
 
 test('issue 105: env.staging and build:staging are found and preselected', async (context) => {
   const site = await publishSite(context, { publish: production(WORKERS), files: { 'wrangler.jsonc': REPORTER_WRANGLER } });
   const environments = await readWorkerEnvironments(site.root);
   assert.deepEqual(environments, [{ name: 'staging', worker: 'my-site-staging', siteUrl: 'https://staging.example.com' }]);
-  const suggested = suggestStaging(production(WORKERS), { scripts: await readPackageScripts(site.root), environments });
+  const detected = { scripts: await readPackageScripts(site.root), environments };
+  const suggested = suggestDestination(production(WORKERS), detected, STAGING, []);
   assert.deepEqual(suggested, {
-    id: 'staging',
+    ...STAGING,
     target: { kind: 'cloudflare-environment', environment: 'staging' },
     buildScript: 'build:staging',
     beforePublish: [],
@@ -159,16 +97,21 @@ test('issue 105: staging builds with build:staging and deploys env.staging to it
   });
   const refs = await site.refs();
   const publisher = publisherFor();
-  assert.deepEqual(await publishStaging(site, publisher), { kind: 'done', github: false, hosting: true, destination: 'staging' });
+  assert.deepEqual(await publishStaging(site, publisher), { kind: 'done', github: false, hosting: true, destination: STAGING });
   assert.equal(await site.refs(), refs, 'A Workers staging publish never touches GitHub');
   assert.deepEqual(scriptsRun(site.calls()), ['build:staging']);
-  assert.deepEqual(site.calls()[0]?.env, { STACKI_PUBLISH_ENV: 'staging', STACKI_PUBLISH_TARGET: 'staging', CLOUDFLARE_ENV: 'staging' });
+  assert.deepEqual(site.calls()[0]?.env, {
+    STACKI_PUBLISH_ENV: 'staging',
+    STACKI_PUBLISH_TARGET: 'staging',
+    STACKI_PUBLISH_DESTINATION: 'staging',
+    CLOUDFLARE_ENV: 'staging',
+  });
   const [deploy, ...more] = deployCalls(site.calls());
   assert.deepEqual(more, []);
   const configAt = deploy?.argv.indexOf('--config') ?? -1;
   assert.deepEqual(deploy?.argv.slice(0, configAt), ['deploy', '--name', 'my-site-staging', '--env', 'staging']);
   assert.equal(deploy?.argv.length, configAt + 2);
-  assert.deepEqual(deploy?.env, { CLOUDFLARE_ACCOUNT_ID: 'account-1', STACKI_PUBLISH_ENV: 'staging' });
+  assert.deepEqual(deploy?.env, { CLOUDFLARE_ACCOUNT_ID: 'account-1', STACKI_PUBLISH_ENV: 'staging', STACKI_PUBLISH_DESTINATION: 'staging' });
   assert.equal(deploy?.config?.['account_id'], 'account-1');
   assert.deepEqual(deploy?.config?.['env'], {
     staging: {
@@ -179,8 +122,8 @@ test('issue 105: staging builds with build:staging and deploys env.staging to it
     },
   });
   const availability = await readPublishAvailability(site.root);
-  assert.equal(availability.staging?.state, 'current');
-  assert.ok(availability.staging?.publishedAtMs !== undefined);
+  assert.equal(availability.destinations?.[0]?.state, 'current');
+  assert.ok(availability.destinations?.[0]?.publishedAtMs !== undefined);
   assert.equal(availability.hosting, 'pending', 'Publishing staging does not mark production current');
 });
 
@@ -205,43 +148,43 @@ test('publishing production leaves staging’s record alone, and its command is 
   assert.deepEqual(await readDeploymentReceipt(site.root, 'staging'), staged);
   const availability = await readPublishAvailability(site.root);
   assert.equal(availability.hosting, 'current');
-  assert.equal(availability.staging?.state, 'pending', 'Publishing production does not mark staging current');
+  assert.equal(availability.destinations?.[0]?.state, 'pending', 'Publishing production does not mark staging current');
 });
 
 for (const [name, wrangler, key] of [
   [
     'an environment without routes, which would inherit production’s domain',
     { name: 'my-site', assets: { directory: './dist' }, routes: ['example.com/*'], env: { staging: {} } },
-    'publish.staging.error.productionRoute',
+    'publish.destination.error.productionRoute',
   ],
   [
     'a route naming production’s hostname under another path',
     { name: 'my-site', routes: [{ pattern: 'example.com/*' }], env: { staging: { routes: ['https://EXAMPLE.com/preview/*'] } } },
-    'publish.staging.error.productionRoute',
+    'publish.destination.error.productionRoute',
   ],
   [
     'a wildcard that covers production',
     { name: 'my-site', route: 'www.example.com/*', env: { staging: { route: '*.example.com/*' } } },
-    'publish.staging.error.productionRoute',
+    'publish.destination.error.productionRoute',
   ],
-  ['a route that cannot be read', { name: 'my-site', env: { staging: { routes: [{ zone: 'x' }] } } }, 'publish.staging.error.routesUnreadable'],
-  ['an environment named as the production Worker', { name: 'my-site', env: { staging: { name: 'my-site' } } }, 'publish.staging.error.sameAsProduction'],
+  ['a route that cannot be read', { name: 'my-site', env: { staging: { routes: [{ zone: 'x' }] } } }, 'publish.destination.error.routesUnreadable'],
+  ['an environment named as the production Worker', { name: 'my-site', env: { staging: { name: 'my-site' } } }, 'publish.destination.error.sameAsProduction'],
   [
     'an environment deploying env.production’s Worker',
     { name: 'my-site', env: { production: { name: 'live-worker' }, staging: { name: 'live-worker' } } },
-    'publish.staging.error.sameAsProduction',
+    'publish.destination.error.sameAsProduction',
   ],
   [
     'an environment declaring production’s workflow',
     { name: 'my-site', workflows: [{ name: 'orders' }], env: { staging: { routes: [], workflows: [{ name: 'orders' }] } } },
-    'publish.staging.error.sharedResource',
+    'publish.destination.error.sharedResource',
   ],
   [
     'an environment consuming production’s queue',
     { name: 'my-site', queues: { consumers: [{ queue: 'mail' }] }, env: { staging: { queues: { consumers: [{ queue: 'mail' }] } } } },
-    'publish.staging.error.sharedResource',
+    'publish.destination.error.sharedResource',
   ],
-  ['an environment that is not there', { name: 'my-site', env: { preview: {} } }, 'publish.staging.error.noEnvironment'],
+  ['an environment that is not there', { name: 'my-site', env: { preview: {} } }, 'publish.destination.error.noEnvironment'],
 ] as const) {
   test(`Workers staging refuses ${name}`, async (context) => {
     const site = await stagingSite(
@@ -257,10 +200,10 @@ for (const [name, wrangler, key] of [
 }
 
 test('a production wildcard over a staging subdomain is not a claim on production', () => {
-  assert.equal(claimsProductionHost('staging.example.com', '*.example.com'), false);
-  assert.equal(claimsProductionHost('*example.com', 'example.com'), true);
-  assert.equal(claimsProductionHost('example.com', 'example.com'), true);
-  assert.equal(claimsProductionHost('*.example.com', 'example.org'), false);
+  assert.equal(claimsHost('staging.example.com', '*.example.com'), false);
+  assert.equal(claimsHost('*example.com', 'example.com'), true);
+  assert.equal(claimsHost('example.com', 'example.com'), true);
+  assert.equal(claimsHost('*.example.com', 'example.org'), false);
 });
 
 test('the published production site is production’s hostname even when Wrangler does not list it', async (context) => {
@@ -269,7 +212,7 @@ test('the published production site is production’s hostname even when Wrangle
     destinations: destinations({ kind: 'cloudflare-environment', environment: 'staging' }),
     files: { 'wrangler.json': JSON.stringify({ name: 'my-site', env: { staging: { routes: ['live.example.com/*'] } } }) },
   });
-  await refusedAs(site, publisherFor(), 'publish.staging.error.productionRoute');
+  await refusedAs(site, publisherFor(), 'publish.destination.error.productionRoute');
 });
 
 test('a separate Worker takes none of production’s routes, schedules or queue consumers', async (context) => {
@@ -311,7 +254,7 @@ test('a separate Worker is refused when it is production’s, or when it would t
       files: { 'wrangler.json': JSON.stringify({ name: 'my-site' }) },
     },
   );
-  await refusedAs(same, publisherFor(), 'publish.staging.error.sameAsProduction');
+  await refusedAs(same, publisherFor(), 'publish.destination.error.sameAsProduction');
   const workflow = await stagingSite(
     context,
     WORKERS,
@@ -320,7 +263,7 @@ test('a separate Worker is refused when it is production’s, or when it would t
       files: { 'wrangler.json': JSON.stringify({ name: 'my-site', workflows: [{ name: 'orders' }] }) },
     },
   );
-  await refusedAs(workflow, publisherFor(), 'publish.staging.error.separateShared');
+  await refusedAs(workflow, publisherFor(), 'publish.destination.error.separateShared');
 });
 
 // A build that stands in for the Cloudflare Vite adapter: it writes a generated config and redirects Wrangler to it.
@@ -358,11 +301,11 @@ test('an adapter build made for staging deploys its generated config without nam
 });
 
 for (const [name, generated, key] of [
-  ['for production', { name: 'my-site', main: 'entry.js', routes: ['example.com'] }, 'publish.staging.error.builtForProduction'],
+  ['for production', { name: 'my-site', main: 'entry.js', routes: ['example.com'] }, 'publish.destination.error.builtForProduction'],
   [
     'with production’s route',
     { name: 'my-site-staging', targetEnvironment: 'staging', main: 'entry.js', routes: ['example.com'] },
-    'publish.staging.error.productionRoute',
+    'publish.destination.error.productionRoute',
   ],
 ] as const) {
   test(`an adapter build made ${name} is never deployed as staging`, async (context) => {
@@ -382,22 +325,22 @@ test('a Pages preview deploys the staging branch of the Pages project, and nothi
     deployCalls(site.calls()).map((call) => call.argv),
     [['pages', 'deploy', 'dist', '--project-name', 'my-pages', '--branch', 'staging', '--commit-dirty=true']],
   );
-  assert.equal((await readPublishAvailability(site.root)).staging?.url, 'https://staging.site.pages.dev');
+  assert.equal((await readPublishAvailability(site.root)).destinations?.[0]?.url, 'https://staging.site.pages.dev');
 });
 
 test('Pages staging asks Cloudflare which branch is production, and fails closed', async (context) => {
   // The settings say production is main; the real project's production branch is the staging one.
   const wrong = await stagingSite(context, PAGES, { kind: 'cloudflare-pages', branch: 'staging' });
-  await refusedAs(wrong, publisherFor({ services: services({ pagesProductionBranch: async () => 'Staging' }) }), 'publish.staging.error.sameAsProduction');
+  await refusedAs(wrong, publisherFor({ services: services({ pagesProductionBranch: async () => 'Staging' }) }), 'publish.destination.error.sameAsProduction');
   const unknown = await stagingSite(context, PAGES, { kind: 'cloudflare-pages', branch: 'staging' });
   const offline = services({
     pagesProductionBranch: async () => {
       throw new Error('offline');
     },
   });
-  await refusedAs(unknown, publisherFor({ services: offline }), 'publish.staging.error.pagesUnconfirmed');
+  await refusedAs(unknown, publisherFor({ services: offline }), 'publish.destination.error.pagesUnconfirmed');
   const named = await stagingSite(context, { ...PAGES, branch: 'release' }, { kind: 'cloudflare-pages', branch: 'release' });
-  await refusedAs(named, publisherFor(), 'publish.staging.error.sameAsProduction');
+  await refusedAs(named, publisherFor(), 'publish.destination.error.sameAsProduction');
 });
 
 test('a Vercel preview never passes --prod and tells Vercel’s own build it is staging', async (context) => {
@@ -406,22 +349,29 @@ test('a Vercel preview never passes --prod and tells Vercel’s own build it is 
   // Vercel builds on its servers: no local build runs, whatever the settings name.
   assert.deepEqual(scriptsRun(site.calls()), []);
   const [deploy] = deployCalls(site.calls());
-  assert.deepEqual(deploy?.argv.slice(0, 4), ['deploy', '--yes', '--build-env', 'STACKI_PUBLISH_ENV=staging']);
+  assert.deepEqual(deploy?.argv.slice(0, 6), [
+    'deploy',
+    '--yes',
+    '--build-env',
+    'STACKI_PUBLISH_ENV=staging',
+    '--build-env',
+    'STACKI_PUBLISH_DESTINATION=staging',
+  ]);
   assert.ok(!deploy?.argv.some((argument) => argument.startsWith('--prod')));
   assert.equal(deploy?.env['VERCEL_PROJECT_ID'], 'prj_1');
-  assert.equal((await readPublishAvailability(site.root)).staging?.url, 'https://site-abc123.vercel.app');
+  assert.equal((await readPublishAvailability(site.root)).destinations?.[0]?.url, 'https://site-abc123.vercel.app');
 });
 
 test('Vercel staging is refused until production exists, because a first deployment is production', async (context) => {
   const first = await stagingSite(context, VERCEL, { kind: 'vercel' });
-  await refusedAs(first, publisherFor({ services: services({ vercelHasProduction: async () => false }) }), 'publish.staging.error.vercelFirstDeploy');
+  await refusedAs(first, publisherFor({ services: services({ vercelHasProduction: async () => false }) }), 'publish.destination.error.vercelFirstDeploy');
   const unknown = await stagingSite(context, VERCEL, { kind: 'vercel' });
   const offline = services({
     vercelHasProduction: async () => {
       throw new Error('offline');
     },
   });
-  await refusedAs(unknown, publisherFor({ services: offline }), 'publish.staging.error.vercelUnconfirmed');
+  await refusedAs(unknown, publisherFor({ services: offline }), 'publish.destination.error.vercelUnconfirmed');
 });
 
 test('Netlify staging is a draft under its alias, built with staging’s build', async (context) => {
@@ -432,7 +382,7 @@ test('Netlify staging is a draft under its alias, built with staging’s build',
     deployCalls(site.calls()).map((call) => call.argv),
     [['deploy', '--site', 'site-1', '--json', '--alias', 'staging', '--no-build', '--dir', 'dist']],
   );
-  assert.equal((await readPublishAvailability(site.root)).staging?.url, 'https://draft1--site.netlify.app');
+  assert.equal((await readPublishAvailability(site.root)).destinations?.[0]?.url, 'https://draft1--site.netlify.app');
 });
 
 test('Netlify’s own build runs in the staging branch’s context, never production’s', async (context) => {
@@ -451,7 +401,7 @@ test('a staging branch receives the current files, uncommitted ones included, an
   await git(site.root, ['config', 'push.followTags', 'true']);
   await git(site.root, ['tag', '--annotate', '--message', 'v1', 'v1']);
   const publisher = publisherFor();
-  assert.deepEqual(await publishStaging(site, publisher), { kind: 'done', github: true, hosting: false, destination: 'staging', handoff: 'github' });
+  assert.deepEqual(await publishStaging(site, publisher), { kind: 'done', github: true, hosting: false, destination: STAGING, handoff: 'github' });
   const names = (await site.refs()).split('\n').map((line) => line.split(' ')[0]);
   assert.deepEqual(names, ['refs/heads/main', 'refs/heads/staging']);
   assert.equal((await git(site.remote, ['show', 'staging:page.txt'])).stdout, 'A draft');
@@ -460,7 +410,7 @@ test('a staging branch receives the current files, uncommitted ones included, an
   write(site.root, 'page.txt', 'Another draft');
   assert.equal((await publishStaging(site, publisher)).kind, 'done');
   await git(site.remote, ['merge-base', '--is-ancestor', first, 'refs/heads/staging']);
-  assert.equal((await readPublishAvailability(site.root)).staging?.state, 'current');
+  assert.equal((await readPublishAvailability(site.root)).destinations?.[0]?.state, 'current');
   assert.deepEqual(site.calls(), []);
 });
 
@@ -469,23 +419,23 @@ test('a staging branch with someone else’s commits is refused as diverged, and
   const tree = await site.revision(site.root, 'HEAD^{tree}');
   const other = (await git(site.root, ['commit-tree', tree, '-m', 'Written by hand'])).stdout.trim();
   await git(site.root, ['push', '--quiet', 'https://github.com/example/fixture.git', `${other}:refs/heads/staging`]);
-  await refusedAs(site, publisherFor(), 'publish.staging.error.diverged');
+  await refusedAs(site, publisherFor(), 'publish.destination.error.diverged');
   assert.equal(await site.revision(site.remote, 'refs/heads/staging'), other);
 });
 
 test('a staging branch is never main, the default branch or the branch the person is on', async (context) => {
   for (const branch of ['main', 'Master', 'production']) {
     const site = await stagingSite(context, OWN_HOST, { kind: 'github-branch', branch });
-    await refusedAs(site, publisherFor(), 'publish.staging.error.sameAsProduction');
+    await refusedAs(site, publisherFor(), 'publish.destination.error.sameAsProduction');
   }
   const current = await stagingSite(context, OWN_HOST, { kind: 'github-branch', branch: 'feature' });
   await git(current.root, ['switch', '--quiet', '--create', 'feature']);
-  await refusedAs(current, publisherFor(), 'publish.staging.error.currentBranch');
+  await refusedAs(current, publisherFor(), 'publish.destination.error.currentBranch');
   // The repository's default branch under an unusual name is only known by asking.
   const trunk = await stagingSite(context, OWN_HOST, { kind: 'github-branch', branch: 'trunk' });
   await git(trunk.remote, ['branch', 'trunk', 'main']);
   await git(trunk.remote, ['symbolic-ref', 'HEAD', 'refs/heads/trunk']);
-  await refusedAs(trunk, publisherFor(), 'publish.staging.error.sameAsProduction');
+  await refusedAs(trunk, publisherFor(), 'publish.destination.error.sameAsProduction');
   const empty = await stagingSite(context, OWN_HOST, { kind: 'github-branch', branch: 'staging' });
   await git(empty.remote, ['update-ref', '-d', 'refs/heads/main']);
   await refusedAsWithoutMain(empty);
@@ -494,9 +444,9 @@ test('a staging branch is never main, the default branch or the branch the perso
 // In an empty repository the first branch pushed becomes the default, so staging must not go first.
 async function refusedAsWithoutMain(site: Site) {
   const publisher = publisherFor();
-  publisher.start(site.root, 'staging');
+  publisher.start(site.root, 'destination:staging');
   const state = await finished(publisher, site.root);
-  assert.equal(state.kind === 'failed' ? state.messageRef?.key : state.kind, 'publish.staging.error.defaultUnknown');
+  assert.equal(state.kind === 'failed' ? state.messageRef?.key : state.kind, 'publish.destination.error.defaultUnknown');
   assert.equal(await site.refs(), '');
 }
 
@@ -512,13 +462,13 @@ for (const name of ['+main', 'main:main', '-f', 'refs/heads/main', 'a..b', 'stag
 
 test('with Pages as production, a staging branch is checked against the project’s real production branch', async (context) => {
   const site = await stagingSite(context, PAGES, { kind: 'github-branch', branch: 'release' });
-  await refusedAs(site, publisherFor({ services: services({ pagesProductionBranch: async () => 'release' }) }), 'publish.staging.error.sameAsProduction');
+  await refusedAs(site, publisherFor({ services: services({ pagesProductionBranch: async () => 'release' }) }), 'publish.destination.error.sameAsProduction');
   const offline = services({
     pagesProductionBranch: async () => {
       throw new Error('offline');
     },
   });
-  await refusedAs(site, publisherFor({ services: offline }), 'publish.staging.error.pagesUnconfirmed');
+  await refusedAs(site, publisherFor({ services: offline }), 'publish.destination.error.pagesUnconfirmed');
 });
 
 test('a staging deploy link pushes the staging branch, then sends staging’s link only', async (context) => {
@@ -539,7 +489,7 @@ test('a staging deploy link pushes the staging branch, then sends staging’s li
     kind: 'done',
     github: true,
     hosting: true,
-    destination: 'staging',
+    destination: STAGING,
     handoff: 'link',
   });
   assert.deepEqual(sent, ['https://host.example/staging-hook']);
@@ -550,10 +500,10 @@ test('one link cannot be saved for both destinations, in either order', async (c
   const site = await stagingSite(context, OWN_HOST, { kind: 'link', branch: 'staging' });
   const store = fakeLinkStore(site.userData);
   await store.save(site.root, 'https://host.example/hook', 'staging');
-  const saved = await store.save(site.root, 'https://HOST.example/hook', 'production');
+  const saved = await store.save(site.root, 'https://HOST.example/hook', 'production', ['staging']);
   assert.equal(saved.ok, false, 'Another spelling of the same address is the same link');
   store.remove(site.root, 'staging');
-  await store.save(site.root, 'https://host.example/hook', 'production');
+  await store.save(site.root, 'https://host.example/hook', 'production', ['staging']);
   // With only production's link saved, staging has none to send.
   await refusedAs(site, publisherFor({ store }), 'publish.custom.link.missing');
 });
@@ -565,7 +515,7 @@ test('a staging script runs on a copy with staging’s own hooks, and GitHub is 
   });
   write(site.root, 'page.txt', 'A draft');
   const refs = await site.refs();
-  assert.deepEqual(await publishStaging(site, publisherFor()), { kind: 'done', github: false, hosting: true, destination: 'staging', handoff: 'script' });
+  assert.deepEqual(await publishStaging(site, publisherFor()), { kind: 'done', github: false, hosting: true, destination: STAGING, handoff: 'script' });
   assert.equal(await site.refs(), refs);
   assert.deepEqual(scriptsRun(site.calls()), ['staging-before', 'build:staging', 'deploy:staging']);
   assert.ok(site.calls().every((call) => call.env['STACKI_PUBLISH_ENV'] === 'staging' && call.env['CLOUDFLARE_ENV'] === undefined));
@@ -573,17 +523,17 @@ test('a staging script runs on a copy with staging’s own hooks, and GitHub is 
 
 test('a staging script that deploys production by name, or is production’s script, is refused', async (context) => {
   const named = await stagingSite(context, WORKERS, { kind: 'script', script: 'deploy' });
-  await refusedAs(named, publisherFor(), 'publish.staging.error.sameAsProduction');
+  await refusedAs(named, publisherFor(), 'publish.destination.error.sameAsProduction');
   const shared = await publishSite(context, {
     publish: { ...production(OWN_HOST), customHosting: { deploy: 'script', script: 'ship' } },
     destinations: destinations({ kind: 'script', script: 'ship' }),
   });
-  await refusedAs(shared, publisherFor(), 'publish.staging.error.sameAsProduction');
+  await refusedAs(shared, publisherFor(), 'publish.destination.error.sameAsProduction');
 });
 
 test('a destination borrowing a provider production no longer uses is refused', async (context) => {
   const site = await stagingSite(context, VERCEL, { kind: 'netlify', alias: 'staging' });
-  await refusedAs(site, publisherFor(), 'publish.staging.error.providerChanged');
+  await refusedAs(site, publisherFor(), 'publish.destination.error.providerChanged');
 });
 
 test('a project that publishes through review sends nothing out to staging', async (context) => {
@@ -591,12 +541,12 @@ test('a project that publishes through review sends nothing out to staging', asy
     publish: { ...production(OWN_HOST), githubWorkflow: { kind: 'pull-request' } },
     destinations: destinations({ kind: 'github-branch', branch: 'staging' }),
   });
-  await refusedAs(site, publisherFor(), 'publish.staging.error.review');
+  await refusedAs(site, publisherFor(), 'publish.destination.error.review');
 });
 
 test('with no staging saved, a staging publish does nothing at all', async (context) => {
   const site = await publishSite(context, { publish: production(WORKERS) });
-  await refusedAs(site, publisherFor(), 'publish.staging.error.notSetUp');
+  await refusedAs(site, publisherFor(), 'publish.destination.error.notSetUp');
   assert.equal(fs.existsSync(path.join(site.root, '.stacki/publish-destinations.json')), false);
 });
 

@@ -1784,43 +1784,135 @@ once with a 30-second deadline, never retries, follows only same-origin 307/308 
 three), drops the response body, and never repeats a transport error. Studio and the demo keep no
 links: the option is unavailable there and Studio refuses such a publish before committing.
 
-### Staging
+### Destinations besides production
 
-`.stacki/publish-destinations.json` (`shared/properties/publishDestinations.ts`) holds the
-destinations besides production: a bounded list, today only `staging`. It is a separate file because
-1.4.21 rewrites `publish.json` from the keys it knows, sometimes without a Save. Provider kinds borrow
-production's account and project and say only how they differ. `publish:start` accepts the target
-`staging`; it is never a `defaultTarget`. Staging runs its own flow (`publisherStaging.ts`), its own
-hooks and its own receipt, with `STACKI_PUBLISH_ENV=staging` (production's scripts get `production`).
+`.stacki/publish-destinations.json` (`shared/properties/publishDestinations.ts`) holds the destinations
+besides production, such as staging and review sites: `{ version: 1, destinations: [...] }`, at most ten
+(`DESTINATION_LIMITS.destinationsMax`) and 64 KiB, in menu order. It is a separate file because 1.4.21
+rewrites `publish.json` from the keys it knows, sometimes without a Save. The parser is strict at every
+level, so a deploy link cannot be saved in this tracked file.
 
-**Publishing to staging never changes production.** It never commits to or pushes the person's
-branch. Only the `github-branch` and `link` kinds touch GitHub, pushing the captured files to the
-staging branch, never forced, never with tags, and never to the checked-out branch, the repository's
-default branch, a conventional production name or a Pages project's production branch. Every check
-fails closed, before anything is built or pushed:
+Each destination is `{ id, label, target, buildScript, beforePublish, afterPublish, siteUrl? }`.
 
-- Workers (`publishStagingWorker.ts`): wrangler uses `--name` verbatim even with `--env`, so staging
-  passes its own resolved name, which must differ from production's. `env.*` inherits top-level
-  `routes`, so a route naming a production hostname is refused, as are workflows, queue consumers and
-  containers production declares. A separate Worker drops routes, triggers and queue consumers.
-  `WRANGLER_CI_OVERRIDE_NAME` and the computer's `CLOUDFLARE_ENV` are withheld. A generated
-  (redirected) config must target the chosen environment.
-- Pages: the project's production branch is read from Cloudflare and must differ.
-- Vercel: never `--prod`, and a ready production deployment must exist, because a project's first
-  deployment is production regardless.
-- Netlify: `--alias` draft deploys only, never `--prod` or `--prod-if-unlocked`.
-- Custom: the script cannot be production's or be named like a production deploy (its content cannot
-  be checked); a staging deploy link is stored apart from production's and may not equal it.
+- `id` never changes: receipts (`stacki-deployment-<id>.json`), deploy links, status and publish requests
+  are keyed by it, so renaming loses nothing. It is lowercase (`^[a-z][a-z0-9-]{0,39}$`), unique, and
+  never `production`, `all`, `github`, `hosting` or `default`. The app makes new ones at random, so a
+  removed destination's records are never inherited.
+- `label` is 1 to 60 characters with no slashes, control or text-reordering characters. No two labels may
+  read alike (case, width, spacing and invisible characters are ignored), and none may be `Production`
+  or `GitHub`.
+- A file from the unreleased preview build (one entry `staging`, optional `name`, no `label`) is read
+  as it stands: `name` becomes the label, else `Staging`. Its id, receipt and deploy link are unchanged,
+  and the next Save writes `label`.
 
-A project with the pull request review workflow cannot publish to staging. Studio does not publish to
-staging; both Studio and Desktop treat the destinations file as publish settings (`publish` access).
+`target.kind` says where it goes. `cloudflare-environment`, `cloudflare-worker`, `cloudflare-pages`,
+`vercel` and `netlify` are the preview, branch or environment form of production's own provider; they
+borrow production's account and project and say only how they differ. `host` carries an account and
+project of the destination's own (`hosting`, as in `publish.json`) and is published as that project's
+live site. `github-branch`, `script` and `link` are a custom host.
+
+`publish:start` accepts `destination:<id>` besides the production targets (`parsePublishRequestTarget`);
+one request publishes exactly one destination, and a destination is never a `defaultTarget`. Each runs its
+own flow (`publisherDestination.ts`), its own hooks and its own receipt. `DesktopPublishState` carries
+`destination: { id, label }` for the progress popup, and `publish:availability` answers
+`destinations: [{ id, state, publishedAtMs?, url? }]`, at most ten.
+
+Scripts see these variables:
+
+| | Production | Any destination |
+|---|---|---|
+| `STACKI_PUBLISH_ENV` | `production` | `staging` |
+| `STACKI_PUBLISH_TARGET` | `all`, `github` or `hosting` (hooks and deploy script) | `staging` |
+| `STACKI_PUBLISH_DESTINATION` | never set, even if this computer has it | the destination's id |
+
+`staging` means "not production" for every destination; the id says which. A `cloudflare-environment`
+destination also sets `CLOUDFLARE_ENV`. A Vercel destination passes the first and last as `--build-env`.
+
+**Publishing to a destination never changes production or another destination**, wherever Stacki can
+tell. It never commits to or pushes the person's branch. Only `github-branch` and `link` touch GitHub,
+pushing the captured files to that branch, never forced, never with tags, and never to the checked-out
+branch, the repository's default branch, a conventional production name, or the production branch of any
+Pages project the settings name (asked of Cloudflare). Every check fails closed, before anything is built
+or pushed, and again at the moment of pushing, sending or deploying, after hooks and the build. At that
+moment the saved settings are read again: a destination edited or removed meanwhile, or a changed
+production host, stops the publish, and the other destinations are compared as they are saved now.
+
+- Settings alone (`publishDestinationConflicts.ts`, also run by Save): anything naming production's
+  place; a `host` naming production's project; production's or another destination's site address; a
+  build or hook that is a production deploy script or another destination's deploy script; and any two
+  destinations that publish to one place (Worker, Wrangler environment, Pages project, Pages preview
+  address including names Cloudflare shortens alike, Netlify site or alias, Vercel project, git branch,
+  a branch whose host would build another's preview or live site, script). Two such destinations both
+  refuse. Vercel previews of production's project each get a new address, so two do not conflict.
+- Workers (`publishDestinationWorker.ts`): wrangler uses `--name` verbatim even with `--env`, so a
+  destination passes its own resolved name, which is neither production's nor another destination's.
+  The project's Wrangler file and the built copy's are both read. `env.*` inherits top-level `routes`;
+  a route naming production's or another destination's hostname is refused, as are workflows, queue
+  consumers and containers that production or another environment declares. A separate or own Worker
+  drops routes, triggers and queue consumers, and refuses a site with workflows or containers.
+  Cloudflare is then asked which custom domains the Worker serves. `WRANGLER_CI_OVERRIDE_NAME` and the
+  computer's `CLOUDFLARE_ENV` are withheld. A generated (redirected) config must target the chosen
+  environment.
+- Pages preview: the project's production branch is read from Cloudflare and must differ.
+- Vercel preview: never `--prod`, and a ready production deployment must exist, because a project's
+  first deployment is production regardless.
+- Netlify draft: `--alias` only, never `--prod` or `--prod-if-unlocked`.
+- A `host` project is deployed as that project's live site, so the host is asked about it first
+  (`publishDestinationHost.ts`; the reply must name the saved id). It is refused when it serves a
+  protected hostname (a `vercel.json` `alias` counts), when the host builds it from this repository
+  while Stacki does not deploy production itself, or when no publish settings are saved and the folder
+  is linked to it (Publish would treat it as production). A Pages project deploys the production branch
+  Cloudflare reports.
+- Custom: a script cannot be production's or be named like a production deploy. A destination's deploy
+  link is stored apart and may not equal production's or another destination's, checked when saved and
+  again when sent; removing a destination removes its link.
+
+#### What a host's reply is held to
+
+`publishDestinationReplies.ts` parses every reply a check reads. A reply must name the project asked about.
+A domain list or repository link that is missing where it must be present, or has another shape, is
+`unread`: it refuses the publish (`publish.destination.error.hostUnconfirmed`) whenever there is a
+hostname or repository to compare, and is never read as "no clash". A hostname comparison applies when
+production or another destination has a known hostname; a repository comparison applies when Stacki does
+not deploy production itself. Field names come from these public references, read without signing in:
+
+| Reply | Fields read | Absent or other shape | Reference |
+|---|---|---|---|
+| Pages project | `success`, `result.name`, `result.production_branch` (both required) | refused | [get project](https://developers.cloudflare.com/api/resources/pages/subresources/projects/methods/get/) |
+| Pages project | `result.domains`, `result.subdomain` (`domains` optional) | counted when present; another shape is unread. The domain list below must answer either way | same |
+| Pages project | `result.source.type`, `.config.owner`, `.config.repo_name` (`source` optional) | no `source`, or null: not connected, as Wrangler reads it for its "Git Provider" column. Present but another shape or type: unread | same |
+| Pages domains | `success`, `result[].name`, `result_info.total_pages` and `.total_count` (`result_info` optional), `page` and `per_page` (at most 25) | unread; without counts a short page is the last | [list domains](https://developers.cloudflare.com/api/resources/pages/subresources/projects/subresources/domains/methods/list/) |
+| Worker domains, filtered by `service` | `success`, `result[].service`, `result[].hostname`, optional `result_info` counts | refused, as is a count beyond the one page | [list domains](https://developers.cloudflare.com/api/resources/workers/subresources/domains/methods/list/); the Cloudflare SDK bundled in Wrangler 4.151.1 lists it as a single page |
+| Vercel project | `id`, `accountId` (required) | refused | [find a project](https://vercel.com/docs/rest-api/projects/find-a-project-by-id-or-name) |
+| Vercel project | `link.type`, `.org`, `.repo`, `.host` (`link` optional) | no `link`: not connected. A `github` link without `org` and `repo`, or a type other than the five published (`github`, `github-limited`, `github-custom-host`, `gitlab`, `bitbucket`): unread | same |
+| Vercel domains | `domains[].name`, `domains[].projectId`, `pagination.next` (all required, `next` nullable) | unread; only `next: null` ends the list | [project domains](https://vercel.com/docs/rest-api/projects/retrieve-project-domains-by-project-by-id-or-name) |
+| Vercel deployments (`/v7`) | `deployments[].projectId`, `.readyState` (required), `.state`, `.target` (nullable) | refused; only a ready `target: "production"` entry of this project counts as a production deployment | [list deployments](https://vercel.com/docs/rest-api/deployments/list-deployments) |
+| Netlify site | `id` | refused | [open-api `swagger.yml`](https://github.com/netlify/open-api/blob/master/swagger.yml), `site` |
+| Netlify site | `custom_domain` (present; null or empty means none), `domain_aliases` (a list), and `ssl_url` or `url` | unread | same |
+| Netlify site | `build_settings.repo_url`, `.repo_path`, `.provider` (`repoInfo`) | no `build_settings`: unread. Present and naming no repository: not connected, unless another key that speaks of a repository holds a value | same |
+
+The Netlify specification marks no property as required, so the Netlify rules are stricter than it: the
+abbreviated example in Netlify's API guide, which has no `domain_aliases` or `build_settings`, is unread.
+For the optional Pages `source` and Vercel `link`, absence is the documented way of saying "not
+connected"; a host renaming either whole block could not be told apart from that.
+
+**What cannot be checked:** what a script or hook does; what a deploy link starts; which branches a host
+builds when its settings are only in its dashboard (other than Pages production branches); routes or
+domains configured only in a host's dashboard that Stacki is not told about (Cloudflare zone routes); and
+a production Stacki has no address or identifier for.
+
+A project with the pull request review workflow cannot publish to a destination. Roles: Desktop offers no
+publish control without the `publish` access, destinations included. Studio does not publish to
+destinations (its publish route accepts only `all`, `github` and `hosting`) and keeps no deploy links; it
+names saved destinations in Publish settings. Both treat the destinations file as publish settings
+(`publish` access).
 
 `defaultTarget` selects the main Publish button's action: `all`, `github`, or `hosting`.
 Missing settings and older version-1 files default to `all`. Desktop and Studio share the
 same settings form and resolve this preference from project metadata when Publish is clicked;
 the dropdown's explicit destination actions do not change the saved preference.
 
-`publish:start` accepts a project path, `all`, `github`, or `hosting`, and an optional validated
+`publish:start` accepts a project path, `all`, `github`, `hosting` or `destination:<id>`, and an optional validated
 `commitMessage` (1–4000 trimmed characters); `publish:state` accepts
 that project path. Both return `DesktopPublishState`, parsed by `publishState.ts` before renderer
 use. One Desktop job runs at a time. Failures preserve which external actions completed, so a

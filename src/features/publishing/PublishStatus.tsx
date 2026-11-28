@@ -38,6 +38,7 @@ export function PublishStatus({ state, close, note, runningNote, setUpWorker }: 
   assert(footerNote.length > 0, 'A running publish always explains what to keep open');
   const busy = publishStatusBusy(state);
   const title = publishStatusTitle(state, translate);
+  const label = unnamedDestination(state);
   // The one failure with a fix: the body says what is missing in a line, and the fix is the primary button.
   const needsSetup = publishNeedsWorkerSetup(state);
   const fix = needsSetup ? setUpWorker : undefined;
@@ -50,6 +51,7 @@ export function PublishStatus({ state, close, note, runningNote, setUpWorker }: 
               <PublishStatusSymbol state={state} />
             </div>
             <h2>{title}</h2>
+            {label !== undefined && <span className="publish-status-destination">{label}</span>}
             {busy ? (
               <PublishRunning state={state} />
             ) : (
@@ -119,12 +121,15 @@ export function publishStatusBusy(state: DesktopPublishState): boolean {
 export function publishStatusTitle(state: DesktopPublishState, translate: Translator): string {
   switch (state.kind) {
     case 'idle':
-    case 'running':
       return translate('publish.status.title.running');
+    case 'running':
+      return state.destination === undefined
+        ? translate('publish.status.title.running')
+        : translate('publish.status.title.destinationRunning', { label: state.destination.label });
     case 'review-open':
       return translate('publish.status.title.review');
     case 'done':
-      return translate(doneTitle(state));
+      return translate(doneTitle(state), { label: state.destination?.label ?? '' });
     case 'failed':
       return translate('publish.status.title.failed');
   }
@@ -132,17 +137,28 @@ export function publishStatusTitle(state: DesktopPublishState, translate: Transl
 
 /** What finished, in no more words than Stacki can stand behind: a script that ran or a request sent is not a live site. */
 function doneTitle(state: Extract<DesktopPublishState, { kind: 'done' }>): MessageKey {
-  const staging = state.destination === 'staging';
+  const added = state.destination !== undefined;
   switch (state.handoff) {
     case 'github':
-      return staging ? 'publish.status.title.stagingPushed' : 'publish.status.title.pushed';
+      return added ? 'publish.status.title.destinationPushed' : 'publish.status.title.pushed';
     case 'script':
       return 'publish.status.title.scriptDone';
     case 'link':
       return 'publish.status.title.requestSent';
     case undefined:
-      return staging ? 'publish.status.title.stagingDone' : 'publish.status.title.done';
+      return added ? 'publish.status.title.destinationDone' : 'publish.status.title.done';
   }
+}
+
+/** The destination's label where the title does not already say it: after a script, a request or a failure. */
+function unnamedDestination(state: DesktopPublishState): string | undefined {
+  if (state.kind === 'failed') {
+    return state.destination?.label;
+  }
+  if (state.kind === 'done') {
+    return state.handoff === 'script' || state.handoff === 'link' ? state.destination?.label : undefined;
+  }
+  return undefined;
 }
 
 function hostingResult(state: Extract<DesktopPublishState, { kind: 'done' | 'failed' }>): MessageKey {
@@ -153,7 +169,7 @@ function hostingResult(state: Extract<DesktopPublishState, { kind: 'done' | 'fai
       return 'publish.status.requestAccepted';
     case 'github':
     case undefined:
-      return state.destination === 'staging' ? 'publish.status.stagingDone' : 'publish.status.hostingDone';
+      return state.destination === undefined ? 'publish.status.hostingDone' : 'publish.status.destinationDone';
   }
 }
 
@@ -207,14 +223,14 @@ function PublishResults({ state }: { readonly state: DesktopPublishState }) {
         {state.github && (
           <div>
             <PublishProviderIcon provider="github" />
-            <span>{translate(state.destination === 'staging' ? 'publish.status.stagingPushed' : 'publish.status.githubDone')}</span>
+            <span>{translate(state.destination === undefined ? 'publish.status.githubDone' : 'publish.status.destinationPushed')}</span>
             <CheckIcon size={14} />
           </div>
         )}
         {state.hosting && (
           <div>
             <UploadCloudIcon />
-            <span>{translate(hostingResult(state))}</span>
+            <span>{translate(hostingResult(state), { label: state.destination?.label ?? '' })}</span>
             <CheckIcon size={14} />
           </div>
         )}

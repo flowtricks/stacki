@@ -27,6 +27,8 @@ type Props = {
       readonly provider: 'cloudflare' | 'vercel' | 'netlify';
       readonly value: Hosting;
       readonly change: (hosting: Hosting) => void;
+      /** Production sets a newly named Worker up at once; a destination's is created by its first publish. */
+      readonly workerSetup: 'now' | 'on-first-deploy';
     }
 );
 type ConnectionState = PublishDiscovery | { readonly kind: 'loading'; readonly previous: PublishDiscovery | undefined };
