@@ -51,6 +51,16 @@ const picture = parts.join("-");
 `;
 const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="${fill}"/></svg>\n`;
 const WAIT_MS_MAX = 20000;
+// Page-side: the focused element by tag and class.
+const FOCUSED_ELEMENT = `document.activeElement ? document.activeElement.tagName + '.' + document.activeElement.className : 'none'`;
+// Page-side: notes each Z keydown that reaches the app document, and whether the app took it.
+const UNDO_KEY_RECORDER = `window.__undoKeys = []; window.addEventListener('keydown', (event) => {
+  if (event.key.toLowerCase() !== 'z') return;
+  const entry = { target: event.target.tagName + '.' + event.target.className };
+  window.__undoKeys.push(entry);
+  setTimeout(() => { entry.taken = event.defaultPrevented; }, 0);
+}, { capture: true, once: true }); 0`;
+const UNDO_KEY_REPORT = `'keys that reached the app: ' + JSON.stringify(window.__undoKeys) + '; toasts: ' + JSON.stringify([...document.querySelectorAll('.toast')].map((toast) => toast.innerText))`;
 // A reopen double click is tried this many times, each given this long to open the popup (see `reopen`).
 const REOPEN_ATTEMPTS_MAX = 4;
 const REOPEN_WAIT_MS = 4000;
@@ -280,16 +290,17 @@ async function runInElectron({ window, project, options }) {
       await driver.pointerPress(await driver.canvasPoint('#native'), { label: 'select the native image' });
       await driver.settle();
       check('selecting another element closes the popup', !(await popupOpen()));
+      // A failed Undo leaves the same bytes whether the key never reached the app, a field took it, or the app declined
+      // and said why in a toast. The failure reports which, from where the key landed.
+      await driver.evaluate(UNDO_KEY_RECORDER);
+      const focusAtUndo = await driver.evaluate(FOCUSED_ELEMENT);
       await driver.key('z', { modifiers: ['meta'] });
       await becomes('the undo written to the page', () => read() === original);
-      check(
-        'one undo restores the bytes',
-        read() === original,
-        read()
-          .split('\n')
-          .filter((line) => line.includes('card-one'))
-          .join(' | '),
-      );
+      const card = read()
+        .split('\n')
+        .filter((line) => line.includes('card-one'))
+        .join(' | ');
+      check('one undo restores the bytes', read() === original, `${card}; focus at the key: ${focusAtUndo}; ${await driver.evaluate(UNDO_KEY_REPORT)}`);
     }
     // 3. The picture: choose another image from the project's own assets. The undo rewrote the page, so the frame may be reloading.
     await reopen('#card-one .card_visual img', 'the popup reopens');
