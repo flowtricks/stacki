@@ -21,6 +21,15 @@ export const COMPILER_LIMITS = {
 // for source positions would cost several times as much, so the tree is read without them.
 const PROGRAM = `
 const { parentPort, workerData } = require('node:worker_threads');
+// A panic prints the whole Go stack; the caller learns of it from the failed call, so the thread's output is
+// dropped here. Reading it from outside instead keeps Studio's process from ever exiting.
+const drop = (chunk, encoding, done) => {
+  const written = typeof encoding === 'function' ? encoding : done;
+  if (written) written();
+  return true;
+};
+process.stdout.write = drop;
+process.stderr.write = drop;
 const loaded = import(workerData.compiler);
 parentPort.on('message', async ({ id, kind, source }) => {
   try {
@@ -45,22 +54,13 @@ interface Waiting {
 
 class CompilerThread {
   private readonly waiting = new Map<number, Waiting>();
-  private readonly worker = new Worker(PROGRAM, {
-    eval: true,
-    workerData: { compiler: import.meta.resolve('@astrojs/compiler') },
-    // A panic prints the whole Go stack; the caller learns of it from the failed call.
-    stdout: true,
-    stderr: true,
-  });
+  private readonly worker = new Worker(PROGRAM, { eval: true, workerData: { compiler: import.meta.resolve('@astrojs/compiler') } });
   private next = 0;
   private parsed = 0;
   private converted = 0;
   private retired = false;
 
   constructor() {
-    // Drained and dropped, so that nothing the thread prints is held in memory.
-    this.worker.stdout.resume();
-    this.worker.stderr.resume();
     this.worker.on('message', (message: unknown) => this.answer(message));
     this.worker.on('error', (error: unknown) => this.end(`The page compiler failed: ${String(error)}`));
     this.worker.on('exit', () => this.end('The page compiler stopped'));

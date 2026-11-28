@@ -9,6 +9,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { CodeGuard } from '../src/features/roles/codeGuard';
+import { parseAstro } from '../src/features/roles/codeCompiler';
 import { applyEdits, nodesOf, flatten } from '../src/features/source/source';
 import { assetProp, frontmatterEdit } from '../src/features/settings/settingsEdits';
 import { writeAttributes } from '../src/features/settings/attributeEdit';
@@ -258,4 +259,10 @@ test('ways round the check are refused', async (context) => {
     assert.notEqual(after, SOURCE, `change ${index} is a change`);
     await assert.rejects(guard.assertAllowed(DESIGNER, { file: PAGE, before: SOURCE, after }), /cannot add or change code/, `change ${index}: ${after}`);
   }
+});
+
+test('an idle page compiler does not hold the process open', async () => {
+  await parseAstro('<h1>Title</h1>');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.ok(!process.getActiveResourcesInfo().includes('MessagePort'), 'The compiler thread lets the process exit once nothing waits on it');
 });
