@@ -19,7 +19,9 @@ export const platformFetch: Fetcher = (input, init) => fetch(input, init);
 export async function fetchJson(fetcher: Fetcher, url: string, init: RequestInit): Promise<Result<unknown, FetchFailure>> {
   let response: Response;
   try {
-    response = await fetcher(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(FETCH_LIMITS.timeoutMs) });
+    // `manual`, not `error`: the Workers runtime throws on `redirect: 'error'` ("won't be implemented"), which made
+    // every discovery, key and token fetch a network failure. A 3xx answer is not ok, so it is still refused below.
+    response = await fetcher(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(FETCH_LIMITS.timeoutMs) });
   } catch {
     return err({ kind: 'network' });
   }
