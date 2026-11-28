@@ -87,6 +87,7 @@ const {
   column1Class,
   column2Class,
   class: className,
+  style,
   ...rest
 } = Astro.props as AllProps;
 
@@ -134,7 +135,7 @@ const column2 = await slotContent(Astro.slots, "column2");
         centered && "centered",
         className,
       ]}
-      style={media}
+      style={[media, style].filter(Boolean).join("; ") || undefined}
       {...rest}
     >
       {column1 && (

@@ -21,6 +21,7 @@ const {
   variant = "solid",
   strength = 50,
   class: className,
+  style,
   ...rest
 } = Astro.props;
 ---
@@ -28,7 +29,7 @@ const {
 {render && (
   <div
     class:list={["overlay", variant !== "solid" && variant, className]}
-    style={`--_strength: ${strength};`}
+    style={[`--_strength: ${strength}`, style].filter(Boolean).join("; ") || undefined}
     {...rest}
   />
 )}

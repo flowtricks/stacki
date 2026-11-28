@@ -88,6 +88,7 @@ const {
   maxColumnCount,
   minColumnWidth,
   class: className,
+  style,
   ...rest
 } = Astro.props as AllProps;
 
@@ -128,7 +129,7 @@ const columns =
 {render && content && (
   <div
     class:list={["grid", variant !== "columns" && variant, className]}
-    style={columns}
+    style={[columns, style].filter(Boolean).join("; ") || undefined}
     {...rest}
   >
     <Fragment set:html={content} />

@@ -37,6 +37,7 @@ const {
   variant = Tag,
   maxWidth,
   class: className,
+  style,
   ...rest
 } = Astro.props;
 
@@ -50,7 +51,7 @@ const content = await slotContent(Astro.slots);
       variant !== "inherit" && `text-style-${variant}`,
       className,
     ]}
-    style={maxWidth ? `--_mw: ${maxWidth}ch;` : undefined}
+    style={[maxWidth && `--_mw: ${maxWidth}ch`, style].filter(Boolean).join("; ") || undefined}
     {...rest}
   >
     <Fragment set:html={content} />
