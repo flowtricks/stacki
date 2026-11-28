@@ -6,10 +6,14 @@
 // fill and turns the primary blue. Desktop only: the address bar is Desktop's own (AppShell UrlGroup takes it
 // as `trailing`); Studio and the demo have no dev server of their own to restart, so they never get it.
 //
+// Beside Copy, a gear opens the card's one setting: "Only devices that scan this code". Off by default and
+// never remembered; on, the code and the copied address carry a key (shared/ipc/devNetwork.ts), and every
+// other device on the Wi-Fi is refused. The address under the code is always shown without the key.
+//
 // Fills, never borders or dividers: the card is a fill on the popover's surface.
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { networkPageURL, type LanAddress } from '../../../../shared/ipc/devNetwork';
+import { NETWORK_ACCESS_OPEN, networkPageURL, type DevNetworkAccess, type LanAddress } from '../../../../shared/ipc/devNetwork';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeInline } from '../../../ui/CodeBlock';
 import { centralIcon } from '../../../ui/central/CentralIcon';
@@ -17,10 +21,10 @@ import { globe as centralGlobe } from '../../../ui/central/centralGeometry';
 import { tooltipAnchor, tooltipHost, useDelayedPlacement, type TooltipAnchor } from '../../../ui/delayedTooltip';
 import FittedTooltip from '../../../ui/FittedTooltip';
 import Dropdown from '../../../ui/Dropdown';
-import { CheckIcon, CopyIcon, HelpCircleIcon } from '../../../ui/Icons';
+import { CheckIcon, CopyIcon, GearIcon, HelpCircleIcon } from '../../../ui/Icons';
 import Popup from '../../../ui/Popup';
 import { Skeleton } from '../../../ui/Skeleton';
-import { Switch } from '../../../ui/Switch';
+import { Switch, SwitchRow } from '../../../ui/Switch';
 import { phoneAddressText } from './phoneAddress';
 import { QR_TILE_PX, QrCodeImage } from './QrCodeImage';
 import { usePhonePreview, type PhonePreview, type PhonePreviewState } from './usePhonePreview';
@@ -31,8 +35,8 @@ const GlobeIcon = centralIcon(centralGlobe);
 
 /** How long the copy button shows its check after a copy. */
 const COPIED_MS = 1500;
-// 14.5rem at the app's 16px root: the 13rem code plus 12px of popover padding on each side, so the code fills the popover with no empty bands, and the address of a typical network still fits on one line (phoneAddress.ts).
-const MENU_WIDTH_PX = 232;
+// 16.25rem at the app's 16px root: the 14.75rem code plus 12px of popover padding on each side, so the code fills the popover with no empty bands. The address row holds Copy and the settings gear, and the address of a typical network still fits on one line beside them (phoneAddress.ts).
+const MENU_WIDTH_PX = 260;
 const MENU_EDGE_PX = 8;
 
 export interface PhonePreviewMenuProps {
@@ -114,44 +118,74 @@ function PhonePreviewRows({ preview, route, onCopyFailed }: PhonePreviewMenuProp
           <Switch label={translate('preview.phone.toggle')} checked={on} disabled={state.kind === 'changing'} onToggle={preview.toggle} />
         </span>
       </div>
-      <PhonePreviewCard state={state} route={route} onCopyFailed={onCopyFailed} />
+      <PhonePreviewCard preview={preview} route={route} onCopyFailed={onCopyFailed} />
     </div>
   );
 }
 
-// Off: no card. Restarting: the card's shapes. On: the code, the address and, with several, the address picker.
-function PhonePreviewCard({ state, route, onCopyFailed }: { readonly state: PhonePreviewState; readonly route: string; readonly onCopyFailed: () => void }) {
+// Off: no card. Restarting: the card's shapes, unless only the access changes, when the card keeps its place,
+// dimmed, with the setting already showing what was asked. On: the code, the address and, with several, the
+// address picker; under the address, the card's setting while the gear has it open.
+function PhonePreviewCard({ preview, route, onCopyFailed }: { readonly preview: PhonePreview; readonly route: string; readonly onCopyFailed: () => void }) {
   const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const translate = useTranslate();
+  const { state } = preview;
+  // What the card draws: the running server's state and whether it is restarting toward another access.
+  let on: Extract<PhonePreviewState, { readonly kind: 'on' }>;
+  let restarting: DevNetworkAccess | undefined = undefined;
   switch (state.kind) {
     case 'off':
       return undefined;
-    case 'changing':
-      return <PhonePreviewSkeleton />;
-    case 'on': {
-      // The chosen address while it is still offered, else the best one.
-      const address = state.addresses.find((candidate) => candidate.address === chosen) ?? state.addresses[0];
-      if (address === undefined) {
-        return undefined; // Main turns the mode off when there is no address; a network that went away since leaves nothing to show.
+    case 'changing': {
+      if (state.keep === undefined) {
+        return <PhonePreviewSkeleton />;
       }
-      const url = networkPageURL(address, state.port, route);
-      return (
-        <div className="phone-preview-card">
-          <PhoneQr url={url} />
-          {state.addresses.length > 1 && <AddressPicker addresses={state.addresses} chosen={address} onChoose={setChosen} />}
-          <PhoneAddress url={url} onCopyFailed={onCopyFailed} />
-        </div>
-      );
+      on = state.keep.on;
+      restarting = state.keep.access;
+      break;
+    }
+    case 'on': {
+      on = state;
+      break;
     }
     default: {
       const exhaustive: never = state;
       return exhaustive;
     }
   }
+  // The chosen address while it is still offered, else the best one.
+  const address = on.addresses.find((candidate) => candidate.address === chosen) ?? on.addresses[0];
+  if (address === undefined) {
+    return undefined; // Main turns the mode off when there is no address; a network that went away since leaves nothing to show.
+  }
+  // What the code holds and Copy copies (with the key, when only scanned devices may open it), and what is shown.
+  const url = networkPageURL(address, on.port, route, on.access);
+  const shown = networkPageURL(address, on.port, route, NETWORK_ACCESS_OPEN);
+  const access = restarting ?? on.access.kind;
+  return (
+    <div className="phone-preview-card" aria-busy={restarting !== undefined} data-restarting={restarting === undefined ? undefined : ''}>
+      <PhoneQr url={url} shown={shown} />
+      {on.addresses.length > 1 && <AddressPicker addresses={on.addresses} chosen={address} onChoose={setChosen} />}
+      <PhoneAddress url={url} shown={shown} settingsOpen={settingsOpen} onSettings={() => setSettingsOpen(!settingsOpen)} onCopyFailed={onCopyFailed} />
+      {settingsOpen && (
+        <div className="phone-preview-settings">
+          <SwitchRow
+            label={translate('preview.phone.scannedOnly')}
+            checked={access === 'key'}
+            disabled={restarting !== undefined}
+            onToggle={() => preview.chooseAccess(access === 'key' ? 'open' : 'key')}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
-function PhoneQr({ url }: { readonly url: string }) {
+// The code holds `url`; its label names `shown`, the address without the key, so a screen reader never reads it out.
+function PhoneQr({ url, shown }: { readonly url: string; readonly shown: string }) {
   const translate = useTranslate();
-  return <QrCodeImage text={url} label={translate('preview.phone.qr', { url })} />;
+  return <QrCodeImage text={url} label={translate('preview.phone.qr', { url: shown })} />;
 }
 
 // The card's own shapes while the server restarts: the tile and the address line, at their real sizes.
@@ -167,9 +201,22 @@ function PhonePreviewSkeleton() {
   );
 }
 
-// The address on one line (phoneAddress.ts writes it), and Copy, which shows a check for a moment in the
-// same box: the icon swaps, nothing around it moves.
-function PhoneAddress({ url, onCopyFailed }: { readonly url: string; readonly onCopyFailed: () => void }) {
+// The address on one line (phoneAddress.ts writes it, without the key), Copy, which copies the code's own
+// address and shows a check for a moment in the same box (the icon swaps, nothing around it moves), and the
+// gear that opens the card's setting.
+function PhoneAddress({
+  url,
+  shown,
+  settingsOpen,
+  onSettings,
+  onCopyFailed,
+}: {
+  readonly url: string;
+  readonly shown: string;
+  readonly settingsOpen: boolean;
+  readonly onSettings: () => void;
+  readonly onCopyFailed: () => void;
+}) {
   const translate = useTranslate();
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -187,11 +234,22 @@ function PhoneAddress({ url, onCopyFailed }: { readonly url: string; readonly on
   const copyLabel = copied ? translate('preview.phone.copied') : translate('preview.phone.copy');
   return (
     <div className="phone-preview-address" role="group" aria-label={translate('preview.phone.url')}>
-      <span className="phone-preview-url" title={url}>
-        <CodeInline text={phoneAddressText(url)} language="shell" />
+      <span className="phone-preview-url" title={shown}>
+        <CodeInline text={phoneAddressText(shown)} language="shell" />
       </span>
       <button type="button" className="phone-preview-icon-button" aria-label={copyLabel} data-copied={copied || undefined} onClick={copy}>
         {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+      </button>
+      <button
+        type="button"
+        className="phone-preview-icon-button"
+        aria-label={translate('preview.phone.settings')}
+        title={translate('preview.phone.settings')}
+        aria-expanded={settingsOpen}
+        data-open={settingsOpen || undefined}
+        onClick={onSettings}
+      >
+        <GearIcon size={14} />
       </button>
     </div>
   );

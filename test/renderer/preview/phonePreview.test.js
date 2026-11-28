@@ -4,6 +4,9 @@
 // in the same button. No divider anywhere. The first "on" of the session asks in the app's own dialog; off
 // never asks; while the server restarts the switch is disabled and the card shows skeletons; a failure is a
 // toast and the switch shows what main runs; the address picker appears only with several addresses.
+// Beside Copy, a gear opens the card's one setting, "Only devices that scan this code": off by default, and on
+// it asks main for a keyed restart; the code's label and the shown address never carry the key, Copy does, and
+// turning the preview off and on again starts open.
 // Method: the Desktop button (src/features/preview/phone) is bundled with the confirmation host
 // (test/helpers/phonePreviewEntry.tsx) and mounted in jsdom. window.avb is a fake main that records every
 // dev:setNetwork and answers from a script, and can hold a reply to show the restarting state; the clipboard
@@ -39,6 +42,8 @@ buildSync({
 
 const WIFI = { address: '192.168.1.23', interfaceName: 'en0' };
 const ETHERNET = { address: '10.0.0.8', interfaceName: 'en7' };
+const OPEN = { kind: 'open' };
+const KEY = 'aZ09_-aZ09_-aZ09_-aZ09_-aZ09_-aZ09_-aZ09_-a';
 
 function setup() {
   const dom = new JSDOM('<div id="root"></div>', { url: 'http://localhost', pretendToBeVisual: true });
@@ -72,7 +77,11 @@ function setup() {
       if (main.held !== undefined) {
         await main.held;
       }
-      const reply = main.replies.shift() ?? { ok: true, value: payload.mode === 'network' ? { kind: 'on', port: 4321, addresses: [WIFI] } : { kind: 'off' } };
+      const access = payload.access === 'key' ? { kind: 'key', key: KEY } : OPEN;
+      const reply = main.replies.shift() ?? {
+        ok: true,
+        value: payload.mode === 'network' ? { kind: 'on', port: 4321, addresses: [WIFI], access } : { kind: 'off' },
+      };
       if (reply.ok) {
         main.state = reply.value;
       }
@@ -183,7 +192,7 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     main.held = undefined;
     release();
     await until(() => url() !== undefined, 'the address');
-    assert.deepEqual(main.calls, [{ projectPath: '/site', mode: 'network' }]);
+    assert.deepEqual(main.calls, [{ projectPath: '/site', mode: 'network', access: 'open' }], 'turned on, open to anyone');
     assert.equal(
       url(),
       '192.168.1.23:4321/bl…st',
@@ -215,6 +224,48 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     await click(window, copyButton());
     await until(() => toasts.length === 1, 'the copy failure toast');
     assert.deepEqual(toasts, [{ message: 'Couldn’t copy the address.', kind: 'error' }]);
+    clipboard.refuse = false;
+
+    // The gear beside Copy opens the card's one setting, off; on, it asks main for a keyed restart.
+    const gear = () => document.querySelector('.phone-preview-address [aria-label="Phone preview settings"]') ?? undefined;
+    const scannedOnly = () => document.querySelector('.phone-preview-settings [role="switch"]') ?? undefined;
+    assert.ok(gear(), 'the gear sits beside Copy');
+    assert.equal(gear().getAttribute('aria-expanded'), 'false');
+    assert.equal(scannedOnly(), undefined, 'the setting waits behind the gear');
+    await click(window, gear());
+    await until(() => scannedOnly() !== undefined, 'the setting');
+    assert.equal(gear().getAttribute('aria-expanded'), 'true');
+    assert.equal(scannedOnly().getAttribute('aria-label'), 'Only via this code');
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'false', 'off by default');
+    // Held mid-restart: the card keeps its place (no skeletons), dimmed and busy, the setting already on and waiting.
+    let releaseKeyed;
+    main.held = new Promise((resolve) => (releaseKeyed = resolve));
+    await click(window, scannedOnly());
+    await until(() => card()?.getAttribute('aria-busy') === 'true', 'the restarting card');
+    assert.equal(card().querySelectorAll('.ui-skeleton').length, 0, 'no skeletons: the card does not redraw');
+    assert.ok(card().querySelector('svg.phone-preview-qr'), 'the code stays in place');
+    assert.equal(card().hasAttribute('data-restarting'), true);
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'true', 'the setting shows what was asked');
+    assert.equal(scannedOnly().disabled, true, 'and waits for the restart');
+    main.held = undefined;
+    releaseKeyed();
+    await until(() => main.calls.length === 2 && card()?.getAttribute('aria-busy') === 'false' && scannedOnly()?.disabled === false, 'the keyed restart');
+    assert.equal(scannedOnly().getAttribute('aria-checked'), 'true');
+    assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'key' });
+    assert.equal(dialog(), undefined, 'no second question: the preview is already on');
+    assert.equal(url(), '192.168.1.23:4321/bl…st', 'the shown address never carries the key');
+    assert.equal(document.querySelector('.phone-preview-url').getAttribute('title'), 'http://192.168.1.23:4321/blog/post');
+    assert.equal(
+      card().querySelector('svg.phone-preview-qr').getAttribute('aria-label'),
+      'QR code for http://192.168.1.23:4321/blog/post',
+      'nor the code’s label',
+    );
+    await click(window, copyButton());
+    await until(() => clipboard.written.length === 2, 'the keyed copy');
+    assert.equal(clipboard.written[1], `http://192.168.1.23:4321/blog/post?stacki-key=${KEY}`, 'Copy copies what the code holds, the key with it');
+    await click(window, scannedOnly());
+    await until(() => main.calls.length === 3 && scannedOnly()?.getAttribute('aria-checked') === 'false', 'open again');
+    assert.deepEqual(main.calls.at(-1), { projectPath: '/site', mode: 'network', access: 'open' });
 
     // Another page on the canvas: the address follows it.
     await render('on', '/about');
@@ -228,7 +279,7 @@ test('the phone preview: hidden without a server, header and switch, confirm onc
     assert.equal(toggle().getAttribute('aria-checked'), 'false');
 
     // On again: the session already answered. Main reports two networks: a picker offers both.
-    main.replies.push({ ok: true, value: { kind: 'on', port: 4321, addresses: [WIFI, ETHERNET] } });
+    main.replies.push({ ok: true, value: { kind: 'on', port: 4321, addresses: [WIFI, ETHERNET], access: OPEN } });
     await click(window, toggle());
     await until(() => url() !== undefined, 'the address without a question');
     assert.equal(dialog(), undefined);

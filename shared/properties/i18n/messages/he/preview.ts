@@ -107,6 +107,8 @@ export const messages = {
   'preview.phone.help': 'עזרה בחיבור',
   'preview.phone.label': 'תצוגה מקדימה בטלפון',
   'preview.phone.qr': 'קוד QR עבור {url}',
+  'preview.phone.scannedOnly': 'רק דרך הקוד הזה',
+  'preview.phone.settings': 'הגדרות התצוגה המקדימה בטלפון',
   'preview.phone.toggle': 'פתיחה ברשת המקומית',
   'preview.phone.url': 'כתובת לטלפון שלך',
   'preview.reload': 'טעינה מחדש של התצוגה המקדימה',

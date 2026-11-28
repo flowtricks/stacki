@@ -110,6 +110,8 @@ export const messages = {
   'preview.phone.help': '接続のヘルプ',
   'preview.phone.label': 'スマートフォンでプレビュー',
   'preview.phone.qr': '{url} の QR コード',
+  'preview.phone.scannedOnly': 'このコード経由のみ',
+  'preview.phone.settings': 'スマートフォンでのプレビューの設定',
   'preview.phone.toggle': 'ローカルネットワークで開く',
   'preview.phone.url': 'スマートフォン用のアドレス',
   'preview.reload': 'プレビューを再読み込み',

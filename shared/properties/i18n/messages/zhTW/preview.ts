@@ -107,6 +107,8 @@ export const messages = {
   'preview.phone.help': '連線說明',
   'preview.phone.label': '手機預覽',
   'preview.phone.qr': '{url} 的 QR 碼',
+  'preview.phone.scannedOnly': '僅限此碼',
+  'preview.phone.settings': '手機預覽設定',
   'preview.phone.toggle': '在區域網路中開啟',
   'preview.phone.url': '手機用位址',
   'preview.reload': '重新載入預覽',

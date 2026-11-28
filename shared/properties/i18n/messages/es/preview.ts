@@ -110,6 +110,8 @@ export const messages = {
   'preview.phone.help': 'Ayuda de conexión',
   'preview.phone.label': 'Vista previa en el teléfono',
   'preview.phone.qr': 'Código QR de {url}',
+  'preview.phone.scannedOnly': 'Solo con este código',
+  'preview.phone.settings': 'Ajustes de la vista previa en el teléfono',
   'preview.phone.toggle': 'Abrir en la red local',
   'preview.phone.url': 'Dirección para tu teléfono',
   'preview.reload': 'Recargar la vista previa',
