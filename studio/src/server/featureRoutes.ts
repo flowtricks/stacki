@@ -9,6 +9,7 @@ import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
 import { workerRoute } from '../features/publishing/workerRoutes';
 import { netlifySiteRoute } from '../features/publishing/netlifySiteRoutes';
+import { customRoute } from '../features/publishing/customRoutes';
 import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
 import { cmsRemoteRoutes } from '../features/cms/cmsRemoteServer';
@@ -58,6 +59,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await accountRoute(root, request, response, pathname, readBody)) ||
       (await workerRoute(root, request, response, pathname, readBody)) ||
       (await netlifySiteRoute(root, request, response, pathname, readBody)) ||
+      (await customRoute(root, request, response, pathname)) ||
       (await repositoryRoute(root, request, response, pathname, readBody)) ||
       (await componentUsageRoute(root, request, response, pathname)) ||
       (await cms(request, response, pathname, readBody)) ||
@@ -101,7 +103,8 @@ function featureServices(root: string, rooms: ReturnType<typeof createRooms>) {
   const synchronization = new RepositorySync(root, repository, rooms);
   const publisher = publisherFor(root, rooms, cleanup, synchronization);
   const automatic = automaticSync(synchronization, () => !!repository && rooms.hasClients() && publisher.state.kind !== 'building');
-  rooms.sockets.once('close', automatic.stop);
+  // The poller lives as long as the process, so syncing continues after a dev server restart. Its timer
+  // never keeps Node running, and it only asks GitHub while an editor is connected.
   return {
     cleanup,
     publisher,

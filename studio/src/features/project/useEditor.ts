@@ -21,6 +21,8 @@ import { useDocument } from '../collaboration/useDocument';
 import type { Session } from '../auth/useSession';
 import { usePreview } from '../preview/usePreview';
 import { componentImport } from '../source/imports';
+import { getStudioRole } from '../roles/roleStore';
+import { clientActionRefusal } from '../roles/clientEditorGate';
 import { flatten, parsePage, type TreeAction } from '../source/source';
 export function useEditor(
   project: Project,
@@ -69,6 +71,12 @@ export function useEditor(
   // framePendingInsert.ts); the server's rendering confirms it, and a refused action takes it back.
   // Each names the source it was planned over (base), so a rendering from before it keeps it shown.
   function action(value: TreeAction) {
+    // What the role may not do is refused before the canvas shows it (the server refuses it too).
+    const refusal = clientActionRefusal(getStudioRole(), file, source, value);
+    if (refusal !== undefined) {
+      report(refusal);
+      return;
+    }
     const base = document?.sourceStamp();
     if (value.kind === 'delete') {
       preview.send({ type: 'avb:hide-pending', path: pathFor(value.node), base });
@@ -84,6 +92,11 @@ export function useEditor(
   // A reorder shows on the canvas at once (electron/preload/frameMove.ts); the page the
   // server renders confirms it, and an action that is not sent or is refused takes it back.
   function move(value: TreeAction, canvasMove: CanvasMove | undefined) {
+    const refusal = clientActionRefusal(getStudioRole(), file, source, value);
+    if (refusal !== undefined) {
+      report(refusal);
+      return;
+    }
     if (canvasMove !== undefined) {
       preview.send({ type: 'avb:optimistic-move', move: canvasMove, base: document?.sourceStamp() });
     }

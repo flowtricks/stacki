@@ -52,6 +52,10 @@ const firstSettings = {
   variables: { version: 1, hiddenFromSuggestions: ['--light-100', '--tint-100'] },
   audits: { version: 1, ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|src="/a.png"', reason: 'Decorative hero' }] },
   roles: { version: 1, defaultRole: 'admin', roles: [{ id: 'admin', name: 'Admin', members: ['owner'] }] },
+  publishDestinations: {
+    version: 1,
+    destinations: [{ id: 'staging', target: { kind: 'github-branch', branch: 'staging' }, buildScript: 'build', beforePublish: [], afterPublish: [] }],
+  },
   publish: {
     ...DEFAULT_PUBLISH_CONFIG,
     defaultTarget: 'hosting',

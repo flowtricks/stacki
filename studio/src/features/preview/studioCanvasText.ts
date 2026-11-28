@@ -23,7 +23,7 @@ export function studioCanvasText(
   file: string,
   document: SharedDocument | undefined,
   nodes: readonly ParserNode[],
-  context: { readonly components: readonly Component[]; readonly selected: string },
+  context: { readonly components: readonly Component[]; readonly selected: string; readonly content?: 'all' | 'page' },
   translate: Translator,
 ): CanvasTextDocument | undefined {
   if (!document?.ready || !file.endsWith('.astro')) {
@@ -46,7 +46,7 @@ export function studioCanvasText(
     nodes,
     projectPath: ROOT,
     loadContent: async (canvas) => [
-      ...(await canvasContentEdits(canvas, translate('shell.canvasText.sharedContent'))),
+      ...(context.content === 'page' ? [] : await canvasContentEdits(canvas, translate('shell.canvasText.sharedContent'))),
       // The page's own frontmatter data: a data module beside the page is Desktop's to write.
       ...(await canvasBoundEdits(
         canvas,
@@ -63,7 +63,7 @@ export function studioCanvasText(
         file: `${ROOT}/${file}`,
         nodes,
         imports: importsOf(source),
-        components: context.components.map(scanComponent),
+        components: context.components.map(componentScanOf),
         relative: (path) => path.slice(ROOT.length + 1),
         read: readComponent,
         // A prop typed on the canvas is written as the props panel writes it.
@@ -96,7 +96,8 @@ function importsOf(source: string) {
   return parsed.editable && 'imports' in parsed.model ? parsed.model.imports : [];
 }
 
-function scanComponent(component: Component): ScanComponent {
+/** A Studio component as the shared canvas tracers read one: under the same stand-in root as the page. */
+export function componentScanOf(component: Component): ScanComponent {
   return {
     name: component.name,
     path: `${ROOT}/${component.file}`,
@@ -106,8 +107,8 @@ function scanComponent(component: Component): ScanComponent {
   };
 }
 
-// A component's template, read from the project, for the props it shows.
-async function readComponent(path: string): Promise<ComponentSource | undefined> {
+/** A component's template, read from the project, for the props and pictures it shows. */
+export async function readComponent(path: string): Promise<ComponentSource | undefined> {
   const file = path.slice(ROOT.length + 1);
   const answer = record(await request(`/studio/api/file?file=${encodeURIComponent(file)}`));
   const parsed = parsePage(string(answer['source'], 2_000_000));

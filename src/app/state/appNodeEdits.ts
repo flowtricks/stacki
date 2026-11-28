@@ -9,6 +9,7 @@ import { gatePlacement, placementNotice } from '../model/placementGate';
 import { useCompileFailureNotice } from './appCompileRecovery';
 import { documentOfPath, placementNodeOf, placementNodeOfItem } from '../../editor/placementCheck';
 import { currentRole } from '../../lib/currentRole';
+import { editingOffFor } from '../../lib/editorGate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { WarmReads } from '../model/componentWarm';
@@ -149,6 +150,11 @@ export function useAddComponent(
   // target: {parentId: string | undefined, index: number} | undefined (append at end)
   const addComponent = useCallback(
     async (componentName: string, target: InsertTarget | undefined) => {
+      const refusedFor = editingOffFor('elements');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const comp = insertables.find((component) => component.path === componentName) ?? insertables.find((component) => component.name === componentName);
       const page = pageStateRef.current.currentPage;
       const projectPath = projectRef.current?.path;
@@ -530,6 +536,11 @@ export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history:
   // what read the loop's item becomes placeholder text (editGestures.ts).
   const moveNode = useCallback(
     (nodeId: string, requested: InsertTarget | undefined) => {
+      const refusedFor = editingOffFor('drag');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
@@ -598,6 +609,11 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
 
   const removeNode = useCallback(
     (nodeId: string) => {
+      const refusedFor = editingOffFor('elements');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
@@ -701,6 +717,11 @@ export function useCopyNode(
 
   const duplicateNode = useCallback(
     (nodeId: string) => {
+      const refusedFor = editingOffFor('elements');
+      if (refusedFor !== undefined) {
+        showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+        return;
+      }
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
         return;
@@ -768,6 +789,11 @@ export function usePasteNode(
   // parent), or at the end of the page. Imports for components in the pasted
   // subtree are added if the target page is missing them (cross-page paste).
   const pasteNode = useCallback(async () => {
+    const refusedFor = editingOffFor('elements');
+    if (refusedFor !== undefined) {
+      showToast(translate('studio.collab.roleCannot', { role: refusedFor }), 'error');
+      return;
+    }
     const clip = nodeClipboardRef.current;
     const state = pageStateRef.current.pageState;
     if (!clip || !state?.editable) {

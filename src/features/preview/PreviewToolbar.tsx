@@ -77,6 +77,16 @@ export function PreviewToolbar(props: PreviewToolbarProps) {
   );
 }
 
+/** The right panel's button on its own, for a role without the rest of the bar whose editor is collapsed. */
+export function InspectorOnlyBar({ inspector }: { readonly inspector: PreviewInspectorActions }) {
+  const translate = useTranslate();
+  return (
+    <ToolbarOverflow items={inspectorItems(inspector, translate)} childrenWidthPxMin={0}>
+      <div className="crumbs" />
+    </ToolbarOverflow>
+  );
+}
+
 function toolbarItems(props: PreviewToolbarProps, translate: Translator): readonly ToolbarItem[] {
   const devices: ToolbarItem = {
     id: 'devices',

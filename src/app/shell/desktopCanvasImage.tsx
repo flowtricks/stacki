@@ -13,6 +13,7 @@ import { projectRelativePath } from '../../lib/projectPath';
 import { imageDecision, traceImage, type ImageTraceContext } from '../model/canvasImageTrace';
 import type { ComponentSource } from '../model/canvasPropSites';
 import { CanvasImagePopup, imageFieldNames, type CanvasImageShown } from './CanvasImagePopup';
+import { editingOffFor } from '../../lib/editorGate';
 
 export interface CanvasImageRequest {
   readonly paths: readonly string[];
@@ -35,7 +36,7 @@ export function useCanvasImagePopup(app: ShellView, renderFields: (fieldNames: r
   const open = useCallback(
     (request: CanvasImageRequest) => {
       const context = traceContext(app);
-      if (context === undefined) {
+      if (context === undefined || editingOffFor('images') !== undefined) {
         return;
       }
       latest.current += 1;

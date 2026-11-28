@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { parsePublishSource, type PublishConfig } from '../../../shared/properties/publishConfig';
+import { deploysFromStacki, parsePublishSource, type PublishConfig } from '../../../shared/properties/publishConfig';
 import type { PublishAvailability } from '../../../shared/properties/publishState';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
@@ -40,8 +40,9 @@ export function usePublishConfiguration(
 
 export function configuredPublishAvailability(availability: PublishAvailability, configuration: Configuration): PublishAvailability {
   if (configuration.kind === 'saved') {
-    if (configuration.config.hosting.provider === 'none') {
-      return availability;
+    if (!deploysFromStacki(configuration.config)) {
+      // A host that deploys from GitHub leaves nothing for Stacki to deploy, whatever the last check saw.
+      return configuration.config.customHosting === undefined ? availability : { ...availability, hosting: 'unconfigured' };
     }
     // Settings can finish saving before the background deployment check catches up.
     if (availability.hosting === 'unconfigured') {

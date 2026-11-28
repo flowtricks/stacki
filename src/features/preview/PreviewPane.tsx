@@ -3,6 +3,7 @@ import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import React, { useSyncExternalStore } from 'react';
 import { canvasDragActive, subscribeCanvasDrag } from '../../editor/canvasDragSession';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
@@ -108,14 +109,18 @@ interface PreviewPaneProps {
   readonly overlayLayer?: ((frame: { readonly rects: RectMap; readonly scale: number }) => React.ReactNode) | undefined;
 }
 
-export default function PreviewPane(props: PreviewPaneProps) {
+export default function PreviewPane(hostProps: PreviewPaneProps) {
+  // A role may have no canvas bar (projectRoles.ts): the canvas is then the ordinary fluid one, in select mode,
+  // with no device keys and no column guide.
+  const bar = !useCurrentRole().editorOff.has('canvasBar');
+  const props: PreviewPaneProps = bar ? hostProps : { ...hostProps, device: 'desktop' };
   const url = props.devUrl && props.route ? props.devUrl + props.route : undefined;
   const runtime = usePreviewRuntime({ ...props, selPath: props.selPath }, url);
   useCanvasText({ document: props.textDocument, frame: runtime.iframeRef, url, ...runtime });
   const interaction = useCanvasInteraction({
     projectKey: props.projectPath,
     url,
-    available: props.device !== 'canvas',
+    available: bar && props.device !== 'canvas',
     frame: runtime.iframeRef,
     post: runtime.post,
     subscribeLoad: runtime.subscribeLoad,
@@ -128,7 +133,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const dimensions = props.dimensions ?? ownDimensions;
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
   const viewKey = [props.projectPath ?? '', props.route ?? '', String(props.refreshKey ?? '')].join('\n');
-  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: true, desktopFramePx, viewKey }, props.onDevice);
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, { deviceShortcuts: bar, desktopFramePx, viewKey }, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
   const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
@@ -136,31 +141,33 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const columnGuide = useColumnGuide({
     projectKey: props.projectPath,
     metrics: runtime.guide,
-    available: props.device !== 'canvas',
+    available: bar && props.device !== 'canvas',
     frame: runtime,
     subject: props.guideSubject,
   });
   return (
     <>
-      <PreviewToolbar
-        breakpoints={breakpoints}
-        crumbs={props.crumbs ?? []}
-        {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
-        activeDevice={sizing.activeDevice}
-        onDevice={sizing.pickDevice}
-        {...(props.device === 'canvas'
-          ? {}
-          : {
-              sizing: {
-                width: sizing.viewport.width,
-                scale: sizing.viewport.scale,
-                onWidth: sizing.setWidth,
-                onFit: () => sizing.pickDevice('desktop'),
-              },
-            })}
-        guide={columnGuide.menu}
-        interaction={interaction}
-      />
+      {bar && (
+        <PreviewToolbar
+          breakpoints={breakpoints}
+          crumbs={props.crumbs ?? []}
+          {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
+          activeDevice={sizing.activeDevice}
+          onDevice={sizing.pickDevice}
+          {...(props.device === 'canvas'
+            ? {}
+            : {
+                sizing: {
+                  width: sizing.viewport.width,
+                  scale: sizing.viewport.scale,
+                  onWidth: sizing.setWidth,
+                  onFit: () => sizing.pickDevice('desktop'),
+                },
+              })}
+          guide={columnGuide.menu}
+          interaction={interaction}
+        />
+      )}
       {/* `dir="ltr"`: the person's own site and the overlays drawn over it never mirror when Stacki is in Arabic or Hebrew. */}
       <div className="preview-frame-wrap" dir="ltr" data-canvas-interactive={interaction.active} ref={sizing.wrapRef}>
         <PreviewContent

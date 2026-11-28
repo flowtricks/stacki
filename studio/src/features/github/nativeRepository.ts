@@ -1,7 +1,7 @@
 import { gitWorkspaceBranch } from '../history/gitWorkspaceContract';
 import { gitWorkspaceContext, gitWorkspaceRun } from '../history/gitWorkspaceObjects';
 import { readGitWorkspace } from '../history/gitWorkspaceStorage';
-import { publishGitWorkspace } from '../history/gitWorkspacePublish';
+import { publishGitWorkspace, importWorkspaceHead } from '../history/gitWorkspacePublish';
 import type { GitHubRepository, RepositoryAccess } from './github';
 import type { RemoteRepository } from './remoteRepository';
 import type { PublishSource } from '../publishing/publishSource';
@@ -39,7 +39,9 @@ export class NativeRepository implements RepositoryAccess {
     if (this.root && workspace) {
       const localParent = gitWorkspaceBranch(workspace).head;
       const local = gitWorkspaceContext(this.root, grant.value.value);
-      const imported = await gitWorkspaceRun(source.git)(['fetch', '--quiet', '--update-shallow', local.directory, localParent]).then(ok, publishFailure);
+      const run = gitWorkspaceRun({ ...source.git, authorization: grant.value.value.token });
+      const remote = `https://github.com/${workspace.repository}.git`;
+      const imported = await importWorkspaceHead(run, local, workspace, remote).then(ok, publishFailure);
       if (!imported.ok) {
         return imported;
       }

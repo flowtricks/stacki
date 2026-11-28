@@ -9,7 +9,7 @@ import { WorkerSetupButton } from './PublishWorker';
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
-import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import './publishing.css';
 
 // The one publish progress popup. Desktop renders it directly and Studio vendors it, so both
@@ -124,9 +124,36 @@ export function publishStatusTitle(state: DesktopPublishState, translate: Transl
     case 'review-open':
       return translate('publish.status.title.review');
     case 'done':
-      return translate('publish.status.title.done');
+      return translate(doneTitle(state));
     case 'failed':
       return translate('publish.status.title.failed');
+  }
+}
+
+/** What finished, in no more words than Stacki can stand behind: a script that ran or a request sent is not a live site. */
+function doneTitle(state: Extract<DesktopPublishState, { kind: 'done' }>): MessageKey {
+  const staging = state.destination === 'staging';
+  switch (state.handoff) {
+    case 'github':
+      return staging ? 'publish.status.title.stagingPushed' : 'publish.status.title.pushed';
+    case 'script':
+      return 'publish.status.title.scriptDone';
+    case 'link':
+      return 'publish.status.title.requestSent';
+    case undefined:
+      return staging ? 'publish.status.title.stagingDone' : 'publish.status.title.done';
+  }
+}
+
+function hostingResult(state: Extract<DesktopPublishState, { kind: 'done' | 'failed' }>): MessageKey {
+  switch (state.handoff) {
+    case 'script':
+      return 'publish.status.title.scriptDone';
+    case 'link':
+      return 'publish.status.requestAccepted';
+    case 'github':
+    case undefined:
+      return state.destination === 'staging' ? 'publish.status.stagingDone' : 'publish.status.hostingDone';
   }
 }
 
@@ -180,14 +207,14 @@ function PublishResults({ state }: { readonly state: DesktopPublishState }) {
         {state.github && (
           <div>
             <PublishProviderIcon provider="github" />
-            <span>{translate('publish.status.githubDone')}</span>
+            <span>{translate(state.destination === 'staging' ? 'publish.status.stagingPushed' : 'publish.status.githubDone')}</span>
             <CheckIcon size={14} />
           </div>
         )}
         {state.hosting && (
           <div>
             <UploadCloudIcon />
-            <span>{translate('publish.status.hostingDone')}</span>
+            <span>{translate(hostingResult(state))}</span>
             <CheckIcon size={14} />
           </div>
         )}

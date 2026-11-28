@@ -52,7 +52,16 @@ function app(id, name, description, opened) {
 }
 
 function clientRole(features) {
-  return { id: 'client', name: 'Client', isAdmin: false, features: new Set(features), appPermissions: {}, pinnedApps: [], componentRules: [] };
+  return {
+    id: 'client',
+    name: 'Client',
+    isAdmin: false,
+    editorOff: new Set(),
+    features: new Set(features),
+    appPermissions: {},
+    pinnedApps: [],
+    componentRules: [],
+  };
 }
 
 async function mount({ apps, storedTab }) {
@@ -287,7 +296,7 @@ test('the role filter and row text', () => {
   assert.equal(palette.canSeePaletteApps(clientRole([])), false);
   const tooMany = Array.from({ length: 51 }, (_, index) => app(`app-${index}`, `App ${index}`, '', opened));
   assert.throws(() => palette.visiblePaletteApps(tooMany, palette.ADMIN_VIEW), /installed apps are bounded/);
-  assert.throws(() => palette.canSeePaletteApps({ id: '', name: '', isAdmin: false, features: new Set() }), /a role has an id/);
+  assert.throws(() => palette.canSeePaletteApps({ id: '', name: '', isAdmin: false, editorOff: new Set(), features: new Set() }), /a role has an id/);
   const [heatmap, seo] = palette.paletteAppItems(apps);
   assert.equal(heatmap.label, 'Heatmap');
   assert.equal(heatmap.sub, 'heatmap Click maps');

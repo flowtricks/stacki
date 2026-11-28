@@ -635,3 +635,39 @@
   border-color: rgba(255, 255, 255, 0.35);
   border-top-color: white;
 }
+
+.publish-settings .publish-label-info {
+  display: flex;
+  align-items: center;
+}
+.publish-settings .publish-add-staging {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+}
+.publish-link-saved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.publish-link-saved > input,
+.publish-link-saved > .publish-link-mask {
+  flex: 1;
+  min-width: 0;
+}
+.publish-settings .publish-link-saved > button {
+  flex: 0 0 auto;
+  min-height: 32px;
+}
+.publish-link-mask {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 12px;
+}

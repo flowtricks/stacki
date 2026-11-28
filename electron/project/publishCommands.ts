@@ -7,17 +7,23 @@ import { checkWorkerReady, withWorkerAccount } from './publishWorkerConfig';
 import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { ok, type Result } from '../../shared/core/result';
 import { netlifyEnvironment, publishEnvironment } from './publishEnvironment';
+import { checkDeployScript } from './publishCustom';
 import { deployNetlify, netlifyBuildPlan } from './publishNetlifyDeploy';
 import { DescribedError } from '../../shared/properties/describedError';
 
 export { publishEnvironment };
 
-export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
+export async function runPublishScripts(
+  root: string,
+  scripts: readonly string[],
+  environment: Readonly<Record<string, string>> = {},
+  withheld: readonly string[] = [],
+): Promise<void> {
   if (scripts.length > PUBLISH_LIMITS.hooksMax) {
     throw new DescribedError(described('publish.command.hooksLimit'));
   }
   for (const script of scripts) {
-    await runPublishCommand(root, { ...scriptCommand(script), environment });
+    await runPublishCommand(root, { ...scriptCommand(script), environment, withheld });
   }
 }
 
@@ -26,6 +32,10 @@ export async function runPublishScripts(root: string, scripts: readonly string[]
  * uses checkWorkerReady, the same check Add Worker ends with, so setup and Publish cannot disagree about a site.
  */
 export async function checkHostingReady(root: string, config: PublishConfig): Promise<Result<void, Described>> {
+  if (config.customHosting?.deploy === 'script') {
+    const script = await checkDeployScript(root, config.customHosting.script);
+    return script.ok ? ok(undefined) : script;
+  }
   if (config.hosting.provider === 'cloudflare-workers') {
     const ready = await checkWorkerReady(root);
     return ready.ok ? ok(undefined) : ready;
@@ -37,7 +47,12 @@ export async function checkHostingReady(root: string, config: PublishConfig): Pr
   return ok(undefined);
 }
 
-export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
+export async function deployHosting(root: string, config: PublishConfig, environment: Readonly<Record<string, string>> = {}): Promise<void> {
+  if (config.customHosting?.deploy === 'script') {
+    // The same contract as the publish hooks: a package.json script by name, never a command from the settings file.
+    await runPublishScripts(root, [config.customHosting.script], environment);
+    return;
+  }
   if (config.hosting.provider === 'none') {
     throw new DescribedError(described('error.publish.chooseHosting'));
   }
@@ -74,8 +89,12 @@ export async function runPublishCommandOutput(root: string, command: ExecutableC
 
 async function runPublishProcess(root: string, command: ExecutableCommand, output: 'keep' | 'discard'): Promise<string> {
   const resolved = resolvePublishExecutable(root, command);
+  const inherited = command.executable === 'netlify' ? netlifyEnvironment() : publishEnvironment();
+  for (const name of command.withheld ?? []) {
+    delete inherited[name];
+  }
   const environment = {
-    ...(command.executable === 'netlify' ? netlifyEnvironment() : publishEnvironment()),
+    ...inherited,
     ...command.environment,
     CI: 'true',
     NO_COLOR: '1',

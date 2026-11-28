@@ -60,6 +60,7 @@ export const messages = {
   'studio.collab.sessionChanged': '工作階段已變更。請重新選取元素。',
   'studio.collab.sessionExpired': '你的工作階段已過期，或儲存庫存取權限已變更。你的本機編輯已保留。請重新登入。',
   'studio.collab.sourceProtected': '在 Client 模式下，元件原始碼受到保護。',
+  'studio.collab.roleCannot': '你的角色（{role}）無法執行此操作。請向管理員要求存取權。',
   'studio.collab.takeOver': '接管',
   'studio.component.packageReadOnly': '套件元件為唯讀。請在頁面上編輯實例屬性。',
   'studio.components.createInSource': '請在專案原始碼中建立元件範本。',

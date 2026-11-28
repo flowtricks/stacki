@@ -32,6 +32,7 @@ import { parsePseudoLayerTarget, type PseudoLayerTarget } from '../../../shared/
 import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
 import { leftTabAfterCanvasSelection } from '../model/canvasSelectionTab';
+import { editingOffFor } from '../../lib/editorGate';
 import { canvasLandingFor, dynamicEntryIndexOf } from '../model/previewPage';
 import PreviewPane from '../../features/preview/PreviewPane';
 import SaveConflictNotice from '../SaveConflictNotice';
@@ -321,7 +322,10 @@ export function selectCanvasPath(
     }
     // Code and Apps stay open (see leftTabAfterCanvasSelection); every
     // other panel gives way to the navigator so the selected row is visible.
-    app.setLeftTab(leftTabAfterCanvasSelection);
+    // Without the Navigator there is no row to show, so the open panel stays.
+    if (editingOffFor('navigator') === undefined) {
+      app.setLeftTab(leftTabAfterCanvasSelection);
+    }
     app.setRevealTick((count) => count + 1);
   };
   if (atCanvasPage(app)) {

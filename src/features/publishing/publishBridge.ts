@@ -1,5 +1,5 @@
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import type { PublishTarget } from '../../../shared/properties/publishConfig';
+import type { PublishRequestTarget } from '../../../shared/properties/publishDestinations';
 import { parseDesktopPublishState } from '../../../shared/properties/publishState';
 import { parsePublishAvailability, type PublishAvailability } from '../../../shared/properties/publishState';
 import type { Result } from '../../../shared/core/result';
@@ -29,7 +29,7 @@ export async function readPublishAvailability(projectPath: string): Promise<Resu
   return { ok: true, value: parsePublishAvailability(response) };
 }
 
-export async function startPublish(projectPath: string, target: PublishTarget, commitMessage?: string) {
+export async function startPublish(projectPath: string, target: PublishRequestTarget, commitMessage?: string) {
   const input = parseIpcPayload('publish:start', { projectPath, target, commitMessage });
   return parseDesktopPublishState(await window.avb.publishStart(input));
 }
