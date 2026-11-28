@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -59,10 +60,11 @@ const check = (what, condition, detail) => {
   });
   Object.defineProperty(global, 'navigator', { value: dom.window.navigator, configurable: true });
   const bridgeCalls = [];
+  let folderAnswer = { kind: 'astro', projectPath: '/sites/other' };
   dom.window.avb = {
-    openProjectDialog: () => {
-      bridgeCalls.push('openProjectDialog');
-      return Promise.resolve({ canceled: false, projectPath: '/sites/other' });
+    openSiteDialog: () => {
+      bridgeCalls.push('openSiteDialog');
+      return Promise.resolve(folderAnswer);
     },
     closeProject: (next) => {
       bridgeCalls.push(`closeProject:${next}`);
@@ -115,9 +117,36 @@ const check = (what, condition, detail) => {
   });
   check(
     'Open another project asks for a folder, then closes onto it',
-    bridgeCalls.join(',') === 'openProjectDialog,closeProject:/sites/other',
+    bridgeCalls.join(',') === 'openSiteDialog,closeProject:/sites/other',
     bridgeCalls.join(','),
   );
+  // A folder with websites inside: the screen asks which, with a dialog host of its own.
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
+  folderAnswer = {
+    kind: 'nestedSites',
+    folderPath: '/sites/mono',
+    sites: [{ projectPath: '/sites/mono/apps/web', relative: 'apps/web', name: 'web' }],
+    searched: 'all',
+    instead: { kind: 'nothing' },
+  };
+  bridgeCalls.length = 0;
+  await act(async () => {
+    document.querySelectorAll('.recovery-actions button')[1].click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const question = document.querySelector('.nested-sites-dialog');
+  check('a website inside the folder is asked about', question !== null && bridgeCalls.join(',') === 'openSiteDialog', bridgeCalls.join(','));
+  await act(async () => question?.querySelector('.choice-dialog-option').click());
+  // Each poll lets React apply what is pending: the dialog answers once its closing has run.
+  await waitFor({
+    what: 'the chosen website to be opened',
+    read: async () => {
+      await act(async () => {});
+      return bridgeCalls.length;
+    },
+    until: (count) => count === 2,
+  });
+  check('and the answer is what opens', bridgeCalls.join(',') === 'openSiteDialog,closeProject:/sites/mono/apps/web', bridgeCalls.join(','));
   await act(async () => root.unmount());
 
   // A healthy tree is untouched.

@@ -152,6 +152,7 @@ export const messages = {
   'git.error.deleteTrunk': '«{branch}» es la rama a la que todo vuelve. Eliminarla dejaría el proyecto sin su línea principal de trabajo.',
   'git.error.deleteWorktree': '«{branch}» está activa en otro worktree ({path}). Ciérralo o cámbialo primero.', // review
   'git.error.detachedHead': 'No estás en una rama, así que no hay nada que enviar ni traer. Cambia primero a una rama.',
+  'git.error.folderNotInVersion': 'La carpeta de este sitio no existía en esa versión, así que no hay nada que mostrar ni restaurar.',
   'git.error.identityMissing': 'Git aún no sabe quién eres. Define tu nombre y correo (git config --global user.name y user.email) y guarda de nuevo.',
   'git.error.locked':
     'Otra operación de Git sigue en curso en este proyecto. Espera un momento e inténtalo de nuevo; si nunca termina, cierra otras herramientas de Git.',

@@ -15,8 +15,10 @@ import {
   parseAstroCopyReply,
   parseAstroCopyRequest,
   parseSiteFolderChoice,
+  NESTED_SITE_LIMITS,
   shortenLocation,
 } from '#dist/shared/ipc/astroCopy.js';
+import { parseCloneResult } from '#dist/shared/ipc/githubRepository.js';
 import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 
 const request = { sourcePath: '/Users/me/Sites/shop', parentPath: '/Users/me/Sites', name: 'shop-astro' };
@@ -87,10 +89,34 @@ test('every folder choice parses, and an unknown kind or a relative path is refu
   assert.deepEqual(parseSiteFolderChoice({ kind: 'canceled' }), { kind: 'canceled' });
   assert.deepEqual(parseSiteFolderChoice({ kind: 'astro', projectPath: '/s/site' }), { kind: 'astro', projectPath: '/s/site' });
   assert.deepEqual(parseSiteFolderChoice(plain), plain);
-  assert.deepEqual(parseSiteFolderChoice({ kind: 'notWebsite', folderPath: '/s/notes' }), { kind: 'notWebsite', folderPath: '/s/notes' });
+  const neither = { kind: 'notWebsite', folderPath: '/s/notes', searched: 'part' };
+  assert.deepEqual(parseSiteFolderChoice(neither), neither);
+  assert.throws(() => parseSiteFolderChoice({ kind: 'notWebsite', folderPath: '/s/notes' }), /SiteSearchReach/);
   assert.throws(() => parseSiteFolderChoice({ kind: 'astro', projectPath: 'site' }), /absolute/);
   assert.throws(() => parseSiteFolderChoice({ ...plain, name: 'a/b' }), /Name/);
   assert.throws(() => parseSiteFolderChoice({ kind: 'error' }), /unknown value/);
+});
+
+test('websites inside a folder parse with their bounds, and a path outside the folder is refused', () => {
+  const found = { projectPath: '/s/mono/apps/web', relative: 'apps/web', name: 'web' };
+  const unnamed = { projectPath: '/s/mono/site', relative: 'site', name: undefined };
+  const nested = { kind: 'nestedSites', folderPath: '/s/mono', sites: [found, unnamed], searched: 'part', instead: { kind: 'nothing' } };
+  assert.deepEqual(parseSiteFolderChoice(nested), nested);
+  const copy = { ...nested, instead: { kind: 'plainWebsite', offer: { sourcePath: '/s/mono', parentPath: '/s', name: 'mono-astro', homePath: '/s' } } };
+  assert.deepEqual(parseSiteFolderChoice(copy), copy);
+  assert.deepEqual(parseSiteFolderChoice({ ...nested, instead: { kind: 'openFolder' } }), { ...nested, instead: { kind: 'openFolder' } });
+  const refused = (change: Readonly<Record<string, unknown>>, message: RegExp) => assert.throws(() => parseSiteFolderChoice({ ...nested, ...change }), message);
+  refused({ sites: [] }, /at least one/);
+  refused({ sites: Array.from({ length: NESTED_SITE_LIMITS.sitesMax + 1 }, () => found) }, /exceeds limit/);
+  refused({ sites: [{ ...found, projectPath: '/s/other' }] }, /inside the picked folder/);
+  refused({ sites: [{ ...found, projectPath: '/s/mono' }] }, /inside the picked folder/);
+  refused({ sites: [{ ...found, projectPath: '/s/mono-old/web' }] }, /inside the picked folder/);
+  refused({ sites: [{ ...found, relative: '../web' }] }, /below the picked one/);
+  refused({ sites: [{ ...found, name: 'x'.repeat(NESTED_SITE_LIMITS.nameCharsMax + 1) }] }, /package name/);
+  refused({ searched: 'some' }, /SiteSearchReach/);
+  refused({ instead: { kind: 'delete' } }, /unknown value/);
+  assert.deepEqual(parseCloneResult({ canceled: false, nested }), { canceled: false, nested });
+  assert.throws(() => parseCloneResult({ canceled: false, nested: { kind: 'astro', projectPath: '/s/mono' } }), /unknown value/);
 });
 
 test('a check reply is a target or a known problem', () => {

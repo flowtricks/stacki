@@ -1111,10 +1111,11 @@ Failure results may carry an optional `messageRef` (`{ key, params? }`, `parseMe
 
 ## Astro copy of a plain website (`shared/ipc/astroCopy.ts`)
 
-The Welcome screen's "Open from folder" calls `project:openSiteDialog` (no payload): main shows the folder
-picker and answers `SiteFolderChoice`, one of `canceled`, `astro` (open it, as `project:openDialog` did),
+The Welcome screen's "Open from folder", File > Open Project and the recovery screen call
+`project:openSiteDialog` (no payload): main shows the folder picker and answers `SiteFolderChoice`, one of
+`canceled`, `astro` (open it), `nestedSites` (websites inside the folder, below),
 `plainWebsite` (the folder, its parent, the suggested `<folder>-astro` name and the home folder for display)
-or `notWebsite` (a toast). Detection (`electron/project/plainSiteScan.ts`) is `isAstroProject` or a
+or `notWebsite` (a toast; `searched` is `part` when the search inside the folder stopped at a bound). Detection (`electron/project/plainSiteScan.ts`) is `isAstroProject` or a
 `src/pages/*.astro`, else at least one `.html`/`.htm` page in the folder's top two levels, skipping installed
 packages, build output, vendored code and hidden folders; it reads names only, bounded by depth and entries
 (`PLAIN_SITE_LIMITS`), and never follows a link to a folder or out of the picked folder.
@@ -1140,6 +1141,32 @@ unquoted braced values, `is:inline` scripts and slots, `is:global` styles, a lea
 written into a `mkdtemp` sibling and renamed into place after the target is checked missing again; any
 failure removes that temporary folder and nothing else. A failed install keeps the finished copy.
 
+## Websites inside a picked folder (`NestedSitesChoice`, `electron/project/nestedSiteScan.ts`)
+
+A folder that opens as a project answers `astro` at once and is never searched. The one exception is a folder
+that opens only because its package.json lists astro: no config, no `src/pages`, no script that runs a site from
+there (a workspace root, or a package that builds on astro). It is searched, and stays `astro` unless a site is
+found. A folder that does not open is searched before it is called a plain website or neither. `git:clone`
+asks the same question and may answer `nested` with the same choice.
+
+The search goes by what folders hold, never by their names or a workspace file's globs: a site has an Astro
+config, or `.astro` pages directly in `src/pages`, or a package.json that lists astro beside a `src/pages`
+folder, or installs astro and runs `astro dev`, `build` or `preview` in place (no `--root`). Depending on astro
+alone is not enough. It skips installed packages and hidden folders, looks at build-output and `public` folders
+without reading below them, does not search inside a found site, never follows a link to a folder, and does not
+walk the home folder or a folder that holds it. It goes level by level, yields after each folder, and is bounded
+by depth, folders, entries and time (`NESTED_SCAN_LIMITS`) and by `NESTED_SITE_LIMITS.sitesMax` results.
+Folder names such as `examples` or `fixtures` only move a site down the list.
+
+The choice holds the picked folder, the sites (absolute path, `/`-separated path below the folder, package name),
+`searched` and `instead`: what the folder offered by itself (`openFolder`, `plainWebsite` with the copy offer, or
+`nothing`). Nothing opens until the person picks one (`src/features/welcome/nestedSites.ts`).
+
+A site in a workspace may have no `node_modules/.bin/astro` of its own. Preview, old-version preview and
+thumbnails ask the site's folder first, then the folders its workspace installs into
+(`electron/lib/installFolders.ts`), never above the repository or workspace and never the home folder or above.
+Yarn Plug'n'Play has no command to run there; the preview says so.
+
 ## Folders from outside the app (`shared/ipc/folderOpen.ts`)
 
 A folder dropped on the window, dropped on the app's icon (macOS `open-file`, which a Dock drop sends only in a
@@ -1149,7 +1176,7 @@ gets the answer "Open from folder" gives: `FolderOpenChoice` is `SiteFolderChoic
 `rejected` with `missing`, `notFolder` or `unreadable`. Main decides (`electron/project/folderOpen.ts`): the path
 is absolute, within `BOUNDARY_LIMITS.pathLengthMax` and NUL-free, `lstat`, `realpath` and `stat` succeed (a link
 opens its target, a dangling link is `missing`, a loop is `unreadable`), and it is a directory; then
-`classifySiteFolder` classifies it.
+`siteFolderChoice` classifies it. Answers go out one at a time, in the order the folders arrived.
 
 `project:inspectFolder` (a path) answers for a window drop; the renderer names the path from the drag through the
 preload's `getFilePath` and never opens it unanswered. Folders from the icon and the command line wait in main's

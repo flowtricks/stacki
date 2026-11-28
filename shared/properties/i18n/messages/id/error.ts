@@ -135,4 +135,6 @@ export const messages = {
   'error.terminal.outsideProject': 'Terminal hanya dapat dibuka di dalam proyek saat ini.',
   'error.thumbnails.devServerSlow': 'server dev tidak mulai tepat waktu',
   'error.thumbnails.noDependencies': 'Proyek ini belum memiliki dependensi yang terinstal.',
+  'error.project.yarnPlugAndPlay':
+    'Paket proyek ini dipasang dengan Yarn Plug’n’Play, yang belum bisa dipratinjau Stacki. Setel nodeLinker ke node-modules di .yarnrc.yml, pasang ulang, lalu buka kembali.',
 } as const satisfies CatalogOf<MessageKey>;

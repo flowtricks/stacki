@@ -14,6 +14,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { isAstroProject } from './projectFiles';
+import { readSiteManifest } from './nestedSiteScan';
+import { ASTRO_CONFIG_FILES } from '../../shared/properties/astroSourceDirectory';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 
 export const PLAIN_SITE_LIMITS = {
@@ -71,12 +73,36 @@ export interface ListSiteOptions {
   readonly purpose: 'detect' | 'copy';
 }
 
-/** What the folder at `directory` is. Reads names and sizes only, besides the package.json and config check the open path already uses. */
+/** What the folder at `directory` is by itself. Reads names and sizes only, besides the package.json and config check the open path already uses. */
 export function classifySiteFolder(directory: string): SiteFolderKind {
   assert(path.isAbsolute(directory), 'classifySiteFolder: an absolute folder');
-  if (isAstroProject(directory) || hasAstroPages(directory)) {
-    return 'astro';
+  return opensAsAstro(directory) ? 'astro' : classifyPlainFolder(directory);
+}
+
+/** Whether the folder opens as an Astro project. */
+export function opensAsAstro(directory: string): boolean {
+  return isAstroProject(directory) || hasAstroPages(directory);
+}
+
+/**
+ * Whether the only thing that makes this folder open as a project is `astro` among its package.json's dependencies:
+ * no config, no `src/pages`, and no script that runs a site from here. A workspace's root looks like this, and so
+ * does a package that merely builds on astro; the website is then a folder inside (folderOpen.ts looks for it). A
+ * folder with a config or pages answers after one or two existence checks, with nothing more read.
+ */
+export function onlyListsAstro(directory: string): boolean {
+  if (ASTRO_CONFIG_FILES.some((file) => fs.existsSync(path.join(directory, file)))) {
+    return false;
   }
+  if (fs.existsSync(path.join(directory, 'src', 'pages'))) {
+    return false;
+  }
+  return readSiteManifest(directory)?.runsAstro !== true;
+}
+
+/** What a folder that is no Astro project is: a plain website to copy, or neither. */
+export function classifyPlainFolder(directory: string): 'plainWebsite' | 'notWebsite' {
+  assert(path.isAbsolute(directory), 'classifyPlainFolder: an absolute folder');
   const listing = listSiteFiles(directory, { depthMax: PLAIN_SITE_LIMITS.detectDepthMax, entriesMax: PLAIN_SITE_LIMITS.detectEntriesMax, purpose: 'detect' });
   return classifyListing(listing);
 }

@@ -154,6 +154,7 @@ export const messages = {
   'git.error.deleteTrunk': '« {branch} » est la branche à laquelle tout revient. La supprimer laisserait le projet sans sa ligne de travail principale.',
   'git.error.deleteWorktree': '« {branch} » est extraite dans un autre worktree ({path}). Fermez-le ou changez-en d’abord.', // review
   'git.error.detachedHead': 'Vous n’êtes sur aucune branche : il n’y a donc rien à envoyer ni à récupérer. Passez d’abord à une branche.',
+  'git.error.folderNotInVersion': 'Le dossier de ce site n’existait pas dans cette version : il n’y a rien à afficher ni à restaurer.',
   'git.error.identityMissing':
     'Git ne sait pas encore qui vous êtes. Définissez votre nom et votre e-mail (git config --global user.name et user.email), puis enregistrez à nouveau.',
   'git.error.locked':

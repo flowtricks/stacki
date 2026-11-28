@@ -157,7 +157,6 @@ function projectBridge() {
     restoreStudio: invoke('studio:restore'),
 
     // Project:
-    openProjectDialog: invoke('project:openDialog'),
     createAstroProject: invoke('project:createAstro'),
     parentDialog: invoke('project:parentDialog'),
     openSiteDialog: invoke('project:openSiteDialog'),

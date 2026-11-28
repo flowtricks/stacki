@@ -21,6 +21,13 @@ export const ASTRO_COPY_LIMITS = {
   reportPathsMax: 50,
 } as const satisfies Record<string, number>;
 
+export const NESTED_SITE_LIMITS = {
+  /** Astro sites one answer names. A longer list is not one to choose from; the answer then says it covers part of the folder. */
+  sitesMax: 24,
+  /** Characters of a site's `package.json` name, npm's own limit. */
+  nameCharsMax: 214,
+} as const satisfies Record<string, number>;
+
 /** What the default name adds to the picked folder's name. */
 export const ASTRO_COPY_SUFFIX = '-astro';
 
@@ -54,21 +61,54 @@ export interface AstroCopyRequest {
   readonly name: string;
 }
 
+/** What the "Make an Astro copy" dialog starts from. */
+export interface AstroCopyOffer {
+  readonly sourcePath: string;
+  /** The picked folder's parent: where the copy goes unless the person chooses elsewhere. */
+  readonly parentPath: string;
+  /** `<folder>-astro`, the suggested name. */
+  readonly name: string;
+  /** The home folder, so a location can be shown as `~/…`. */
+  readonly homePath: string;
+}
+
+/** Whether the search for sites inside a folder read all of it, or stopped at one of its bounds. */
+export const SITE_SEARCH_REACHES = ['all', 'part'] as const;
+export type SiteSearchReach = (typeof SITE_SEARCH_REACHES)[number];
+
+/** An Astro site found inside the picked folder. */
+export interface NestedSite {
+  readonly projectPath: string;
+  /** The site's folder below the picked one, `/`-separated. */
+  readonly relative: string;
+  /** Its `package.json` name, when it has one. */
+  readonly name: string | undefined;
+}
+
+/**
+ * What the picked folder itself would have been without the sites inside it, still on offer so nothing the folder
+ * could do before is lost: open it as it is, copy it as a plain website, or nothing.
+ */
+export type NestedSitesInstead =
+  { readonly kind: 'openFolder' } | { readonly kind: 'plainWebsite'; readonly offer: AstroCopyOffer } | { readonly kind: 'nothing' };
+
+/** The picked folder is not a website's own folder, but Astro sites sit inside it. The person chooses; nothing opens unasked. */
+export interface NestedSitesChoice {
+  readonly kind: 'nestedSites';
+  readonly folderPath: string;
+  /** At least one, at most `NESTED_SITE_LIMITS.sitesMax`, in the order they are offered. */
+  readonly sites: readonly NestedSite[];
+  readonly searched: SiteSearchReach;
+  readonly instead: NestedSitesInstead;
+}
+
 /** What the picked folder turned out to be. */
 export type SiteFolderChoice =
   | { readonly kind: 'canceled' }
   | { readonly kind: 'astro'; readonly projectPath: string }
-  | {
-      readonly kind: 'plainWebsite';
-      readonly sourcePath: string;
-      /** The picked folder's parent: where the copy goes unless the person chooses elsewhere. */
-      readonly parentPath: string;
-      /** `<folder>-astro`, the suggested name. */
-      readonly name: string;
-      /** The home folder, so a location can be shown as `~/…`. */
-      readonly homePath: string;
-    }
-  | { readonly kind: 'notWebsite'; readonly folderPath: string };
+  | ({ readonly kind: 'plainWebsite' } & AstroCopyOffer)
+  | NestedSitesChoice
+  | { readonly kind: 'notWebsite'; readonly folderPath: string; readonly searched: SiteSearchReach };
 
 export type AstroCopyCheck = Result<{ readonly targetPath: string }, AstroCopyTargetProblem>;
 
@@ -213,6 +253,86 @@ export function parseAstroCopyRequest(input: unknown): AstroCopyRequest {
   };
 }
 
+function parseAstroCopyOffer(fields: Readonly<Record<string, unknown>>): AstroCopyOffer {
+  const name = parseAstroCopyName(fields['name']);
+  const homePath = pathText(fields['homePath']);
+  return { sourcePath: parseAbsolutePath(fields['sourcePath']), parentPath: parseAbsolutePath(fields['parentPath']), name, homePath };
+}
+
+function parseSiteSearchReach(input: unknown): SiteSearchReach {
+  const reach = SITE_SEARCH_REACHES.find((known) => known === input);
+  if (reach === undefined) {
+    throw new Error('SiteSearchReach: unknown value');
+  }
+  return reach;
+}
+
+export function parseNestedSitesChoice(input: unknown): NestedSitesChoice {
+  const fields = record(input);
+  if (fields['kind'] !== 'nestedSites') {
+    throw new Error('NestedSitesChoice.kind: unknown value');
+  }
+  const folderPath = parseAbsolutePath(fields['folderPath']);
+  const sites = list(parseNestedSite)(fields['sites']);
+  if (sites.length === 0) {
+    throw new Error('NestedSitesChoice.sites: expected at least one site');
+  }
+  if (sites.length > NESTED_SITE_LIMITS.sitesMax) {
+    throw new Error('NestedSitesChoice.sites: exceeds limit');
+  }
+  if (sites.some((site) => !isBelow(folderPath, site.projectPath))) {
+    throw new Error('NestedSitesChoice.sites: expected folders inside the picked folder');
+  }
+  return {
+    kind: 'nestedSites',
+    folderPath,
+    sites,
+    searched: parseSiteSearchReach(fields['searched']),
+    instead: parseNestedSitesInstead(fields['instead']),
+  };
+}
+
+// Both paths are absolute and normalized already, so "below" is a prefix that ends at a separator.
+function isBelow(folder: string, candidate: string): boolean {
+  if (candidate.length <= folder.length) {
+    return false;
+  }
+  if (!candidate.startsWith(folder)) {
+    return false;
+  }
+  const boundary = folder.endsWith('/') || folder.endsWith('\\') ? folder.charAt(folder.length - 1) : candidate.charAt(folder.length);
+  return boundary === '/' || boundary === '\\';
+}
+
+function parseNestedSite(input: unknown): NestedSite {
+  const fields = record(input);
+  const relative = pathText(fields['relative']);
+  if (relative.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw new Error('NestedSite.relative: expected a folder below the picked one');
+  }
+  const name = fields['name'] === undefined ? undefined : text(fields['name']);
+  if (name !== undefined) {
+    if (name.length === 0 || name.length > NESTED_SITE_LIMITS.nameCharsMax) {
+      throw new Error('NestedSite.name: expected a package name');
+    }
+  }
+  return { projectPath: parseAbsolutePath(fields['projectPath']), relative, name };
+}
+
+function parseNestedSitesInstead(input: unknown): NestedSitesInstead {
+  const fields = record(input);
+  const kind = fields['kind'];
+  switch (kind) {
+    case 'openFolder':
+    case 'nothing':
+      return { kind };
+    case 'plainWebsite':
+      return { kind, offer: parseAstroCopyOffer(record(fields['offer'])) };
+    default:
+      throw new Error('NestedSitesChoice.instead: unknown value');
+  }
+}
+
 export function parseSiteFolderChoice(input: unknown): SiteFolderChoice {
   const fields = record(input);
   const kind = fields['kind'];
@@ -221,13 +341,12 @@ export function parseSiteFolderChoice(input: unknown): SiteFolderChoice {
       return { kind };
     case 'astro':
       return { kind, projectPath: parseAbsolutePath(fields['projectPath']) };
-    case 'plainWebsite': {
-      const name = parseAstroCopyName(fields['name']);
-      const homePath = pathText(fields['homePath']);
-      return { kind, sourcePath: parseAbsolutePath(fields['sourcePath']), parentPath: parseAbsolutePath(fields['parentPath']), name, homePath };
-    }
+    case 'plainWebsite':
+      return { kind, ...parseAstroCopyOffer(fields) };
+    case 'nestedSites':
+      return parseNestedSitesChoice(fields);
     case 'notWebsite':
-      return { kind, folderPath: parseAbsolutePath(fields['folderPath']) };
+      return { kind, folderPath: parseAbsolutePath(fields['folderPath']), searched: parseSiteSearchReach(fields['searched']) };
     default:
       throw new Error('SiteFolderChoice.kind: unknown value');
   }

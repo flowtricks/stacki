@@ -11,7 +11,7 @@ import * as thumbs from '../project/thumbs';
 import { sameFilesystemPath } from '../lib/platform';
 import { createSerialQueue } from '../lib/serialQueue';
 import { findFreePort, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
-import { hasDependencies, localAstroBin } from '../project/projectFiles';
+import { hasDependencies, localAstroBin, resolveAstroBin } from '../project/projectFiles';
 import { serverAlive } from '../preview/devServerChecks';
 import { imageCacheConfigArgs } from '../preview/imageCacheConfig';
 import type { DevServers } from './devServers';
@@ -127,7 +127,8 @@ export function registerThumbnailHandlers({
 // A dev server of the project's own, for one capture: the canvas's server is
 // left alone, and the temporary one is stopped however the capture ends.
 async function withTemporaryServer(projectPath: string, signal: AbortSignal, capture: (url: string) => ReturnType<typeof thumbs.capture>) {
-  const localBin = localAstroBin(projectPath);
+  // With nothing found the spawn fails and says so, as it did when only the project's own folder was asked.
+  const localBin = resolveAstroBin(projectPath) ?? localAstroBin(projectPath);
   const port = await findFreePort(4400 + Math.floor(Math.random() * 200));
   if (signal.aborted) {
     return { ok: false as const, error: 'skipped' };

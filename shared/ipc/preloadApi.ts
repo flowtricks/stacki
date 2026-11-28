@@ -25,7 +25,6 @@ interface InvokeChannels {
   readonly upgradeStudio: 'studio:upgrade';
   readonly studioUpgradeCheck: 'studio:upgradeCheck';
   readonly restoreStudio: 'studio:restore';
-  readonly openProjectDialog: 'project:openDialog';
   readonly createAstroProject: 'project:createAstro';
   readonly parentDialog: 'project:parentDialog';
   readonly openSiteDialog: 'project:openSiteDialog';

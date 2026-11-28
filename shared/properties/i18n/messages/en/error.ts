@@ -135,6 +135,8 @@ export const messages = {
   'error.terminal.outsideProject': 'Terminal can only open inside the current project.',
   'error.thumbnails.devServerSlow': 'the dev server did not start in time',
   'error.thumbnails.noDependencies': 'This project has no dependencies installed yet.',
+  'error.project.yarnPlugAndPlay':
+    'This project’s packages were installed with Yarn Plug’n’Play, which Stacki can’t preview yet. Set nodeLinker to node-modules in .yarnrc.yml, install again and reopen.',
 } as const satisfies CatalogOf<`error.${string}`>;
 
 export type MessageKey = keyof typeof messages;

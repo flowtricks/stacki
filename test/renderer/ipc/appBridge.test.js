@@ -11,9 +11,6 @@ const loadRenderer = require('../../helpers/rendererModule');
 const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 
 const bridgeModule = loadRenderer('src/ipc/appBridge.ts');
-// A legacy bridge answered a cancelled dialog with null; the parser still reads it as a
-// cancellation, so the stub sends null as JSON would carry it.
-const legacyCancel = JSON.parse('null');
 
 test('App bridge preserves validated lifecycle and write operations', async () => {
   const calls = [];
@@ -24,7 +21,6 @@ test('App bridge preserves validated lifecycle and write operations', async () =
         calls.push(['start', payload]);
         return { url: 'http://localhost:4321' };
       },
-      openProjectDialog: async () => legacyCancel,
       copySelection: async (payload) => {
         calls.push(['copy', payload]);
         return { ok: true, count: 2 };
@@ -45,7 +41,6 @@ test('App bridge preserves validated lifecycle and write operations', async () =
     trailingSlash: '',
     url: 'http://localhost:4321',
   });
-  assert.deepEqual(await bridgeModule.openProject(), { canceled: true });
   assert.equal(await bridgeModule.copyEditorSelection('/project', ['page|n1']), true);
   await bridgeModule.writeProjectFile('src', '/project', 'src/data.ts', 'export {};');
   await bridgeModule.writeProjectFile('public', '/project', 'data.txt', 'value');

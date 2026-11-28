@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '“{branch}” é o branch para o qual tudo volta. Excluí-lo deixaria o projeto sem sua linha principal de trabalho.',
   'git.error.deleteWorktree': '“{branch}” está em uso em outro worktree ({path}). Feche ou troque esse primeiro.', // review
   'git.error.detachedHead': 'Você não está em nenhum branch, então não há nada para enviar ou puxar. Mude primeiro para um branch.',
+  'git.error.folderNotInVersion': 'A pasta deste site não existia nessa versão, então não há o que mostrar nem restaurar.',
   'git.error.identityMissing': 'O Git ainda não sabe quem você é. Defina seu nome e e-mail (git config --global user.name e user.email) e salve de novo.',
   'git.error.locked':
     'Outra operação do Git ainda está em andamento neste projeto. Aguarde um instante e tente de novo; se ela nunca terminar, feche outras ferramentas do Git.',

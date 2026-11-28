@@ -9,7 +9,6 @@ import { parseAstroCopyCheck, parseAstroCopyReply, parseSiteFolderChoice, type A
 import { parseFolderOpenChoice, parseFolderOpenChoices, type FolderOpenChoice } from '../../../shared/ipc/folderOpen';
 
 export type RecentProject = IpcResults['recents:list'][number];
-export type ProjectDialog = IpcResults['project:openDialog'];
 export type ParentDialog = { readonly canceled: true } | { readonly canceled: false; readonly parentPath: string };
 export type ProjectTemplate = 'basics' | 'blog' | 'starlight' | 'minimal';
 
@@ -42,17 +41,6 @@ export function parseRefreshThumb(input: unknown): IpcResults['recents:refreshTh
     return { ok: true, ...common };
   }
   return { ok: false, error: text(value['error']), ...common };
-}
-
-export function parseProjectDialog(input: unknown): ProjectDialog {
-  const value = record(input);
-  if (boolean(value['canceled'])) {
-    return { canceled: true };
-  }
-  if (value['error'] !== undefined) {
-    return { canceled: false, error: text(value['error']) };
-  }
-  return { canceled: false, projectPath: pathText(value['projectPath']) };
 }
 
 export function parseParentDialog(input: unknown): ParentDialog {

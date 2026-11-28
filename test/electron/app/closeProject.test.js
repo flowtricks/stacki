@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
 const { readFolderSource, readSource } = require('../../helpers/sourceText.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -86,7 +87,7 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   // is what leaving a project actually is.
   const closed = [];
   const opened = [];
-  let dialogAnswer = { projectPath: '/projects/next' };
+  let dialogAnswer = { kind: 'astro', projectPath: '/projects/next' };
   const menu = new Map();
   const noop = async () => undefined;
   const bridge = new Proxy(
@@ -95,7 +96,7 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
         menu.set(channel, callback);
         return () => menu.delete(channel);
       },
-      openProjectDialog: async () => dialogAnswer,
+      openSiteDialog: async () => dialogAnswer,
       closeProject: async (next) => {
         closed.push(next);
         return { ok: true };
@@ -124,6 +125,9 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   global.avb = bridge;
   // Starting the window over is main's half of the same act, so what the app
   // does here is ask — see the source checks at the end for the rest.
+
+  // The question about websites inside a folder is a popup: after the other stubs, so reduced motion holds.
+  require('../../helpers/popupDom').installPopupDOM(dom.window);
 
   const React = require('react');
   const { createRoot } = require('react-dom/client');
@@ -174,16 +178,41 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   // --- switching to another one ---------------------------------------------------------
   // The reload is what lets go, so the project being opened has to be handed
   // over BEFORE it — main holds it for the window that comes back.
-  dialogAnswer = { projectPath: '/projects/third' };
+  dialogAnswer = { kind: 'astro', projectPath: '/projects/third' };
   await fire('openProject');
   check('switching lets the old project go', closed.length === 2, JSON.stringify(closed));
   check('and hands over the one to open next', closed[1] === '/projects/third', JSON.stringify(closed));
   check('without opening it in the window that is going away', !opened.includes('/projects/third'), opened.join());
 
   // --- a dialog nobody answered ----------------------------------------------------------
-  dialogAnswer = { canceled: true };
+  dialogAnswer = { kind: 'canceled' };
   await fire('openProject');
   check('cancelling the picker leaves the project alone', closed.length === 2, JSON.stringify(closed));
+
+  // --- a folder with websites inside it ----------------------------------------------------
+  // The menu asks what "Open from folder" asks, and nothing moves until the person chooses.
+  dialogAnswer = {
+    kind: 'nestedSites',
+    folderPath: '/projects/mono',
+    sites: [{ projectPath: '/projects/mono/apps/web', relative: 'apps/web', name: 'web' }],
+    searched: 'all',
+    instead: { kind: 'nothing' },
+  };
+  await fire('openProject');
+  const nestedDialog = document.querySelector('.nested-sites-dialog');
+  check('Open Project asks about a website inside the folder', nestedDialog !== null, document.body.innerHTML.slice(0, 200));
+  check('and leaves the project alone until answered', closed.length === 2, JSON.stringify(closed));
+  await act(async () => nestedDialog?.querySelector('.choice-dialog-option')?.click());
+  // Each poll lets React apply what is pending: the dialog answers once its closing has run.
+  await waitFor({
+    what: 'the chosen website to be switched to',
+    read: async () => {
+      await act(async () => {});
+      return closed.length;
+    },
+    until: (count) => count === 3,
+  });
+  check('the answer switches to the website', closed[2] === '/projects/mono/apps/web', JSON.stringify(closed));
 
   // --- what main does with it -------------------------------------------------------------
   const main = readSource('electron/main.ts');

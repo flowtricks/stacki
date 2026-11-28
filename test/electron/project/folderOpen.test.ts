@@ -85,12 +85,18 @@ test('a disk that refuses access is unreadable, not missing', () => {
   assert.deepEqual(inspectFolderPath('/locked', system), { ok: false, error: 'unreadable' });
 });
 
-test('an accepted folder is classified as "Open from folder" classifies it', () => {
-  assert.deepEqual(folderOpenChoice(astro), { kind: 'astro', projectPath: astro });
-  assert.deepEqual(folderOpenChoice(plain), { kind: 'plainWebsite', sourcePath: plain, parentPath: root, name: 'shop-astro', homePath: os.homedir() });
-  assert.deepEqual(folderOpenChoice(folder), { kind: 'notWebsite', folderPath: folder });
-  assert.deepEqual(folderOpenChoice(file), { kind: 'rejected', reason: 'notFolder' });
-  assert.deepEqual(folderOpenChoice(path.join(root, 'gone')), { kind: 'rejected', reason: 'missing' });
+test('an accepted folder is classified as "Open from folder" classifies it', async () => {
+  assert.deepEqual(await folderOpenChoice(astro), { kind: 'astro', projectPath: astro });
+  assert.deepEqual(await folderOpenChoice(plain), {
+    kind: 'plainWebsite',
+    sourcePath: plain,
+    parentPath: root,
+    name: 'shop-astro',
+    homePath: os.homedir(),
+  });
+  assert.deepEqual(await folderOpenChoice(folder), { kind: 'notWebsite', folderPath: folder, searched: 'all' });
+  assert.deepEqual(await folderOpenChoice(file), { kind: 'rejected', reason: 'notFolder' });
+  assert.deepEqual(await folderOpenChoice(path.join(root, 'gone')), { kind: 'rejected', reason: 'missing' });
 });
 
 test('folders that arrive before the window listens wait, in order, and are taken once', () => {

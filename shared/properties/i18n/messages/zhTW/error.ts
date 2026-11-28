@@ -133,4 +133,6 @@ export const messages = {
   'error.terminal.outsideProject': '終端機只能在目前的專案內開啟。',
   'error.thumbnails.devServerSlow': '開發伺服器未能及時啟動',
   'error.thumbnails.noDependencies': '此專案尚未安裝任何相依套件。',
+  'error.project.yarnPlugAndPlay':
+    '此專案的套件是用 Yarn Plug’n’Play 安裝的，Stacki 目前還無法預覽。請在 .yarnrc.yml 中將 nodeLinker 設為 node-modules，重新安裝後再開啟。',
 } as const satisfies CatalogOf<MessageKey>;

@@ -146,4 +146,6 @@ export const messages = {
   'error.terminal.outsideProject': 'لا يمكن فتح الطرفية إلا داخل المشروع الحالي.',
   'error.thumbnails.devServerSlow': 'لم يبدأ خادم التطوير في الوقت المناسب',
   'error.thumbnails.noDependencies': 'لم تُثبَّت أي تبعيات في هذا المشروع بعد.',
+  'error.project.yarnPlugAndPlay':
+    'ثُبّتت حزم هذا المشروع باستخدام Yarn Plug’n’Play، ولا يستطيع Stacki معاينته بعد. اضبط nodeLinker على node-modules في ‎.yarnrc.yml ثم أعد التثبيت وافتح المشروع من جديد.',
 } as const satisfies CatalogOf<MessageKey>;

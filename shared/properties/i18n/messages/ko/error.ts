@@ -134,4 +134,6 @@ export const messages = {
   'error.terminal.outsideProject': '터미널은 현재 프로젝트 안에서만 열 수 있습니다.',
   'error.thumbnails.devServerSlow': '개발 서버가 제시간에 시작되지 않았습니다',
   'error.thumbnails.noDependencies': '이 프로젝트에는 아직 의존성이 설치되지 않았습니다.',
+  'error.project.yarnPlugAndPlay':
+    '이 프로젝트의 패키지는 Yarn Plug’n’Play로 설치되어 있어 Stacki에서 아직 미리 볼 수 없습니다. .yarnrc.yml에서 nodeLinker를 node-modules로 설정하고 다시 설치한 뒤 다시 여세요.',
 } as const satisfies CatalogOf<MessageKey>;

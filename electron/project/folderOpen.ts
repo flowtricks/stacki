@@ -18,9 +18,11 @@ import { fileURLToPath } from 'url';
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { err, ok, type Result } from '../../shared/core/result';
-import { defaultAstroCopyName } from '../../shared/ipc/astroCopy';
+import { defaultAstroCopyName, type AstroCopyOffer, type NestedSitesInstead } from '../../shared/ipc/astroCopy';
 import { FOLDER_OPEN_LIMITS, type FolderOpenChoice, type FolderRejection } from '../../shared/ipc/folderOpen';
-import { classifySiteFolder } from './plainSiteScan';
+import { classifyPlainFolder, onlyListsAstro, opensAsAstro } from './plainSiteScan';
+import { nestedSitesSliced, type NestedScan } from './nestedSiteScan';
+import { runSliced } from '../lib/slicedWork';
 import { errorCode } from '../documents/atomicWrite';
 
 /** The three file-system reads the check makes, so a test can stand in for the disk. */
@@ -81,18 +83,39 @@ export function inspectFolderPath(candidate: string, system: FolderFileSystem = 
   return ok(folder);
 }
 
-/** What "Open from folder" makes of `folder`, a folder `inspectFolderPath` accepted. */
-export function siteFolderChoice(folder: string): Exclude<FolderOpenChoice, { readonly kind: 'rejected' }> {
+/** How the sites inside a folder are looked for, so a test can see whether and when the search runs. */
+export type NestedSiteSearch = (folder: string) => Promise<NestedScan>;
+
+const searchNestedSites: NestedSiteSearch = (folder) => runSliced(nestedSitesSliced(folder));
+
+type SiteChoice = Exclude<FolderOpenChoice, { readonly kind: 'rejected' }>;
+
+/**
+ * What "Open from folder" makes of `folder`, a folder `inspectFolderPath` accepted. A folder that is a project of
+ * its own answers at once, unsearched. Any other is searched for sites inside it before it is called a plain website
+ * or neither; those found are offered for the person to choose, and no folder but the picked one ever opens unasked.
+ */
+export async function siteFolderChoice(folder: string, search: NestedSiteSearch = searchNestedSites): Promise<SiteChoice> {
   assert(path.isAbsolute(folder), 'siteFolderChoice: an absolute folder');
   assert(path.resolve(folder) === folder, 'siteFolderChoice: a resolved folder');
-  const kind = classifySiteFolder(folder);
+  if (opensAsAstro(folder)) {
+    const asItIs = { kind: 'astro', projectPath: folder } as const;
+    if (!onlyListsAstro(folder)) {
+      return asItIs;
+    }
+    // In doubt it opens as it always has: only a site found inside is reason to ask.
+    const inside = await search(folder);
+    return inside.sites.length === 0 ? asItIs : nestedChoice(folder, inside, { kind: 'openFolder' });
+  }
+  const inside = await search(folder);
+  const kind = classifyPlainFolder(folder);
   switch (kind) {
-    case 'astro':
-      return { kind, projectPath: folder };
-    case 'plainWebsite':
-      return { kind, sourcePath: folder, parentPath: path.dirname(folder), name: defaultAstroCopyName(path.basename(folder)), homePath: os.homedir() };
+    case 'plainWebsite': {
+      const offer = astroCopyOffer(folder);
+      return inside.sites.length === 0 ? { kind, ...offer } : nestedChoice(folder, inside, { kind, offer });
+    }
     case 'notWebsite':
-      return { kind, folderPath: folder };
+      return inside.sites.length === 0 ? { kind, folderPath: folder, searched: inside.searched } : nestedChoice(folder, inside, { kind: 'nothing' });
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -100,11 +123,24 @@ export function siteFolderChoice(folder: string): Exclude<FolderOpenChoice, { re
   }
 }
 
+function nestedChoice(folder: string, inside: NestedScan, instead: NestedSitesInstead): SiteChoice {
+  assert(inside.sites.length > 0, 'nestedChoice: a site to offer');
+  return { kind: 'nestedSites', folderPath: folder, sites: inside.sites, searched: inside.searched, instead };
+}
+
+function astroCopyOffer(folder: string): AstroCopyOffer {
+  return { sourcePath: folder, parentPath: path.dirname(folder), name: defaultAstroCopyName(path.basename(folder)), homePath: os.homedir() };
+}
+
 /** The whole answer for one path: refused, or classified. */
-export function folderOpenChoice(candidate: string, system: FolderFileSystem = NODE_FILE_SYSTEM): FolderOpenChoice {
+export async function folderOpenChoice(
+  candidate: string,
+  system: FolderFileSystem = NODE_FILE_SYSTEM,
+  search: NestedSiteSearch = searchNestedSites,
+): Promise<FolderOpenChoice> {
   const inspected = inspectFolderPath(candidate, system);
   if (inspected.ok) {
-    return siteFolderChoice(inspected.value);
+    return siteFolderChoice(inspected.value, search);
   }
   return { kind: 'rejected', reason: inspected.error };
 }

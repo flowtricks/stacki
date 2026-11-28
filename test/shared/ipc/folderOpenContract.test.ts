@@ -9,7 +9,7 @@ import { parseIpcPayload } from '#dist/shared/ipc/ipcPayloads.js';
 
 const astro = { kind: 'astro', projectPath: '/Users/me/Sites/blog' };
 const plain = { kind: 'plainWebsite', sourcePath: '/Users/me/Sites/shop', parentPath: '/Users/me/Sites', name: 'shop-astro', homePath: '/Users/me' };
-const neither = { kind: 'notWebsite', folderPath: '/Users/me/Documents' };
+const neither = { kind: 'notWebsite', folderPath: '/Users/me/Documents', searched: 'all' };
 
 test('every answer a folder can get passes and comes back equal', () => {
   assert.deepEqual(parseFolderOpenChoice(astro), astro);

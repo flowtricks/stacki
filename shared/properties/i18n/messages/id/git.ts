@@ -151,6 +151,7 @@ export const messages = {
   'git.error.deleteTrunk': '"{branch}" adalah branch tempat semuanya kembali. Menghapusnya akan membuat proyek kehilangan jalur kerja utamanya.',
   'git.error.deleteWorktree': '"{branch}" sedang di-checkout di worktree lain ({path}). Tutup atau beralih dari worktree itu terlebih dahulu.',
   'git.error.detachedHead': 'Anda tidak berada di sebuah branch, jadi tidak ada yang dapat dikirim atau di-pull. Beralihlah ke sebuah branch terlebih dahulu.',
+  'git.error.folderNotInVersion': 'Folder situs web ini belum ada pada versi itu, jadi tidak ada yang dapat ditampilkan atau dipulihkan.',
   'git.error.identityMissing': 'Git belum tahu siapa Anda. Atur nama dan email Anda (git config --global user.name dan user.email), lalu simpan lagi.',
   'git.error.locked': 'Operasi Git lain masih berjalan di proyek ini. Tunggu sebentar lalu coba lagi; jika tidak kunjung selesai, tutup alat Git lainnya.',
   'git.error.mergeBranchChanged': 'Branch saat ini berubah. Buka kembali merge untuk meninjaunya lagi.',

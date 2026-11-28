@@ -1,6 +1,7 @@
 import { assert } from '../core/assert';
 import { list, text, record, boolean, pathText } from '../core/boundary';
 import { parseOptionalMessageRef } from '../core/i18n/messageReference';
+import { parseNestedSitesChoice } from './astroCopy';
 
 export function parseGitHubRepository(input: unknown): string {
   const value = text(input);
@@ -35,6 +36,10 @@ export function parseCloneResult(input: unknown) {
     return errorRef === undefined
       ? { canceled: false as const, error: text(value['error']) }
       : { canceled: false as const, error: text(value['error']), errorRef };
+  }
+  // A repository whose website sits in a folder of its own: the person chooses it.
+  if (value['nested'] !== undefined) {
+    return { canceled: false as const, nested: parseNestedSitesChoice(value['nested']) };
   }
   return { canceled: false as const, projectPath: pathText(value['projectPath']) };
 }

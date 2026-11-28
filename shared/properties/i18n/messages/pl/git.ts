@@ -173,6 +173,7 @@ export const messages = {
   'git.error.deleteTrunk': '„{branch}” to gałąź, do której wszystko wraca. Jej usunięcie zostawiłoby projekt bez głównej linii pracy.',
   'git.error.deleteWorktree': '„{branch}” jest wyewidencjonowana w innym worktree ({path}). Najpierw zamknij je lub przełącz.',
   'git.error.detachedHead': 'Nie jesteś na żadnej gałęzi, więc nie ma czego wysłać ani pobrać. Najpierw przełącz się na gałąź.',
+  'git.error.folderNotInVersion': 'W tej wersji folder tej witryny jeszcze nie istniał, więc nie ma czego pokazać ani przywrócić.',
   'git.error.identityMissing': 'Git jeszcze nie wie, kim jesteś. Ustaw imię i e-mail (git config --global user.name oraz user.email), a potem zapisz ponownie.',
   'git.error.locked': 'W tym projekcie nadal trwa inna operacja Gita. Poczekaj chwilę i spróbuj ponownie; jeśli się nie kończy, zamknij inne narzędzia Git.',
   'git.error.mergeBranchChanged': 'Bieżąca gałąź się zmieniła. Otwórz scalenie ponownie, aby je przejrzeć.',

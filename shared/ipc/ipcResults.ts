@@ -15,7 +15,7 @@ import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
 import type { PreviewHealth } from './previewHealth';
 import type { DevNetworkReply, DevNetworkState } from './devNetwork';
-import type { AstroCopyCheck, AstroCopyReply, SiteFolderChoice } from './astroCopy';
+import type { AstroCopyCheck, AstroCopyReply, NestedSitesChoice, SiteFolderChoice } from './astroCopy';
 import type { FolderOpenChoice } from './folderOpen';
 import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type { ConstantEditReply, ConstantListingReply } from '../properties/cmsConstants';
@@ -584,7 +584,11 @@ export interface IpcResults extends AiResults, AgentResults, FileExplorerResults
     readonly branch: undefined | string;
   };
   readonly 'git:repositories': readonly string[];
-  readonly 'git:clone': IpcResults['project:openDialog'];
+  readonly 'git:clone':
+    | { readonly canceled: true }
+    | { readonly canceled: false; readonly error: string; readonly errorRef?: MessageRef | undefined }
+    | { readonly canceled: false; readonly projectPath: string }
+    | { readonly canceled: false; readonly nested: NestedSitesChoice };
   readonly 'git:connect': IpcResults['git:publish'];
   readonly 'publish:start': DesktopPublishState;
   readonly 'publish:state': DesktopPublishState;
@@ -848,23 +852,6 @@ export interface IpcResults extends AiResults, AgentResults, FileExplorerResults
   readonly 'project:injectedRoutes': {
     readonly routes: ReadonlyArray<WireInjectedRoute>;
   };
-  readonly 'project:openDialog':
-    | {
-        readonly canceled: true;
-        readonly error?: never;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly error: string;
-        readonly errorRef?: MessageRef | undefined;
-        readonly projectPath?: never;
-      }
-    | {
-        readonly canceled: false;
-        readonly projectPath: string;
-        readonly error?: never;
-      };
   readonly 'project:openSiteDialog': SiteFolderChoice;
   readonly 'project:inspectFolder': FolderOpenChoice;
   readonly 'project:takeOpenedFolders': readonly FolderOpenChoice[];

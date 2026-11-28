@@ -240,7 +240,7 @@ export { subscribeErrorToasts } from ${JSON.stringify(repoPath('src/ui/errorNoti
   check('an Astro folder opens as before', opened[0] === '/Users/me/Sites/blog' && modal() === null);
 
   const toastsBeforeNeither = toasts.length;
-  dom.window.avb.openSiteDialog = async () => ({ kind: 'notWebsite', folderPath: '/Users/me/Documents' });
+  dom.window.avb.openSiteDialog = async () => ({ kind: 'notWebsite', folderPath: '/Users/me/Documents', searched: 'all' });
   openFromFolder().click();
   await until('the not-a-website toast', () => toasts.length === toastsBeforeNeither + 1);
   check('a folder that is neither is a toast', /isn’t a website/.test(toasts.at(-1) ?? ''), toasts.at(-1));
