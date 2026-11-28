@@ -112,17 +112,20 @@ export function chipStyleOf(inline: Pick<InlineState, 'ownStyle' | 'instance'>, 
 /** Whether the chip is in the well, and whether it is the edit target. */
 export function inlineTargetOf(inline: InlineState, style: InlineStyle): { readonly shown: boolean; readonly active: boolean } {
   const shown = inlineChipShown(style, { writable: inline.writable, pseudo: inline.pseudo }) || startsInline(style, inline);
-  const active = shown && inline.nodeId !== undefined && attributePicked(inline, inline.nodeId);
+  const active = shown && inline.nodeId !== undefined && attributePicked(inline, inline.nodeId, style);
   return { shown, active };
 }
 
 // Decided from what is known while rendering, never in an effect: picked after the commit, the default left the
 // rules' own default (useTokenDefault), which runs when the element's classes arrive, to select a class beside it.
-function attributePicked(inline: Pick<InlineState, 'pick'>, nodeId: string): boolean {
+function attributePicked(inline: Pick<InlineState, 'pick'>, nodeId: string, style: InlineStyle): boolean {
   if (inline.pick?.nodeId === nodeId) {
     return inline.pick.target === 'attribute';
   }
-  return inlineDefault() === 'inline';
+  // Never the default where it takes no edit: an attribute shown as read-only code (a Grid whose component writes
+  // `style={columns}`) disables every control, so starting on it left the whole panel greyed out with nothing
+  // saying why. Only the person's own pick of the chip goes there.
+  return inlineDefault() === 'inline' && style.kind !== 'code';
 }
 
 // With inline as the default (model/inlineDefault.ts), the chip stands in the well even before the element has
