@@ -311,7 +311,9 @@ test('editor: after typing in a rule’s code, a control’s edit shows in the c
     ['Grid', /display: grid/],
   ]) {
     await choose(panel, label);
-    assert.match(codeShown(panel), declared, label);
+    // After typing, the editor view takes outside text late: @uiw/react-codemirror holds it for 200 ticks of a 1 ms
+    // interval, about 0.2 s where a tick is 1 ms and about 3 s on Windows, whose ticks are about 15 ms.
+    await waitFor({ what: `the code shows ${label}`, read: () => codeShown(panel), until: (shown) => declared.test(shown) });
     assert.match(panel.writes.at(-1).css, declared, label);
   }
 });
