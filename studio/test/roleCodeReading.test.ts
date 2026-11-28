@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { transform } from '@astrojs/compiler-rs';
+import { measureSpeedFactor } from '../../test/helpers/scaleFixtures';
 import { CodeGuard } from '../src/features/roles/codeGuard';
 import { parseAsRun } from '../src/features/roles/codeRuntimeCompiler';
 import { assertEditorRequest } from '../src/features/roles/editorRoutes';
@@ -136,7 +137,9 @@ test('hostile text is judged in seconds, whatever repeats in it', { timeout: 60_
   const role = { ...CLIENT, editorOff: new Set(EDITOR_PARTS.slice(0, 1)) };
   const styles = '<style>'.repeat(40_000);
   assert.throws(() => assertEditorRequest(role, '/studio/api/source', JSON.stringify({ file: PAGE, base: styles, source: `${styles}x` })));
-  assert.ok(Date.now() - started < 20_000, `${Date.now() - started} ms`);
+  const elapsedMs = Date.now() - started;
+  const boundMs = 20_000 * measureSpeedFactor();
+  assert.ok(elapsedMs < boundMs, `${elapsedMs} ms, bound ${Math.round(boundMs)} ms`);
 });
 
 test('an input that ends the site compiler is refused, and the next page is read', async () => {
