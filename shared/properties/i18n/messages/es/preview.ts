@@ -121,6 +121,8 @@ export const messages = {
   'preview.size.width': 'Ancho del lienzo',
   'preview.size.widthHint': 'Introduce de {minimum} a {maximum}px',
   'preview.size.widthTip': 'Ancho del lienzo en píxeles',
+  'preview.stopped.restart': 'Reiniciar vista previa',
+  'preview.stopped.title': 'La vista previa se detuvo',
   'preview.studio.exit': 'Salir de la vista previa (Esc)',
   'preview.studio.frameTitle': 'Vista previa del sitio (interactiva)',
   'preview.studio.loading': 'Cargando vista previa…',

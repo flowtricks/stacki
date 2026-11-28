@@ -37,6 +37,7 @@ import {
   readAstroLock,
   satisfiesRange,
   serverAlive,
+  serverStillServes,
   trailingSlashFromSource,
 } from '../preview/devServerChecks';
 import { hasContentConfig } from '../content/contentConfig';
@@ -67,6 +68,16 @@ function waitForPreviewExit(process: ChildProcess | undefined): Promise<void> {
     }, 10000);
     process.once('exit', exited);
   });
+}
+
+// `astro dev stop` ends whatever server the project's lock names. That may be one another Stacki or a terminal
+// started since ours: stopping ours must not stop theirs. Ports tell them apart. No lock leaves nothing to stop.
+function lockNamesServer(server: DevServer): boolean {
+  const lock = readAstroLock(server.projectPath);
+  if (lock === undefined || !URL.canParse(lock.url)) {
+    return false;
+  }
+  return new URL(lock.url).port === new URL(server.url).port;
 }
 
 // The page patcher, handed to every page as a module. It lives in its own
@@ -178,8 +189,10 @@ export class DevServers {
       return;
     }
     if (server.daemon && server.bin) {
-      const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
-      await run(command, args, server.projectPath, SHORT_COMMAND);
+      if (lockNamesServer(server)) {
+        const [command, args] = nodeCliCommand(server.bin, ['dev', 'stop']);
+        await run(command, args, server.projectPath, SHORT_COMMAND);
+      }
       if (this.server === server) {
         this.server = undefined;
       }
@@ -206,9 +219,13 @@ export class DevServers {
       return;
     }
     const { proc, daemon, bin, projectPath } = this.server;
+    const ownsLock = lockNamesServer(this.server);
     this.server = undefined;
     // Daemonized servers (Astro >= 7 forks a background process) stop via the CLI.
     if (daemon && bin) {
+      if (!ownsLock) {
+        return;
+      }
       try {
         const [cmd, argv] = nodeCliCommand(bin, ['dev', 'stop']);
         execFile(cmd, argv, { ...SHORT_COMMAND, cwd: projectPath, shell: commandNeedsShell(cmd) }, () => {});
@@ -486,20 +503,33 @@ export class DevServers {
     }
   }
 
+  // The server already held for this project, when it still serves; otherwise it is let go, so a start replaces it.
+  // Why asked at all: a server that died or hung would be answered with for as long as the project stayed open.
+  private async stillRunning(current: DevServer): Promise<{ readonly url: string; readonly external?: true } | undefined> {
+    const serves = await serverStillServes(current.url);
+    // It may have exited, or been replaced, while it was asked.
+    if (this.server !== current) {
+      return undefined;
+    }
+    if (serves) {
+      return current.external === true ? { url: current.url, external: true } : { url: current.url };
+    }
+    this.pushLog('\n[stacki] the preview server stopped answering; starting it again.\n');
+    const exited = waitForPreviewExit(current.proc);
+    this.stop(false);
+    // A server that will not end is left behind: the new one takes the next free port.
+    await exited.catch(() => undefined);
+    return undefined;
+  }
+
   /** Starts the project's dev server, or answers with the one already running. */
   async start(projectPath: string, assertActive: () => void) {
     assertActive();
     if (this.server && sameFilesystemPath(this.server.projectPath, projectPath)) {
-      // For adopted external servers, make sure it's still alive.
-      if (this.server.external) {
-        const current = this.server;
-        if (await serverAlive(current.url)) {
-          assertActive();
-          return { url: current.url, external: true };
-        }
-        this.server = undefined;
-      } else {
-        return { url: this.server.url };
+      const running = await this.stillRunning(this.server);
+      assertActive();
+      if (running !== undefined) {
+        return running;
       }
     }
     assertActive();

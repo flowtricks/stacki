@@ -119,6 +119,8 @@ export const messages = {
   'preview.size.width': 'कैनवास की चौड़ाई',
   'preview.size.widthHint': '{minimum}–{maximum}px दर्ज करें',
   'preview.size.widthTip': 'कैनवास की चौड़ाई पिक्सेल में',
+  'preview.stopped.restart': 'पूर्वावलोकन फिर शुरू करें',
+  'preview.stopped.title': 'पूर्वावलोकन रुक गया',
   'preview.studio.exit': 'प्रीव्यू से बाहर निकलें (Esc)',
   'preview.studio.frameTitle': 'साइट प्रीव्यू (इंटरैक्टिव)',
   'preview.studio.loading': 'प्रीव्यू लोड हो रहा है…',

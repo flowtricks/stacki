@@ -119,6 +119,8 @@ export const messages = {
   'preview.size.width': '캔버스 너비',
   'preview.size.widthHint': '{minimum}–{maximum}px 입력',
   'preview.size.widthTip': '캔버스 너비(픽셀)',
+  'preview.stopped.restart': '미리보기 다시 시작',
+  'preview.stopped.title': '미리보기가 중지되었습니다',
   'preview.studio.exit': '미리보기 종료(Esc)',
   'preview.studio.frameTitle': '사이트 미리보기(인터랙티브)',
   'preview.studio.loading': '미리보기 불러오는 중…',

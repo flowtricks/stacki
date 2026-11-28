@@ -123,6 +123,8 @@ export const messages = {
   'preview.size.width': 'Canvas-Breite',
   'preview.size.widthHint': 'Gib {minimum}–{maximum}px ein',
   'preview.size.widthTip': 'Canvas-Breite in Pixeln',
+  'preview.stopped.restart': 'Vorschau neu starten',
+  'preview.stopped.title': 'Die Vorschau wurde angehalten',
   'preview.studio.exit': 'Vorschau beenden (Esc)',
   'preview.studio.frameTitle': 'Website-Vorschau (interaktiv)',
   'preview.studio.loading': 'Vorschau wird geladen …',

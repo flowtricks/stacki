@@ -121,6 +121,8 @@ export const messages = {
   'preview.size.width': 'キャンバスの幅',
   'preview.size.widthHint': '{minimum}〜{maximum}px を入力',
   'preview.size.widthTip': 'キャンバスの幅（ピクセル）',
+  'preview.stopped.restart': 'プレビューを再起動',
+  'preview.stopped.title': 'プレビューが停止しました',
   'preview.studio.exit': 'プレビューを終了（Esc）',
   'preview.studio.frameTitle': 'サイトのプレビュー（操作可能）',
   'preview.studio.loading': 'プレビューを読み込み中…',

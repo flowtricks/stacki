@@ -120,6 +120,8 @@ export const messages = {
   'preview.size.width': 'Ширина холста',
   'preview.size.widthHint': 'Введите {minimum}–{maximum}px',
   'preview.size.widthTip': 'Ширина холста в пикселях',
+  'preview.stopped.restart': 'Перезапустить предпросмотр',
+  'preview.stopped.title': 'Предпросмотр остановлен',
   'preview.studio.exit': 'Выйти из предпросмотра (Esc)',
   'preview.studio.frameTitle': 'Предпросмотр сайта (интерактивный)',
   'preview.studio.loading': 'Загрузка предпросмотра…',

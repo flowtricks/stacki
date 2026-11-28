@@ -1745,6 +1745,7 @@
     "src/features/preview/guideSettings.ts",
     "src/features/preview/outlineBoxes.ts",
     "src/features/preview/pageLoadState.ts",
+    "src/features/preview/previewFrames.ts",
     "src/features/preview/previewMessages.ts",
     "src/features/preview/previewViewport.css",
     "src/features/preview/previewViewport.ts",

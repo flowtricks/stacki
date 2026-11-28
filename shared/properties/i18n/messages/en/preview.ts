@@ -119,6 +119,8 @@ export const messages = {
   'preview.size.width': 'Canvas width',
   'preview.size.widthHint': 'Enter {minimum}–{maximum}px',
   'preview.size.widthTip': 'Canvas width in pixels',
+  'preview.stopped.restart': 'Restart preview',
+  'preview.stopped.title': 'The preview stopped',
   'preview.studio.exit': 'Exit preview (Esc)',
   'preview.studio.frameTitle': 'Site preview (interactive)',
   'preview.studio.loading': 'Loading preview…',

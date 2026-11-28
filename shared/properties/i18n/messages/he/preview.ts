@@ -118,6 +118,8 @@ export const messages = {
   'preview.size.width': 'רוחב הקנבס',
   'preview.size.widthHint': 'יש להזין {minimum}–{maximum}px',
   'preview.size.widthTip': 'רוחב הקנבס בפיקסלים',
+  'preview.stopped.restart': 'הפעלה מחדש של התצוגה המקדימה',
+  'preview.stopped.title': 'התצוגה המקדימה נעצרה',
   'preview.studio.exit': 'יציאה מהתצוגה המקדימה (Esc)',
   'preview.studio.frameTitle': 'תצוגה מקדימה של האתר (אינטראקטיבית)',
   'preview.studio.loading': 'התצוגה המקדימה נטענת…',

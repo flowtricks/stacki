@@ -390,6 +390,9 @@ export function spawnAstroServer(projectPath: string, localBin: string, args: re
     // Vite and Astro together, including CLIs that launch another process.
     detached: !isWin,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ...extraEnvironment, FORCE_COLOR: '0', NO_COLOR: '1' },
+    // ASTRO_DEV_BACKGROUND keeps the server this process: Astro >= 7 otherwise forks a detached one when it finds an
+    // AI agent's variables in the environment (Stacki started from an agent's shell). Nothing hears that one exit, so
+    // a dead preview went unnoticed and left the canvas blank (docs/canvas-recovery.md).
+    env: { ...process.env, ...extraEnvironment, ASTRO_DEV_BACKGROUND: '1', FORCE_COLOR: '0', NO_COLOR: '1' },
   });
 }

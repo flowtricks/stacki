@@ -119,6 +119,8 @@ export const messages = {
   'preview.size.width': 'Largura do canvas',
   'preview.size.widthHint': 'Digite de {minimum} a {maximum}px',
   'preview.size.widthTip': 'Largura do canvas em pixels',
+  'preview.stopped.restart': 'Reiniciar pré-visualização',
+  'preview.stopped.title': 'A pré-visualização parou',
   'preview.studio.exit': 'Sair da visualização (Esc)',
   'preview.studio.frameTitle': 'Visualização do site (interativa)',
   'preview.studio.loading': 'Carregando visualização…',

@@ -7,6 +7,7 @@ import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
+import { PreviewCover } from './PreviewCover';
 import { useCanvasWidthRequest, usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest, type PreviewDimensions } from './usePreviewSizing';
 import { SizedFrame } from './SizedFrame';
 import CanvasView from './CanvasView';
@@ -187,6 +188,7 @@ export default function PreviewPane(hostProps: PreviewPaneProps) {
           desktopFramePx={desktopFramePx}
           shownGuide={columnGuide.shown}
         />
+        <PreviewCover />
       </div>
     </>
   );

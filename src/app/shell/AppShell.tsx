@@ -78,6 +78,8 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { rootSwatchScope, SwatchScopeContext } from '../../features/style/model/computedColor';
 import { useSharedVars } from '../../features/style/sharedVars';
 import { PreviewModeStage } from '../../features/preview/SizedFrame';
+import { PreviewCover } from '../../features/preview/PreviewCover';
+import { previewReloadAsked, useSupervision } from '../../features/preview/previewSupervisorBus';
 import { usePreviewSizing } from '../../features/preview/usePreviewSizing';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
@@ -232,10 +234,15 @@ function PreviewModeView({ app, source }: { readonly app: ShellView; readonly so
   const translate = useTranslate();
   const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(app.project.path);
   const sizing = usePreviewSizing(app.device, app.previewDimensions, breakpoints, { deviceShortcuts: false, desktopFramePx }, app.setDevice);
+  // A new document after the preview was recovered (previewSupervisor.ts): the old one holds nothing.
+  const { reloads } = useSupervision();
   return (
-    <PreviewModeStage sizing={sizing}>
-      <iframe ref={app.previewIframeRef} src={source} title={translate('shell.preview.interactiveTitle')} />
-    </PreviewModeStage>
+    <>
+      <PreviewModeStage sizing={sizing}>
+        <iframe key={reloads} ref={app.previewIframeRef} src={source} title={translate('shell.preview.interactiveTitle')} />
+      </PreviewModeStage>
+      <PreviewCover />
+    </>
   );
 }
 
@@ -400,7 +407,14 @@ export function UrlGroup({ app, trailing }: { readonly app: ShellView; readonly 
           something you type a route into. Focus selects it all, so one
           click and ⌘C gets the whole thing. */}
       <div className="url-bar">
-        <ReloadButton disabled={!liveUrl} onReload={() => app.setRefreshKey((count) => count + 1)} />
+        <ReloadButton
+          disabled={!liveUrl}
+          onReload={() => {
+            app.setRefreshKey((count) => count + 1);
+            // A reload of a dead preview shows nothing, so it is also looked after (previewSupervisor.ts).
+            previewReloadAsked();
+          }}
+        />
         <input
           className="url"
           spellCheck={false}

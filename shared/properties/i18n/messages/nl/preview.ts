@@ -122,6 +122,8 @@ export const messages = {
   'preview.size.width': 'Canvasbreedte',
   'preview.size.widthHint': 'Voer {minimum}–{maximum}px in',
   'preview.size.widthTip': 'Canvasbreedte in pixels',
+  'preview.stopped.restart': 'Voorbeeld opnieuw starten',
+  'preview.stopped.title': 'Het voorbeeld is gestopt',
   'preview.studio.exit': 'Preview sluiten (Esc)',
   'preview.studio.frameTitle': 'Sitepreview (interactief)',
   'preview.studio.loading': 'Preview laden…',

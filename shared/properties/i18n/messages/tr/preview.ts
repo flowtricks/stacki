@@ -120,6 +120,8 @@ export const messages = {
   'preview.size.width': 'Tuval genişliği',
   'preview.size.widthHint': '{minimum}–{maximum}px girin',
   'preview.size.widthTip': 'Piksel cinsinden tuval genişliği',
+  'preview.stopped.restart': 'Önizlemeyi yeniden başlat',
+  'preview.stopped.title': 'Önizleme durdu',
   'preview.studio.exit': 'Önizlemeden çık (Esc)',
   'preview.studio.frameTitle': 'Site önizlemesi (etkileşimli)',
   'preview.studio.loading': 'Önizleme yükleniyor…',

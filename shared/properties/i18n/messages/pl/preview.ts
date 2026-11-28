@@ -121,6 +121,8 @@ export const messages = {
   'preview.size.width': 'Szerokość kanwy',
   'preview.size.widthHint': 'Wpisz {minimum}–{maximum}px',
   'preview.size.widthTip': 'Szerokość kanwy w pikselach',
+  'preview.stopped.restart': 'Uruchom podgląd ponownie',
+  'preview.stopped.title': 'Podgląd został zatrzymany',
   'preview.studio.exit': 'Zamknij podgląd (Esc)',
   'preview.studio.frameTitle': 'Podgląd witryny (interaktywny)',
   'preview.studio.loading': 'Wczytywanie podglądu…',

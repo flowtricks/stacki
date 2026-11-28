@@ -121,6 +121,8 @@ export const messages = {
   'preview.size.width': 'Lebar kanvas',
   'preview.size.widthHint': 'Masukkan {minimum}–{maximum}px',
   'preview.size.widthTip': 'Lebar kanvas dalam piksel',
+  'preview.stopped.restart': 'Mulai ulang pratinjau',
+  'preview.stopped.title': 'Pratinjau berhenti',
   'preview.studio.exit': 'Keluar dari pratinjau (Esc)',
   'preview.studio.frameTitle': 'Pratinjau situs (interaktif)',
   'preview.studio.loading': 'Memuat pratinjau…',

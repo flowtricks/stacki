@@ -118,6 +118,8 @@ export const messages = {
   'preview.size.width': '画布宽度',
   'preview.size.widthHint': '输入 {minimum}–{maximum}px',
   'preview.size.widthTip': '画布宽度（像素）',
+  'preview.stopped.restart': '重新启动预览',
+  'preview.stopped.title': '预览已停止',
   'preview.studio.exit': '退出预览（Esc）',
   'preview.studio.frameTitle': '站点预览（可交互）',
   'preview.studio.loading': '正在加载预览…',

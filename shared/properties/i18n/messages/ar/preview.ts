@@ -118,6 +118,8 @@ export const messages = {
   'preview.size.width': 'عرض اللوحة',
   'preview.size.widthHint': 'أدخل {minimum}–{maximum}px',
   'preview.size.widthTip': 'عرض اللوحة بالبكسل',
+  'preview.stopped.restart': 'إعادة تشغيل المعاينة',
+  'preview.stopped.title': 'توقفت المعاينة',
   'preview.studio.exit': 'الخروج من المعاينة (Esc)',
   'preview.studio.frameTitle': 'معاينة الموقع (تفاعلية)',
   'preview.studio.loading': 'جارٍ تحميل المعاينة…',

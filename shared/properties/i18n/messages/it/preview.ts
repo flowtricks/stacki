@@ -122,6 +122,8 @@ export const messages = {
   'preview.size.width': 'Larghezza del canvas',
   'preview.size.widthHint': 'Inserisci {minimum}–{maximum}px',
   'preview.size.widthTip': 'Larghezza del canvas in pixel',
+  'preview.stopped.restart': 'Riavvia anteprima',
+  'preview.stopped.title': 'L’anteprima si è interrotta',
   'preview.studio.exit': 'Esci dall’anteprima (Esc)',
   'preview.studio.frameTitle': 'Anteprima del sito (interattiva)',
   'preview.studio.loading': 'Caricamento dell’anteprima…',

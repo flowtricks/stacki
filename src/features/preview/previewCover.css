@@ -1,0 +1,24 @@
+/* The cover over a canvas whose preview is not there (PreviewCover.tsx). It is opaque, so a half-gone page is never
+   read as the site. Above the frame, its outlines and its drop overlay. */
+.preview-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.preview-cover .ui-empty-state-center {
+  margin-block: 0;
+  min-inline-size: 220px;
+}
+.preview-cover-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  inline-size: min(640px, 100%);
+  block-size: min(420px, 100%);
+}

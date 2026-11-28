@@ -121,6 +121,8 @@ export const messages = {
   'preview.size.width': 'Largeur du canevas',
   'preview.size.widthHint': 'Saisissez entre {minimum} et {maximum}px',
   'preview.size.widthTip': 'Largeur du canevas en pixels',
+  'preview.stopped.restart': 'Relancer l’aperçu',
+  'preview.stopped.title': 'L’aperçu s’est arrêté',
   'preview.studio.exit': 'Quitter l’aperçu (Échap)',
   'preview.studio.frameTitle': 'Aperçu du site (interactif)',
   'preview.studio.loading': 'Chargement de l’aperçu…',
